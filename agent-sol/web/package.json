@@ -1,0 +1,16 @@
+{
+  "name": "agent-sol-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build --outDir ../site",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.98.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
