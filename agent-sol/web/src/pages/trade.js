@@ -24,12 +24,17 @@ export async function renderTrade(container, state, mintAddress) {
       <!-- Left: Chart + trades -->
       <div>
         <div class="card glass" id="price-chart-card">
-          <div class="card-header">
+          <div class="card-header flex items-center" style="justify-content:space-between">
             <h2 class="font-semibold text-sm">Price Chart</h2>
+            <div class="flex gap-05" id="timeframe-btns">
+              <button class="btn btn-xs btn-ghost timeframe-btn" data-tf="300">5m</button>
+              <button class="btn btn-xs btn-ghost timeframe-btn" data-tf="3600">1h</button>
+              <button class="btn btn-xs btn-ghost timeframe-btn" data-tf="14400">4h</button>
+              <button class="btn btn-xs btn-ghost timeframe-btn active" data-tf="86400">24h</button>
+            </div>
           </div>
           <div class="card-body">
             <canvas id="price-chart" height="200"></canvas>
-            <p class="text-muted text-xs text-center mt-1">Bonding curve — price increases with each buy</p>
           </div>
         </div>
 
@@ -55,16 +60,16 @@ export async function renderTrade(container, state, mintAddress) {
                 <div class="text-muted text-xs">Price (SOL)</div>
               </div>
               <div class="text-center">
-                <div class="font-bold font-mono" id="stat-fdv">—</div>
+                <div class="font-bold font-mono" id="stat-mcap">—</div>
                 <div class="text-muted text-xs">Market Cap</div>
               </div>
               <div class="text-center">
-                <div class="font-bold font-mono" id="stat-volume">—</div>
-                <div class="text-muted text-xs">24h Volume</div>
+                <div class="font-bold font-mono" id="stat-ath">—</div>
+                <div class="text-muted text-xs">ATH</div>
               </div>
               <div class="text-center">
-                <div class="font-bold font-mono" id="stat-trades">—</div>
-                <div class="text-muted text-xs">Total Trades</div>
+                <div class="font-bold font-mono" id="stat-vol">—</div>
+                <div class="text-muted text-xs">Volume</div>
               </div>
             </div>
             <div class="flex items-center gap-1 mt-1" style="justify-content:center">
@@ -252,6 +257,15 @@ export async function renderTrade(container, state, mintAddress) {
     });
   });
 
+  // Timeframe buttons
+  document.querySelectorAll('.timeframe-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.timeframe-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadPriceChart(mintAddress, parseInt(btn.dataset.tf));
+    });
+  });
+
   // Live quote on input
   document.getElementById('buy-sol-amount')?.addEventListener('input', () => updateBuyQuote(mintAddress));
   document.getElementById('sell-token-amount')?.addEventListener('input', () => updateSellQuote(mintAddress));
@@ -297,9 +311,9 @@ async function loadTradePageData(mintAddress) {
     // Update stats
     const price = parseFloat(poolData.price_sol || poolData.current_price || '0');
     document.getElementById('stat-price').textContent = price < 0.001 ? price.toFixed(10) : price.toFixed(6);
-    document.getElementById('stat-fdv').textContent = poolData.market_cap_sol ? `${poolData.market_cap_sol} SOL` : '—';
-    document.getElementById('stat-volume').textContent = poolData.total_volume_sol ? `${poolData.total_volume_sol} SOL` : '0 SOL';
-    document.getElementById('stat-trades').textContent = poolData.total_trades ?? poolData.pool?.total_trades ?? '0';
+    document.getElementById('stat-mcap').textContent = poolData.market_cap_sol ? `${parseFloat(poolData.market_cap_sol).toFixed(2)} SOL` : '—';
+    document.getElementById('stat-vol').textContent = poolData.total_volume_sol ? `${parseFloat(poolData.total_volume_sol).toFixed(4)} SOL` : '0 SOL';
+    // stat-ath is populated by loadPriceChart
 
     // Mint info
     const mintLink = document.getElementById('mint-link');
@@ -351,10 +365,35 @@ async function loadTradePageData(mintAddress) {
   }
 }
 
-async function loadPriceChart(mintAddress) {
+let _chartData = { mint: null, prices: [] };
+
+async function loadPriceChart(mintAddress, timeframeSecs = 86400) {
   try {
-    const { prices } = await api.get(`/tokens/by-mint/${mintAddress}/chart?limit=50`);
-    if (!prices || prices.length < 2) return;
+    // Cache price data per mint — fetch once, filter for each timeframe
+    if (_chartData.mint !== mintAddress) {
+      const { prices } = await api.get(`/tokens/by-mint/${mintAddress}/chart?limit=200`);
+      _chartData = {
+        mint: mintAddress,
+        prices: (prices || []).filter(p => parseFloat(p.price_sol) > 0),
+      };
+    }
+
+    const allPrices = _chartData.prices;
+
+    // ATH from all history
+    if (allPrices.length > 0) {
+      const ath = Math.max(...allPrices.map(p => parseFloat(p.price_sol)));
+      const athEl = document.getElementById('stat-ath');
+      if (athEl) athEl.textContent = ath < 0.001 ? ath.toFixed(10) : ath.toFixed(6);
+    }
+
+    // Filter by selected timeframe
+    const now = Math.floor(Date.now() / 1000);
+    const since = now - timeframeSecs;
+    let filtered = allPrices.filter(p => p.timestamp >= since);
+    // Fall back to all data if timeframe has fewer than 2 points
+    if (filtered.length < 2) filtered = allPrices;
+    if (filtered.length < 2) return;
 
     const canvas = document.getElementById('price-chart');
     if (!canvas) return;
@@ -364,22 +403,22 @@ async function loadPriceChart(mintAddress) {
     canvas.width = W;
     canvas.height = H;
 
-    const vals = prices.map(p => parseFloat(p.price));
+    const vals = filtered.map(p => parseFloat(p.price_sol));
     const min = Math.min(...vals);
     const max = Math.max(...vals);
-    const range = max - min || 1;
+    const range = max - min || min * 0.01 || 0.000001;
 
     ctx.clearRect(0, 0, W, H);
 
     // Gradient fill
     const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, 'rgba(153,69,255,0.3)');
+    grad.addColorStop(0, 'rgba(153,69,255,0.35)');
     grad.addColorStop(1, 'rgba(153,69,255,0)');
 
     ctx.beginPath();
     vals.forEach((v, i) => {
       const x = (i / (vals.length - 1)) * W;
-      const y = H - ((v - min) / range) * (H - 20) - 10;
+      const y = H - ((v - min) / range) * (H - 30) - 15;
       i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     });
     ctx.lineTo(W, H);
@@ -392,12 +431,18 @@ async function loadPriceChart(mintAddress) {
     ctx.beginPath();
     vals.forEach((v, i) => {
       const x = (i / (vals.length - 1)) * W;
-      const y = H - ((v - min) / range) * (H - 20) - 10;
+      const y = H - ((v - min) / range) * (H - 30) - 15;
       i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     });
     ctx.strokeStyle = '#9945FF';
     ctx.lineWidth = 2;
     ctx.stroke();
+
+    // Min/max price labels
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '10px monospace';
+    ctx.fillText(max < 0.001 ? max.toExponential(2) : max.toFixed(8), 4, 14);
+    ctx.fillText(min < 0.001 ? min.toExponential(2) : min.toFixed(8), 4, H - 4);
   } catch { /* No chart data yet */ }
 }
 
