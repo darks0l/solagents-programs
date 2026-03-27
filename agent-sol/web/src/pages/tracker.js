@@ -286,10 +286,14 @@ async function openTokenDetail(tokenId, mint) {
     const price = parseFloat(pool.price_sol || pool.currentPrice || pool.price || token.price || 0);
     const virtualSol = parseFloat(pool.virtual_sol_reserve || pool.virtualSolReserve || 0);
     const virtualToken = parseFloat(pool.virtual_token_reserve || pool.virtualTokenReserve || 0);
-    const realSol = parseFloat(pool.pool_sol || pool.realSolBalance || 0);
-    const totalBuys = pool.total_buys || pool.totalBuys || 0;
-    const totalSells = pool.total_sells || pool.totalSells || 0;
+    const realSol = parseFloat(pool.pool_sol || pool.real_sol_balance || pool.realSolBalance || 0);
+    // Compute buys/sells from trades since on-chain fields were removed
+    const totalBuys = trades.filter(t => t.type === 'buy').length || parseInt(pool.total_buys || pool.totalBuys || 0);
+    const totalSells = trades.filter(t => t.type === 'sell').length || parseInt(pool.total_sells || pool.totalSells || 0);
     const totalVolume = parseFloat(pool.total_volume_sol || pool.totalVolumeSol || pool.volume || 0);
+    // FDV market cap
+    const marketCapSol = parseFloat(pool.market_cap_sol || 0);
+    const marketCapUsd = marketCapSol > 0 && _solPriceUsd > 0 ? (marketCapSol * _solPriceUsd) : 0;
     const creatorFees = parseFloat(pool.creator_fees_earned || pool.creatorFeesEarned || 0);
     const platformFees = parseFloat(pool.platform_fees_earned || pool.platformFeesEarned || 0);
     const creator = token.creator || pool.creator || '';
@@ -327,12 +331,12 @@ async function openTokenDetail(tokenId, mint) {
       <!-- Stats Grid -->
       <div class="grid-4 gap-2 mb-2">
         <div class="card card-compact">
-          <div class="stat-label">Virtual SOL</div>
-          <div class="stat-value" style="font-size: 1rem;">${formatSol(virtualSol)}</div>
+          <div class="stat-label">Pooled SOL</div>
+          <div class="stat-value" style="font-size: 1rem;">${formatSol(realSol)}</div>
         </div>
         <div class="card card-compact">
-          <div class="stat-label">Real SOL</div>
-          <div class="stat-value" style="font-size: 1rem;">${formatSol(realSol)}</div>
+          <div class="stat-label">Market Cap</div>
+          <div class="stat-value" style="font-size: 1rem;">${marketCapUsd > 0 ? formatUsd(marketCapUsd) : formatSol(marketCapSol) + ' SOL'}</div>
         </div>
         <div class="card card-compact">
           <div class="stat-label">Total Buys</div>
