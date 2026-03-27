@@ -280,9 +280,18 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
                 <span class="text-muted text-xs">Fees</span>
                 <span class="text-xs">2% — <span style="color:#14F195">1.4%</span> creator / <span style="color:#9945FF">0.6%</span> platform</span>
               </div>
-              <div class="flex items-center mt-05" style="justify-content:space-between">
-                <span class="text-muted text-xs">Graduation</span>
-                <span class="text-xs">85 SOL → Raydium CPMM</span>
+              <div style="margin-top:8px">
+                <div class="flex items-center text-xs" style="justify-content:space-between;margin-bottom:4px">
+                  <span class="text-muted">Graduation</span>
+                  <span class="font-mono" style="color:#9945FF;font-weight:600">${(Math.min((parseFloat(pool?.pool_sol || 0) / 85) * 100, 100)).toFixed(1)}%</span>
+                </div>
+                <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+                  <div style="height:100%;width:${Math.min((parseFloat(pool?.pool_sol || 0) / 85) * 100, 100)}%;background:linear-gradient(90deg,#9945FF,#14F195);border-radius:3px"></div>
+                </div>
+                <div class="flex items-center text-xs" style="justify-content:space-between;margin-top:3px">
+                  <span class="text-muted">${parseFloat(pool?.pool_sol || 0).toFixed(2)} / 85 SOL</span>
+                  <span class="text-muted">→ Raydium</span>
+                </div>
               </div>
             </div>
 

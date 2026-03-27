@@ -282,6 +282,20 @@ export async function renderTrade(container, state, mintAddress) {
                 <div class="text-muted text-xs">Volume</div>
               </div>
             </div>
+            <!-- Graduation Progress -->
+            <div id="graduation-bar" style="margin-top:12px;display:none">
+              <div class="flex items-center text-xs" style="justify-content:space-between;margin-bottom:4px">
+                <span class="text-muted">Bonding Curve</span>
+                <span class="font-mono" id="graduation-pct" style="color:#9945FF">0%</span>
+              </div>
+              <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+                <div id="graduation-fill" style="height:100%;background:linear-gradient(90deg,#9945FF,#14F195);border-radius:3px;transition:width 0.6s ease;width:0%"></div>
+              </div>
+              <div class="flex items-center text-xs" style="justify-content:space-between;margin-top:3px">
+                <span class="text-muted" id="graduation-sol">0 / 85 SOL</span>
+                <span class="text-muted">→ Raydium</span>
+              </div>
+            </div>
             <div class="flex items-center gap-1 mt-1" style="justify-content:center">
               <span class="text-xs" style="color:#14F195">🔒 Liquidity Locked</span>
               <span class="text-muted text-xs">•</span>
@@ -550,6 +564,24 @@ async function loadTradePageData(mintAddress) {
       document.getElementById('stat-mcap').textContent = '—';
     }
     document.getElementById('stat-vol').textContent = poolData.total_volume_sol ? `${parseFloat(poolData.total_volume_sol).toFixed(4)} SOL` : '0 SOL';
+
+    // Graduation progress bar
+    const gradBar = document.getElementById('graduation-bar');
+    if (gradBar && poolData.status !== 'graduated') {
+      const realSolVal = parseFloat(poolData.real_sol_balance || poolData.pool_sol || 0);
+      const pct = Math.min((realSolVal / 85) * 100, 100);
+      gradBar.style.display = '';
+      document.getElementById('graduation-pct').textContent = pct.toFixed(1) + '%';
+      document.getElementById('graduation-fill').style.width = pct + '%';
+      document.getElementById('graduation-sol').textContent = `${realSolVal.toFixed(2)} / 85 SOL`;
+    } else if (gradBar && poolData.status === 'graduated') {
+      gradBar.style.display = '';
+      document.getElementById('graduation-pct').textContent = '🎓 Graduated';
+      document.getElementById('graduation-pct').style.color = '#14F195';
+      document.getElementById('graduation-fill').style.width = '100%';
+      document.getElementById('graduation-sol').textContent = '85 / 85 SOL';
+    }
+
     // stat-ath is populated by loadPriceChart
 
     // Mint info

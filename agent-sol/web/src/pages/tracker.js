@@ -209,9 +209,16 @@ function renderTable(tokens) {
     const status = token.status || 'active';
     const created = token.createdAt || token.created_at || 0;
 
+    const realSolBal = token.realSolBalance || 0;
+    const gradPct = Math.min((realSolBal / 85) * 100, 100);
     const statusBadge = status === 'graduated'
       ? '<span style="color: #9945FF; font-size: 0.8rem;">🎓 Raydium</span>'
-      : '<span style="color: var(--green); font-size: 0.8rem;">● Bonding</span>';
+      : `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+           <span style="color: var(--green); font-size: 0.8rem;">● ${gradPct.toFixed(1)}%</span>
+           <div style="width:60px;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden">
+             <div style="height:100%;width:${gradPct}%;background:linear-gradient(90deg,#9945FF,#14F195);border-radius:2px"></div>
+           </div>
+         </div>`;
 
     return `
       <tr class="token-row" data-id="${token.id}" data-mint="${mint}" style="cursor: pointer;">
@@ -347,6 +354,27 @@ async function openTokenDetail(tokenId, mint) {
           <div class="stat-value" style="font-size: 1rem; color: #ff6b6b;">${totalSells}</div>
         </div>
       </div>
+
+      <!-- Graduation Progress -->
+      ${status !== 'graduated' ? `
+      <div class="card mb-2" style="padding: 0.75rem;">
+        <div class="flex items-center text-xs" style="justify-content:space-between;margin-bottom:6px">
+          <span class="font-semibold">Bonding Curve Progress</span>
+          <span class="font-mono" style="color:#9945FF;font-weight:600">${(Math.min((realSol / 85) * 100, 100)).toFixed(1)}%</span>
+        </div>
+        <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${Math.min((realSol / 85) * 100, 100)}%;background:linear-gradient(90deg,#9945FF,#14F195);border-radius:4px;transition:width 0.6s ease"></div>
+        </div>
+        <div class="flex items-center text-xs" style="justify-content:space-between;margin-top:4px">
+          <span class="text-muted">${realSol.toFixed(2)} / 85 SOL</span>
+          <span class="text-muted">→ Raydium CPMM</span>
+        </div>
+      </div>
+      ` : `
+      <div class="card mb-2" style="padding: 0.75rem; text-align:center;">
+        <span style="color:#14F195;font-weight:600">🎓 Graduated to Raydium CPMM</span>
+      </div>
+      `}
 
       <div class="grid-3 gap-2 mb-2">
         <div class="card card-compact">
