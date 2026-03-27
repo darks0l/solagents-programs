@@ -11,9 +11,169 @@ import { connectWallet, getPublicKey, isConnected, signAndSendTransaction } from
 const LAMPORTS_PER_SOL = 1_000_000_000;
 const TOKEN_DECIMALS = 9;
 
+// ── Live WebSocket Feed ──────────────────────────────────────
+
+let _ws = null;
+let _wsReconnectTimer = null;
+let _wsMintAddress = null;
+let _wsRetries = 0;
+const MAX_WS_RETRIES = 5;
+
+function connectLiveFeed(mintAddress) {
+  disconnectLiveFeed();
+  _wsMintAddress = mintAddress;
+  _wsRetries = 0;
+  _openWs(mintAddress);
+}
+
+function _openWs(mintAddress) {
+  try {
+    // Derive WS URL from API base
+    const apiBase = api.base;
+    let wsUrl;
+    if (apiBase.startsWith('http')) {
+      wsUrl = apiBase.replace(/^http/, 'ws').replace(/\/api\/?$/, '') + '/ws/trades';
+    } else {
+      // Relative path — use current host
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsUrl = `${proto}//${location.host}/ws/trades`;
+    }
+
+    _ws = new WebSocket(wsUrl);
+
+    _ws.onopen = () => {
+      _wsRetries = 0;
+      // Subscribe to this specific mint
+      _ws.send(JSON.stringify({ subscribe: mintAddress }));
+      // Show live indicator
+      const indicator = document.getElementById('live-indicator');
+      if (indicator) {
+        indicator.style.display = '';
+        indicator.classList.add('live-pulse');
+      }
+    };
+
+    _ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.event === 'trade') {
+          handleLiveTrade(msg.data, mintAddress);
+        }
+      } catch { /* ignore malformed */ }
+    };
+
+    _ws.onclose = () => {
+      const indicator = document.getElementById('live-indicator');
+      if (indicator) indicator.classList.remove('live-pulse');
+      // Auto-reconnect if still on same page
+      if (_wsMintAddress === mintAddress && _wsRetries < MAX_WS_RETRIES) {
+        _wsRetries++;
+        _wsReconnectTimer = setTimeout(() => _openWs(mintAddress), 2000 * _wsRetries);
+      }
+    };
+
+    _ws.onerror = () => {
+      // onclose will fire after this
+    };
+  } catch {
+    // WS not available — fall back to polling
+  }
+}
+
+function disconnectLiveFeed() {
+  _wsMintAddress = null;
+  if (_wsReconnectTimer) { clearTimeout(_wsReconnectTimer); _wsReconnectTimer = null; }
+  if (_ws) {
+    try { _ws.close(); } catch {}
+    _ws = null;
+  }
+  const indicator = document.getElementById('live-indicator');
+  if (indicator) indicator.style.display = 'none';
+}
+
+function handleLiveTrade(data, mintAddress) {
+  // 1. Prepend trade to trades list
+  const list = document.getElementById('trades-list');
+  if (list && data.wallet) {
+    const side = (data.type === 'buy' || data.side === 'buy') ? 'buy' : 'sell';
+    const tokenAmt = data.amount_token ? Number(data.amount_token / 1e9).toLocaleString() : '—';
+    const solAmt = data.amount_sol ? (data.amount_sol / 1e9).toFixed(4) : (data.sol_amount || '—');
+    const row = document.createElement('div');
+    row.className = 'flex items-center text-xs trade-row-flash';
+    row.style.cssText = 'padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.04);justify-content:space-between';
+    row.innerHTML = `
+      <span style="color:${side === 'buy' ? '#14F195' : '#FF4444'};font-weight:600;width:36px">${side.toUpperCase()}</span>
+      <span class="font-mono" style="flex:1;text-align:right">${tokenAmt} tokens</span>
+      <span class="font-mono" style="flex:1;text-align:right">${solAmt} SOL</span>
+      <span class="text-muted" style="flex:1;text-align:right">${truncateAddress(data.wallet)}</span>
+      <span class="text-muted" style="flex:1;text-align:right">just now</span>
+    `;
+    // Remove "no trades" placeholder if present
+    const placeholder = list.querySelector('.text-muted.text-center');
+    if (placeholder) placeholder.remove();
+    list.prepend(row);
+    // Cap visible trades at 30
+    while (list.children.length > 30) list.lastChild.remove();
+  }
+
+  // 2. Update price display
+  const price = parseFloat(data.price || 0);
+  if (price > 0) {
+    const priceEl = document.getElementById('stat-price');
+    if (priceEl) {
+      priceEl.textContent = price < 0.001 ? price.toFixed(10) : price.toFixed(6);
+      // Flash green/red
+      priceEl.classList.remove('price-flash-green', 'price-flash-red');
+      void priceEl.offsetWidth; // force reflow
+      priceEl.classList.add(data.side === 'sell' || data.type === 'sell' ? 'price-flash-red' : 'price-flash-green');
+    }
+
+    // 3. Add point to chart
+    if (_chartData.mint === mintAddress) {
+      _chartData.prices.push({
+        price_sol: price.toString(),
+        timestamp: Math.floor(Date.now() / 1000),
+      });
+      // Re-render chart with current timeframe
+      const activeBtn = document.querySelector('.tf-btn.active');
+      const tf = activeBtn ? parseInt(activeBtn.dataset.tf) : 86400;
+      loadPriceChart(mintAddress, tf);
+    }
+  }
+
+  // 4. Refresh stats (pool data) — debounced
+  _scheduleStatsRefresh(mintAddress);
+}
+
+let _statsRefreshTimer = null;
+function _scheduleStatsRefresh(mintAddress) {
+  if (_statsRefreshTimer) return; // already scheduled
+  _statsRefreshTimer = setTimeout(async () => {
+    _statsRefreshTimer = null;
+    try {
+      const poolData = await api.get(`/chain/state/pool/${mintAddress}`);
+      const price = parseFloat(poolData.price_sol || poolData.current_price || '0');
+      document.getElementById('stat-price').textContent = price < 0.001 ? price.toFixed(10) : price.toFixed(6);
+      document.getElementById('stat-vol').textContent = poolData.total_volume_sol ? `${parseFloat(poolData.total_volume_sol).toFixed(4)} SOL` : '0 SOL';
+
+      // Update market cap
+      try {
+        const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+        const cgData = await cgRes.json();
+        const solPriceUsd = cgData.solana?.usd || 0;
+        const mcapSol = parseFloat(poolData.market_cap_sol || 0);
+        if (mcapSol > 0 && solPriceUsd > 0) {
+          document.getElementById('stat-mcap').textContent = '$' + (mcapSol * solPriceUsd).toLocaleString(undefined, { maximumFractionDigits: 0 });
+        }
+      } catch {}
+    } catch {}
+  }, 1500); // 1.5s debounce
+}
+
 export async function renderTrade(container, state, mintAddress) {
   // If no mint specified, show token picker landing
   if (!mintAddress) {
+    disconnectLiveFeed();
     renderTradeLanding(container);
     return;
   }
@@ -39,7 +199,10 @@ export async function renderTrade(container, state, mintAddress) {
       <div>
         <div class="card glass" id="price-chart-card">
           <div class="card-header flex items-center" style="justify-content:space-between">
-            <h2 class="font-semibold text-sm">Price Chart</h2>
+            <div class="flex items-center gap-1">
+              <h2 class="font-semibold text-sm">Price Chart</h2>
+              <span id="live-indicator" style="display:none;font-size:0.7rem;padding:2px 8px;border-radius:4px;background:rgba(20,241,149,0.15);color:#14F195;font-weight:600;letter-spacing:0.5px">● LIVE</span>
+            </div>
             <div class="flex gap-05" id="timeframe-btns">
               <button class="btn btn-xs btn-ghost timeframe-btn" data-tf="300">5m</button>
               <button class="btn btn-xs btn-ghost timeframe-btn" data-tf="3600">1h</button>
@@ -230,6 +393,9 @@ export async function renderTrade(container, state, mintAddress) {
 
   // Load token data
   await loadTradePageData(mintAddress);
+
+  // Connect live WebSocket feed for real-time updates
+  connectLiveFeed(mintAddress);
 
   // Wire up tab switching
   document.getElementById('tab-buy')?.addEventListener('click', () => switchSide('buy'));
@@ -609,7 +775,8 @@ async function executeBuy(mintAddress) {
 
     toast(`✅ Bought! Transaction confirmed.`, 'success');
 
-    // Refresh
+    // Refresh — clear chart cache so fresh data is fetched
+    _chartData = { mint: null, prices: [] };
     setTimeout(() => loadTradePageData(mintAddress), 2000);
   } catch (err) {
     console.error('Buy error:', err);
@@ -662,6 +829,7 @@ async function executeSell(mintAddress) {
     });
 
     toast(`✅ Sold! SOL returned to your wallet.`, 'success');
+    _chartData = { mint: null, prices: [] };
     setTimeout(() => loadTradePageData(mintAddress), 2000);
   } catch (err) {
     console.error('Sell error:', err);
