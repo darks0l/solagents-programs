@@ -5,14 +5,28 @@
  * Route: /trade/:mintAddress
  */
 
-import { api, toast, truncateAddress } from '../main.js';
+import { api, toast, truncateAddress, getSolPrice } from '../main.js';
 import { connectWallet, getPublicKey, isConnected, signAndSendTransaction } from '../services/wallet.js';
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 const TOKEN_DECIMALS = 9;
 
 export async function renderTrade(container, state, mintAddress) {
+  // If no mint specified, show token picker landing
+  if (!mintAddress) {
+    renderTradeLanding(container);
+    return;
+  }
+
   container.innerHTML = `
+    <!-- SOL Price Ticker -->
+    <div class="card" id="sol-ticker" style="padding:10px 16px;margin-bottom:1rem;display:flex;align-items:center;gap:12px;background:rgba(153,69,255,0.08);border:1px solid rgba(153,69,255,0.15)">
+      <img src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png" alt="SOL" style="width:24px;height:24px;border-radius:50%">
+      <span style="font-weight:600;color:var(--text-primary)">SOL</span>
+      <span class="font-mono" style="color:var(--green);font-size:1.1rem;font-weight:700" id="sol-usd-price">—</span>
+      <span class="text-muted text-xs" style="margin-left:auto">Live price</span>
+    </div>
+
     <div class="page-header">
       <button class="btn btn-sm btn-ghost mb-2" id="btn-back">← Back</button>
       <div id="token-header">
@@ -205,6 +219,12 @@ export async function renderTrade(container, state, mintAddress) {
       </div>
     </div>
   `;
+
+  // Load SOL price
+  getSolPrice().then(p => {
+    const el = document.getElementById('sol-usd-price');
+    if (el && p) el.textContent = `$${p.toFixed(2)}`;
+  });
 
   document.getElementById('btn-back')?.addEventListener('click', () => history.back());
 
@@ -655,4 +675,90 @@ function formatTime(ts) {
   if (diff < 60) return `${diff}s ago`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   return `${Math.floor(diff / 3600)}h ago`;
+}
+
+// ── Trade Landing (no mint specified) ────────────────────────
+
+async function renderTradeLanding(container) {
+  container.innerHTML = `
+    <!-- SOL Price Ticker -->
+    <div class="card" id="sol-ticker" style="padding:14px 20px;margin-bottom:1.5rem;display:flex;align-items:center;gap:16px;background:rgba(153,69,255,0.08);border:1px solid rgba(153,69,255,0.15)">
+      <img src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png" alt="SOL" style="width:32px;height:32px;border-radius:50%">
+      <div>
+        <div style="font-weight:700;font-size:1.3rem;color:var(--text-primary)">Solana</div>
+        <div class="text-muted text-xs">SOL/USD</div>
+      </div>
+      <div class="font-mono" style="color:var(--green);font-size:1.6rem;font-weight:700;margin-left:auto" id="sol-usd-price">—</div>
+    </div>
+
+    <div class="section-header" style="margin-bottom:1.5rem">
+      <h1 class="page-title" style="font-size:1.8rem">Trade Agent Tokens</h1>
+      <p class="text-secondary">Select a token below to start trading on the bonding curve.</p>
+    </div>
+
+    <div id="trade-token-list">
+      <div class="text-muted text-center" style="padding:3rem">Loading tokens...</div>
+    </div>
+  `;
+
+  // Load SOL price
+  getSolPrice().then(p => {
+    const el = document.getElementById('sol-usd-price');
+    if (el && p) el.textContent = `$${p.toFixed(2)}`;
+  });
+
+  // Load available tokens
+  try {
+    const data = await api.get('/tokens?sort=recent&limit=50');
+    const tokens = data.tokens || data || [];
+    const list = document.getElementById('trade-token-list');
+    if (!list) return;
+
+    if (!tokens.length) {
+      list.innerHTML = '<div class="text-muted text-center" style="padding:3rem">No tokens available yet. <a href="#" data-page="agents" style="color:var(--green)">Browse agents</a> to find one to tokenize.</div>';
+      return;
+    }
+
+    list.innerHTML = tokens.map(t => {
+      const symbol = t.token_symbol || t.symbol || '???';
+      const name = t.token_name || t.name || 'Unknown';
+      const mint = t.mint_address || t.mint || '';
+      const price = parseFloat(t.current_price || t.price || 0);
+      const vol = parseFloat(t.volume_24h || t.volume || 0);
+      return `
+        <div class="card glass mb-1 trade-token-row" data-mint="${mint}" style="padding:14px 20px;cursor:pointer;transition:border-color 0.2s;border:1px solid transparent">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#14F195,#9945FF);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;color:#000;flex-shrink:0">
+              ${symbol.slice(0, 2)}
+            </div>
+            <div style="flex:1">
+              <div style="font-weight:600;font-size:1rem">${name}</div>
+              <div class="text-muted text-xs">$${symbol}</div>
+            </div>
+            <div style="text-align:right">
+              <div class="font-mono" style="font-weight:600;color:var(--green)">${price < 0.001 ? price.toExponential(3) : price.toFixed(6)} SOL</div>
+              <div class="text-muted text-xs">Vol: ${vol > 0 ? vol.toFixed(4) + ' SOL' : '—'}</div>
+            </div>
+            <div style="color:var(--text-tertiary);font-size:1.2rem">→</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Click to navigate to trade with mint
+    list.querySelectorAll('.trade-token-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const mint = row.dataset.mint;
+        if (mint) {
+          history.pushState({ page: 'trade', params: { mintAddress: mint } }, '', `/trade/${mint}`);
+          const content = document.getElementById('page-content');
+          content.innerHTML = '';
+          renderTrade(content, {}, mint);
+        }
+      });
+    });
+  } catch {
+    const list = document.getElementById('trade-token-list');
+    if (list) list.innerHTML = '<div class="text-muted text-center" style="padding:3rem">Failed to load tokens.</div>';
+  }
 }
