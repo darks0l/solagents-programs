@@ -374,7 +374,7 @@ export async function buildBuyTransaction({
   const [configPDA] = getCurveConfigPDA();
 
   const ix = await program.methods
-    .buy(new BN(solAmountLamports), new BN(minTokensOut))
+    .buy(new BN(solAmountLamports.toString()), new BN(minTokensOut.toString()))
     .accounts({
       buyer,
       config: configPDA,
@@ -423,7 +423,7 @@ export async function buildSellTransaction({
   const [configPDA] = getCurveConfigPDA();
 
   const ix = await program.methods
-    .sell(new BN(tokenAmount), new BN(minSolOut))
+    .sell(new BN(tokenAmount.toString()), new BN(minSolOut.toString()))
     .accounts({
       seller,
       config: configPDA,
