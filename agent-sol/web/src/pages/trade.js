@@ -328,10 +328,25 @@ async function loadTradePageData(mintAddress) {
       </div>
     `;
 
+    // Fetch SOL/USD price
+    let solPriceUsd = 0;
+    try {
+      const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+      const cgData = await cgRes.json();
+      solPriceUsd = cgData.solana?.usd || 0;
+    } catch {}
+
     // Update stats
     const price = parseFloat(poolData.price_sol || poolData.current_price || '0');
     document.getElementById('stat-price').textContent = price < 0.001 ? price.toFixed(10) : price.toFixed(6);
-    document.getElementById('stat-mcap').textContent = poolData.market_cap_sol ? `${parseFloat(poolData.market_cap_sol).toFixed(2)} SOL` : '—';
+    const mcapSol = parseFloat(poolData.market_cap_sol || 0);
+    if (mcapSol > 0 && solPriceUsd > 0) {
+      document.getElementById('stat-mcap').textContent = '$' + (mcapSol * solPriceUsd).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    } else if (mcapSol > 0) {
+      document.getElementById('stat-mcap').textContent = `${mcapSol.toFixed(2)} SOL`;
+    } else {
+      document.getElementById('stat-mcap').textContent = '—';
+    }
     document.getElementById('stat-vol').textContent = poolData.total_volume_sol ? `${parseFloat(poolData.total_volume_sol).toFixed(4)} SOL` : '0 SOL';
     // stat-ath is populated by loadPriceChart
 

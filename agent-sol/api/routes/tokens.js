@@ -502,10 +502,11 @@ export default async function tokenRoutes(fastify) {
       if (pool) {
         const vSol = Number(BigInt(pool.virtual_sol_reserve)) / 1e9;  // SOL
         const vToken = Number(BigInt(pool.virtual_token_reserve)) / 1e9; // display tokens
+        const realSol = Number(BigInt(pool.real_sol_reserve)) / 1e9;
         const totalSupplyDisplay = Number(BigInt(pool.total_supply)) / 1e9;
         const priceSol = vToken > 0 ? vSol / vToken : 0;
-        // FDV market cap in SOL = price_per_token * total_supply
-        const marketCapSol = priceSol * totalSupplyDisplay;
+        // FDV market cap: (real_sol + initial_virtual_30) * (total_supply / tokens_in_pool)
+        const marketCapSol = vToken > 0 ? (realSol + 30) * (totalSupplyDisplay / vToken) : 0;
 
         poolData = {
           price_sol: priceSol.toFixed(12),

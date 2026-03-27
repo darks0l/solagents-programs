@@ -110,7 +110,9 @@ export default async function chainRoutes(fastify) {
         total_sells: pool.totalSells?.toNumber() || 0,
         status: pool.graduated ? 'graduated' : 'active',
         graduated_at: pool.graduatedAt?.toNumber() || 0,
-        market_cap_sol: (priceSol * Number(BigInt(pool.totalSupply.toString()) / BigInt(1e9))).toFixed(4),
+        market_cap_sol: (vTokenBig > 0n
+          ? (Number(BigInt(pool.realSolBalance.toString())) / LAMPORTS_PER_SOL + 30) * (Number(BigInt(pool.totalSupply.toString()) / BigInt(1e9)) / (vToken / 1e9))
+          : 0).toFixed(4),
         graduation_progress: pool.realSolBalance
           ? ((Number(BigInt(pool.realSolBalance.toString())) / 85_000_000_000) * 100).toFixed(2) + '%'
           : '0%',
