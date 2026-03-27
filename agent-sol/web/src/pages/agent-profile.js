@@ -88,7 +88,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
     if (creatorTrades.length > 0) {
       const totalSolLamports = creatorTrades.reduce((s, t) => s + parseFloat(t.amount_sol || 0), 0);
       const totalTokens = creatorTrades.reduce((s, t) => s + parseFloat(t.amount_token || 0), 0);
-      const totalSupply = parseFloat(token.total_supply || 1e9) * 1e9; // token supply in smallest unit
+      const totalSupply = parseFloat(String(token.total_supply || 1e9).replace(/,/g, '')) * 1e9; // raw supply (9 decimals)
       const pct = totalSupply > 0 ? ((totalTokens / totalSupply) * 100).toFixed(2) : '0';
       derivedDevBuys = {
         buys: creatorTrades.map(t => ({
