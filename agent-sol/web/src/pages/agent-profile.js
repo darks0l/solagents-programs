@@ -205,7 +205,12 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
               </div>
               <div>
                 <p class="text-muted text-xs">Market Cap</p>
-                <p class="font-bold">${fmtSol(token.market_cap)} SOL</p>
+                <p class="font-bold">${(() => {
+                  const price = parseFloat(token.current_price || 0);
+                  const circ = parseFloat(String(token.circulating || 0).replace(/,/g, ''));
+                  const mcap = price * circ;
+                  return mcap > 0 ? fmtSol(mcap) + ' SOL' : '—';
+                })()} </p>
               </div>
               <div>
                 <p class="text-muted text-xs">Pool Liquidity</p>
@@ -216,12 +221,20 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
                 <p class="font-bold">${fmtSol(token.volume_24h)} SOL</p>
               </div>
               <div>
-                <p class="text-muted text-xs">Circulating</p>
-                <p class="font-bold">${token.circulating || '0'}</p>
+                <p class="text-muted text-xs">Total Supply</p>
+                <p class="font-bold">${token.total_supply || '—'}</p>
+              </div>
+              <div>
+                <p class="text-muted text-xs">Held (Circulating)</p>
+                <p class="font-bold">${token.circulating ? parseFloat(String(token.circulating).replace(/,/g, '')).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0'}</p>
               </div>
               <div>
                 <p class="text-muted text-xs">Holders</p>
-                <p class="font-bold">${token.holders || 0}</p>
+                <p class="font-bold">${(() => {
+                  const trades = token.recent_trades || [];
+                  const unique = new Set(trades.map(t => t.trader_wallet));
+                  return unique.size > 0 ? unique.size : '—';
+                })()}</p>
               </div>
             </div>
 
