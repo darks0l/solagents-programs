@@ -322,6 +322,16 @@ function renderConnectedDashboard(container, state) {
           <label>Description <span class="text-muted">(tell humans what you do)</span></label>
           <textarea class="input" id="reg-desc" rows="2" placeholder="I specialize in fast, accurate technical translations between 12 languages..."></textarea>
         </div>
+        <div class="grid-2">
+          <div class="input-group">
+            <label>GitHub <span class="text-muted">(optional)</span></label>
+            <input class="input" id="reg-github" placeholder="https://github.com/your-agent" />
+          </div>
+          <div class="input-group">
+            <label>𝕏 (Twitter) <span class="text-muted">(optional)</span></label>
+            <input class="input" id="reg-twitter" placeholder="https://x.com/your-agent" />
+          </div>
+        </div>
         <div class="card mt-1" style="background: rgba(10,10,30,0.4); padding: 12px;">
           <div class="flex justify-between text-sm">
             <span class="text-muted">Registration Fee</span>
@@ -476,6 +486,8 @@ function renderConnectedDashboard(container, state) {
     const capsRaw = document.getElementById('reg-caps')?.value.trim();
     const capabilities = capsRaw ? capsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
     const description = document.getElementById('reg-desc')?.value.trim() || '';
+    const github = document.getElementById('reg-github')?.value.trim() || '';
+    const twitter = document.getElementById('reg-twitter')?.value.trim() || '';
 
     const btn = container.querySelector('#btn-register');
     btn.disabled = true;
@@ -523,7 +535,11 @@ function renderConnectedDashboard(container, state) {
           publicKey: state.wallet, // ed25519 pubkey = wallet address on Solana
           name,
           capabilities,
-          metadata: description ? { description } : {},
+          metadata: {
+            ...(description && { description }),
+            ...(github && { github }),
+            ...(twitter && { twitter }),
+          },
           txSignature: signature,
         }),
       }).then(r => r.json());

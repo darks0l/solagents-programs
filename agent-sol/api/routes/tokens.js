@@ -539,14 +539,20 @@ export default async function tokenRoutes(fastify) {
     const recentJobs = stmts.listJobsByProvider.all(agent.wallet_address, 10, 0);
 
     return {
-      agent: {
-        id: agent.id,
-        name: agent.name,
-        walletAddress: agent.wallet_address,
-        capabilities: JSON.parse(agent.capabilities || '[]'),
-        registeredAt: agent.registered_at,
-        lastSeen: agent.last_seen,
-      },
+      agent: (() => {
+        const meta = JSON.parse(agent.metadata || '{}');
+        return {
+          id: agent.id,
+          name: agent.name,
+          walletAddress: agent.wallet_address,
+          capabilities: JSON.parse(agent.capabilities || '[]'),
+          description: meta.description || null,
+          github: meta.github || null,
+          twitter: meta.twitter || null,
+          registeredAt: agent.registered_at,
+          lastSeen: agent.last_seen,
+        };
+      })(),
       stats: stats ? {
         totalJobs: stats.total_jobs,
         completedJobs: stats.completed_jobs,

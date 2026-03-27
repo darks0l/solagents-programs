@@ -36,11 +36,15 @@ export default async function agentRoutes(fastify) {
         };
       }
 
+      const meta = JSON.parse(a.metadata || '{}');
       return {
         id: a.id,
         name: a.name,
         walletAddress: a.wallet_address,
         capabilities: JSON.parse(a.capabilities || '[]'),
+        description: meta.description || null,
+        github: meta.github || null,
+        twitter: meta.twitter || null,
         registeredAt: a.registered_at,
         tokenized: !!token && token.status === 'active',
         token: tokenData,
@@ -88,13 +92,17 @@ export default async function agentRoutes(fastify) {
       };
     }
 
+    const meta = JSON.parse(agent.metadata || '{}');
     return {
       id: agent.id,
       name: agent.name,
       walletAddress: agent.wallet_address,
       publicKey: agent.public_key,
       capabilities: JSON.parse(agent.capabilities || '[]'),
-      metadata: JSON.parse(agent.metadata || '{}'),
+      description: meta.description || null,
+      github: meta.github || null,
+      twitter: meta.twitter || null,
+      metadata: meta,
       registeredAt: agent.registered_at,
       lastSeen: agent.last_seen,
       tokenized: !!token && token.status === 'active',
