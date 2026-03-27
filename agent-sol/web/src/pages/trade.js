@@ -574,6 +574,9 @@ async function executeBuy(mintAddress) {
       slippageBps: 100, // 1% slippage
     });
 
+    if (result.error) throw new Error(result.error);
+    if (!result.transaction) throw new Error('No transaction returned from server');
+
     btn.textContent = 'Waiting for wallet approval...';
 
     // Sign + send via Phantom
@@ -627,6 +630,9 @@ async function executeSell(mintAddress) {
       tokenAmount: raw,
       slippageBps: 100,
     });
+
+    if (result.error) throw new Error(result.error);
+    if (!result.transaction) throw new Error('No transaction returned from server');
 
     btn.textContent = 'Waiting for wallet approval...';
     const signature = await signAndSendTransaction(result.transaction);
