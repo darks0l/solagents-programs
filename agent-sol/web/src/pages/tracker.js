@@ -111,6 +111,7 @@ export function renderTracker(container) {
 
 let allTokens = [];
 let _cachedChartPoints = [];
+let _solPriceUsd = 0;
 
 async function loadTokens() {
   const sort = document.getElementById('tracker-sort')?.value || 'recent';
@@ -133,14 +134,37 @@ async function loadTokens() {
     }));
     allTokens = tokens;
 
+    // Fetch SOL price for USD conversion + on-chain liquidity
+    const solPrice = await getSolPrice() || 0;
+    _solPriceUsd = solPrice;
+
+    // Enrich with on-chain pool data for liquidity
+    try {
+      const poolsData = await api.get('/chain/pools');
+      const pools = poolsData.pools || poolsData || [];
+      const poolByMint = {};
+      for (const p of pools) {
+        const mint = p.mint?.toString() || p.mint_address || '';
+        if (mint) poolByMint[mint] = p;
+      }
+      for (const t of tokens) {
+        const pool = poolByMint[t.mint];
+        if (pool) {
+          t.realSolBalance = parseFloat(pool.real_sol || pool.real_sol_balance || pool.realSolBalance || 0);
+        } else {
+          t.realSolBalance = 0;
+        }
+      }
+    } catch { /* pools unavailable */ }
+
     // Update stats
     const totalTokens = tokens.length;
     const graduated = tokens.filter(t => t.status === 'graduated').length;
     const totalVolume = tokens.reduce((sum, t) => sum + (t.volume || 0), 0);
-    const totalLiquidity = tokens.reduce((sum, t) => sum + (t.realSolBalance || t.liquidity || 0), 0);
+    const totalLiquidity = tokens.reduce((sum, t) => sum + (t.realSolBalance || 0), 0);
 
     setText('stat-total', totalTokens.toString());
-    setText('stat-volume', formatSol(totalVolume));
+    setText('stat-volume', formatUsd(totalVolume * solPrice));
     setText('stat-liquidity', formatSol(totalLiquidity));
     setText('stat-graduated', graduated.toString());
 
@@ -204,8 +228,8 @@ function renderTable(tokens) {
           </div>
         </td>
         <td style="text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;">${formatPrice(price)}</td>
-        <td style="text-align: right; font-size: 0.88rem;">${formatSol(mcap)}</td>
-        <td style="text-align: right; font-size: 0.88rem;">${formatSol(vol)}</td>
+        <td style="text-align: right; font-size: 0.88rem;">${formatUsd(mcap * _solPriceUsd)}</td>
+        <td style="text-align: right; font-size: 0.88rem;">${formatUsd(vol * _solPriceUsd)}</td>
         <td style="text-align: right;">${holders}</td>
         <td style="text-align: right;">${statusBadge}</td>
         <td style="text-align: right; font-size: 0.82rem; color: var(--text-tertiary);">${formatTime(created)}</td>
@@ -541,6 +565,15 @@ function drawPriceChart(dataPoints, range = 'all') {
 function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
+}
+
+function formatUsd(value) {
+  const v = typeof value === 'number' ? value : 0;
+  if (v === 0) return '$0';
+  if (v < 0.01) return `$${v.toFixed(4)}`;
+  if (v < 1000) return `$${v.toFixed(2)}`;
+  if (v < 1_000_000) return `$${(v / 1000).toFixed(1)}K`;
+  return `$${(v / 1_000_000).toFixed(2)}M`;
 }
 
 function formatSol(lamportsOrSol) {

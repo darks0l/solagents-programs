@@ -304,7 +304,7 @@ async function openAgentDetail(agentId, state = {}) {
       </div>
 
       <!-- Capabilities -->
-      ${data.agent.capabilities.length > 0 ? `
+      ${(Array.isArray(data.agent.capabilities) && data.agent.capabilities.length > 0) ? `
         <div class="flex gap-05 mb-2" style="flex-wrap:wrap">
           ${data.agent.capabilities.map(c => `<span class="badge">${c}</span>`).join('')}
         </div>

@@ -563,11 +563,14 @@ export default async function tokenRoutes(fastify) {
   fastify.get('/api/platform/stats', async () => {
     const stats = stmts.platformStats.get();
     const jobData = stmts.jobStats.get();
+    // budget is stored in raw USDC (6 decimals) — convert to human-readable
+    const rawPaid = jobData?.total_paid || 0;
+    const paidUsd = rawPaid > 1000 ? rawPaid / 1e6 : rawPaid; // handle both raw and decimal formats
     return {
       agents: stats?.total_agents || 0,
       tokenized_agents: stats?.tokenized_agents || 0,
       total_jobs: stats?.total_jobs || 0,
-      total_volume_usd: jobData?.total_paid || 0,
+      total_volume_usd: parseFloat(paidUsd.toFixed(2)),
       total_token_trades: stats?.total_token_trades || 0,
     };
   });
