@@ -235,9 +235,13 @@ async function loadAgents(filter) {
       </div>
     `;
 
-    // Click handlers
+    // Click handlers — navigate to agent profile page
     grid.querySelectorAll('.agent-card').forEach(card => {
-      card.addEventListener('click', () => openAgentDetail(card.dataset.agentId, state));
+      card.addEventListener('click', () => {
+        document.dispatchEvent(new CustomEvent('navigate', {
+          detail: { page: 'agent', agentId: card.dataset.agentId }
+        }));
+      });
     });
   } catch (err) {
     document.getElementById('agents-grid').innerHTML = `

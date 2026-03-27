@@ -13,6 +13,7 @@ import { renderTokenize } from './pages/tokenize.js';
 import { renderSkills } from './pages/skills.js';
 import { renderTracker } from './pages/tracker.js';
 import { renderMarketplace } from './pages/marketplace.js';
+import { renderAgentProfile } from './pages/agent-profile.js';
 
 // === State ===
 const state = {
@@ -88,6 +89,7 @@ const pages = {
   trade: renderTrade,
   cards: renderCards,
   agents: renderAgents,
+  agent: renderAgentProfile,
   marketplace: renderMarketplace,
   tokenize: renderTokenize,
   skills: renderSkills,
@@ -98,6 +100,7 @@ const pages = {
 function pathForPage(page, params = {}) {
   if (page === 'dashboard') return '/';
   if (page === 'trade' && params.mintAddress) return `/trade/${params.mintAddress}`;
+  if (page === 'agent' && (params.agentId || params.id)) return `/agent/${params.agentId || params.id}`;
   return `/${page}`;
 }
 
@@ -105,6 +108,8 @@ function pageFromPath(path) {
   if (!path || path === '/') return { page: 'dashboard', params: {} };
   const tradeMatch = path.match(/^\/trade\/([^/]+)$/);
   if (tradeMatch) return { page: 'trade', params: { mintAddress: tradeMatch[1] } };
+  const agentMatch = path.match(/^\/agent\/([^/]+)$/);
+  if (agentMatch) return { page: 'agent', params: { agentId: agentMatch[1] } };
   const pageMatch = path.match(/^\/([a-z]+)$/);
   if (pageMatch && pages[pageMatch[1]]) return { page: pageMatch[1], params: {} };
   return { page: 'dashboard', params: {} };
@@ -124,7 +129,9 @@ function navigate(page, params = {}, skipHistory = false) {
 
   // Update nav active states
   document.querySelectorAll('.nav-link, .mobile-nav-link').forEach(link => {
-    link.classList.toggle('active', link.dataset.page === page);
+    // Keep "Agents" nav active when viewing an agent profile
+    const navPage = link.dataset.page;
+    link.classList.toggle('active', navPage === page || (navPage === 'agents' && page === 'agent'));
   });
 
   // Hide mobile nav
@@ -136,7 +143,7 @@ function navigate(page, params = {}, skipHistory = false) {
   content.className = 'main-content page-enter';
 
   if (pages[page]) {
-    pages[page](content, state, params.mintAddress || params.id);
+    pages[page](content, state, params.mintAddress || params.agentId || params.id);
   }
 }
 
