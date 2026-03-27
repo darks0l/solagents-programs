@@ -552,18 +552,23 @@ export default async function chainRoutes(fastify) {
         );
       }
 
-      // Emit WebSocket event
-      if (tokenId) {
-        emitTrade(tokenId, {
-          type: 'trade',
-          wallet: traderWallet || '',
-          price: (priceLamports / LAMPORTS_PER_SOL).toFixed(12),
-          txSignature,
-          symbol: dbToken?.token_symbol || '',
-          name: dbToken?.token_name || '',
-          onChain: true,
-        });
-      }
+      // Emit WebSocket event — broadcast to both tokenId and mintAddress
+      // so clients subscribed by either key receive the update
+      const tradePayload = {
+        type: 'trade',
+        side: tx?.meta?.logMessages?.some(l => l.includes('buy') || l.includes('Buy')) ? 'buy' : 'sell',
+        wallet: traderWallet || '',
+        price: (priceLamports / LAMPORTS_PER_SOL).toFixed(12),
+        amount_token: tokenAmount || '0',
+        amount_sol: solAmount || '0',
+        txSignature,
+        symbol: dbToken?.token_symbol || '',
+        name: dbToken?.token_name || '',
+        mintAddress: mintAddress || '',
+        onChain: true,
+      };
+      if (tokenId) emitTrade(tokenId, tradePayload);
+      if (mintAddress) emitTrade(mintAddress, tradePayload);
 
       return {
         synced: true,

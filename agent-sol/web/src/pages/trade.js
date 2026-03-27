@@ -87,6 +87,7 @@ function disconnectLiveFeed() {
     try { _ws.close(); } catch {}
     _ws = null;
   }
+  stopPolling();
   const indicator = document.getElementById('live-indicator');
   if (indicator) indicator.style.display = 'none';
 }
@@ -96,8 +97,10 @@ function handleLiveTrade(data, mintAddress) {
   const list = document.getElementById('trades-list');
   if (list && data.wallet) {
     const side = (data.type === 'buy' || data.side === 'buy') ? 'buy' : 'sell';
-    const tokenAmt = data.amount_token ? Number(data.amount_token / 1e9).toLocaleString() : '—';
-    const solAmt = data.amount_sol ? (data.amount_sol / 1e9).toFixed(4) : (data.sol_amount || '—');
+    const rawToken = BigInt(data.amount_token || '0');
+    const rawSol = BigInt(data.amount_sol || '0');
+    const tokenAmt = rawToken > 0n ? Number(rawToken / 1000000000n).toLocaleString() : '—';
+    const solAmt = rawSol > 0n ? (Number(rawSol) / 1e9).toFixed(4) : '—';
     const row = document.createElement('div');
     row.className = 'flex items-center text-xs trade-row-flash';
     row.style.cssText = 'padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.04);justify-content:space-between';
@@ -148,32 +151,62 @@ function handleLiveTrade(data, mintAddress) {
 let _statsRefreshTimer = null;
 function _scheduleStatsRefresh(mintAddress) {
   if (_statsRefreshTimer) return; // already scheduled
-  _statsRefreshTimer = setTimeout(async () => {
+  _statsRefreshTimer = setTimeout(() => {
     _statsRefreshTimer = null;
-    try {
-      const poolData = await api.get(`/chain/state/pool/${mintAddress}`);
-      const price = parseFloat(poolData.price_sol || poolData.current_price || '0');
-      document.getElementById('stat-price').textContent = price < 0.001 ? price.toFixed(10) : price.toFixed(6);
-      document.getElementById('stat-vol').textContent = poolData.total_volume_sol ? `${parseFloat(poolData.total_volume_sol).toFixed(4)} SOL` : '0 SOL';
+    _refreshPoolStats(mintAddress);
+  }, 1000); // 1s debounce
+}
 
-      // Update market cap
-      try {
-        const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
-        const cgData = await cgRes.json();
-        const solPriceUsd = cgData.solana?.usd || 0;
-        const mcapSol = parseFloat(poolData.market_cap_sol || 0);
-        if (mcapSol > 0 && solPriceUsd > 0) {
-          document.getElementById('stat-mcap').textContent = '$' + (mcapSol * solPriceUsd).toLocaleString(undefined, { maximumFractionDigits: 0 });
-        }
-      } catch {}
+async function _refreshPoolStats(mintAddress) {
+  try {
+    const poolData = await api.get(`/chain/state/pool/${mintAddress}`);
+    const price = parseFloat(poolData.price_sol || poolData.current_price || '0');
+    const priceEl = document.getElementById('stat-price');
+    if (priceEl) priceEl.textContent = price < 0.001 ? price.toFixed(10) : price.toFixed(6);
+    const volEl = document.getElementById('stat-vol');
+    if (volEl) volEl.textContent = poolData.total_volume_sol ? `${parseFloat(poolData.total_volume_sol).toFixed(4)} SOL` : '0 SOL';
+
+    // Update market cap
+    try {
+      const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+      const cgData = await cgRes.json();
+      const solPriceUsd = cgData.solana?.usd || 0;
+      const mcapSol = parseFloat(poolData.market_cap_sol || 0);
+      if (mcapSol > 0 && solPriceUsd > 0) {
+        document.getElementById('stat-mcap').textContent = '$' + (mcapSol * solPriceUsd).toLocaleString(undefined, { maximumFractionDigits: 0 });
+      }
     } catch {}
-  }, 1500); // 1.5s debounce
+  } catch {}
+}
+
+// ── Polling fallback (catches anything WS misses) ────────────
+
+let _pollTimer = null;
+
+function startPolling(mintAddress) {
+  stopPolling();
+  // Poll every 10s for fresh pool state + trades
+  _pollTimer = setInterval(async () => {
+    if (_wsMintAddress !== mintAddress) { stopPolling(); return; }
+    await _refreshPoolStats(mintAddress);
+    // Refresh chart data from API
+    _chartData = { mint: null, prices: [] };
+    const activeBtn = document.querySelector('.timeframe-btn.active');
+    const tf = activeBtn ? parseInt(activeBtn.dataset.tf) : 86400;
+    loadPriceChart(mintAddress, tf);
+    loadTrades(mintAddress);
+  }, 10000);
+}
+
+function stopPolling() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
 }
 
 export async function renderTrade(container, state, mintAddress) {
   // If no mint specified, show token picker landing
   if (!mintAddress) {
     disconnectLiveFeed();
+    stopPolling();
     renderTradeLanding(container);
     return;
   }
@@ -396,6 +429,9 @@ export async function renderTrade(container, state, mintAddress) {
 
   // Connect live WebSocket feed for real-time updates
   connectLiveFeed(mintAddress);
+
+  // Polling fallback: refresh stats/chart/trades every 10s
+  startPolling(mintAddress);
 
   // Wire up tab switching
   document.getElementById('tab-buy')?.addEventListener('click', () => switchSide('buy'));
@@ -775,9 +811,14 @@ async function executeBuy(mintAddress) {
 
     toast(`✅ Bought! Transaction confirmed.`, 'success');
 
-    // Refresh — clear chart cache so fresh data is fetched
+    // Aggressive refresh — immediate stats + staggered full reload
     _chartData = { mint: null, prices: [] };
-    setTimeout(() => loadTradePageData(mintAddress), 2000);
+    _refreshPoolStats(mintAddress);
+    loadTrades(mintAddress);
+    setTimeout(() => {
+      _chartData = { mint: null, prices: [] };
+      loadTradePageData(mintAddress);
+    }, 1500);
   } catch (err) {
     console.error('Buy error:', err);
     const msg = err?.message || err?.toString() || 'Unknown error';
@@ -830,7 +871,12 @@ async function executeSell(mintAddress) {
 
     toast(`✅ Sold! SOL returned to your wallet.`, 'success');
     _chartData = { mint: null, prices: [] };
-    setTimeout(() => loadTradePageData(mintAddress), 2000);
+    _refreshPoolStats(mintAddress);
+    loadTrades(mintAddress);
+    setTimeout(() => {
+      _chartData = { mint: null, prices: [] };
+      loadTradePageData(mintAddress);
+    }, 1500);
   } catch (err) {
     console.error('Sell error:', err);
     const msg = err?.message || err?.toString() || 'Unknown error';
