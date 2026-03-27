@@ -172,25 +172,38 @@ export default async function tokenRoutes(fastify) {
   // === TOKENIZATION ===
 
   // Tokenize an agent (create token request)
-  // Requires auth: agent must sign this request with their own keypair.
-  // creatorWallet is always the authenticated agent's registered wallet — not user-supplied.
+  // Two valid flows:
+  //   1. Agent self-tokenizes: Bearer auth present → creatorWallet = agent's registered wallet (DB)
+  //   2. Human tokenizes agent: no Bearer auth → creatorWallet must be supplied in body (human's Phantom wallet)
   fastify.post('/api/agents/:agentId/tokenize', {
-    preHandler: [authHook],
+    preHandler: [optionalAuth],
   }, async (request, reply) => {
     const { agentId } = request.params;
     const { tokenName, tokenSymbol, totalSupply, logoUrl, description, agentDescription } = request.body || {};
+    const bodyCreatorWallet = request.body?.creatorWallet;
 
     // Validate agent exists
     const agent = stmts.getAgent.get(agentId);
     if (!agent) return reply.code(404).send({ error: 'Agent not found' });
 
-    // Auth check: only the agent itself can tokenize itself
-    if (request.agent.id !== agentId) {
-      return reply.code(403).send({ error: 'An agent can only tokenize itself' });
+    // Determine creatorWallet based on who is calling:
+    // - Authenticated agent calling for itself → use DB wallet (can't be spoofed)
+    // - Authenticated agent calling for a different agent → reject (agents can't tokenize each other)
+    // - No auth (human flow) → use creatorWallet from body (human's wallet receives creator fees)
+    let creatorWallet;
+    if (request.agent) {
+      // Agent-authenticated flow
+      if (request.agent.id !== agentId) {
+        return reply.code(403).send({ error: 'Agents can only tokenize themselves' });
+      }
+      creatorWallet = agent.wallet_address;
+    } else {
+      // Human flow — creatorWallet required in body
+      if (!bodyCreatorWallet || bodyCreatorWallet.length < 32) {
+        return reply.code(400).send({ error: 'creatorWallet required (your wallet address to receive creator fees)' });
+      }
+      creatorWallet = bodyCreatorWallet;
     }
-
-    // creatorWallet always comes from the authenticated agent's registered wallet
-    const creatorWallet = agent.wallet_address;
 
     // Check not already tokenized
     const existing = stmts.getAgentTokenByAgent.get(agentId);
