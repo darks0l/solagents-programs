@@ -289,13 +289,24 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
             <!-- Dev Buy Transparency -->
             ${derivedDevBuys.totals && derivedDevBuys.totals.length > 0 ? `
               <div style="margin-top:12px;padding:10px;background:rgba(255,200,0,0.05);border:1px solid rgba(255,200,0,0.15);border-radius:8px">
-                <p class="text-xs font-semibold mb-05" style="color:#FFD700">🔍 Dev Buys (Public)</p>
+                <p class="text-xs font-semibold mb-05" style="color:#FFD700">🔍 DEV BUY <span class="text-muted" style="font-weight:400">Fully transparent</span></p>
                 ${derivedDevBuys.totals.map(t => `
-                  <div class="flex items-center text-xs" style="justify-content:space-between;padding:3px 0">
-                    <span class="text-muted">${truncateAddress(t.wallet)}</span>
-                    <span style="font-family:var(--font-mono)">${t.total_sol} SOL · ${t.buy_count || 1} buy${(t.buy_count || 1) > 1 ? 's' : ''} · ${t.pct_of_supply}% supply</span>
+                  <div class="flex items-center text-xs" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+                    <span class="text-muted">Dev SOL spent</span>
+                    <span style="font-family:var(--font-mono);font-weight:600">${parseFloat(t.total_sol).toFixed(9)} SOL</span>
+                  </div>
+                  <div class="flex items-center text-xs" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+                    <span class="text-muted">Dev tokens received</span>
+                    <span style="font-family:var(--font-mono);font-weight:600">${Number(parseFloat(t.total_tokens)).toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
                   </div>
                 `).join('')}
+                ${data.creatorHoldings ? `
+                  <div class="flex items-center text-xs" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+                    <span class="text-muted">Current holdings</span>
+                    <span style="font-family:var(--font-mono);font-weight:600;color:#14F195">${data.creatorHoldings.balance} <span class="text-muted">(${data.creatorHoldings.pct_of_supply}% supply)</span></span>
+                  </div>
+                ` : ''}
+                <p class="text-xs text-muted" style="margin-top:8px;opacity:0.6">All dev buys happen at the same bonding curve price as public buyers.</p>
               </div>
             ` : `
               <div style="margin-top:12px;padding:10px;background:rgba(20,241,149,0.03);border:1px solid rgba(20,241,149,0.1);border-radius:8px;text-align:center">

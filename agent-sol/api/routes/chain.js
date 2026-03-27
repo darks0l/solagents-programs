@@ -87,6 +87,23 @@ export default async function chainRoutes(fastify) {
       // Get token info from DB if available
       const dbToken = stmts.getAgentTokenByMint?.get(mintAddress);
 
+      // Fetch creator's current on-chain token balance
+      let creatorCurrentBalance = '0';
+      let creatorCurrentPct = '0';
+      try {
+        const mintPk = new PublicKey(mintAddress);
+        const creatorPk = pool.creator;
+        const ata = await getAssociatedTokenAddress(mintPk, creatorPk);
+        const _conn = getConnection();
+        const acct = await getAccount(_conn, ata);
+        const rawBal = BigInt(acct.amount.toString());
+        creatorCurrentBalance = (Number(rawBal) / 1e9).toLocaleString('en-US', { maximumFractionDigits: 2 });
+        const totalRaw = BigInt(pool.totalSupply.toString());
+        creatorCurrentPct = totalRaw > 0n ? ((Number(rawBal) / Number(totalRaw)) * 100).toFixed(2) : '0';
+      } catch {
+        // ATA doesn't exist
+      }
+
       return {
         mint: mintAddress,
         name: dbToken?.token_name || pool.name || '',
@@ -104,6 +121,8 @@ export default async function chainRoutes(fastify) {
         platform_fees_claimed: (pool.platformFeesClaimed.toNumber() / LAMPORTS_PER_SOL).toFixed(9),
         dev_buy_sol: (pool.devBuySol.toNumber() / LAMPORTS_PER_SOL).toFixed(9),
         dev_buy_tokens: (Number(BigInt(pool.devBuyTokens.toString()) / BigInt(1e6)) / 1e3).toFixed(2),
+        creator_current_balance: creatorCurrentBalance,
+        creator_current_pct: creatorCurrentPct,
         total_volume_sol: ((pool.totalVolumeSol?.toNumber() || 0) / LAMPORTS_PER_SOL).toFixed(9),
         total_trades: pool.totalTrades?.toNumber() || 0,
         total_buys: pool.totalBuys?.toNumber() || 0,

@@ -1,4 +1,6 @@
 import { randomUUID } from 'crypto';
+import { PublicKey } from '@solana/web3.js';
+import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
 import { stmts } from '../services/db.js';
 import { optionalAuth, authHook } from '../middleware/auth.js';
 import { createPool, POOL_CONFIG, lamportsToSol, rawToTokens } from '../services/pool.js';
@@ -536,6 +538,34 @@ export default async function tokenRoutes(fastify) {
       };
     }
 
+    // Fetch creator's current on-chain token balance
+    let creatorHoldings = null;
+    if (token?.mint_address && token?.creator_wallet) {
+      try {
+        const mintPk = new PublicKey(token.mint_address);
+        const creatorPk = new PublicKey(token.creator_wallet);
+        const ata = await getAssociatedTokenAddress(mintPk, creatorPk);
+        const acct = await getAccount(connection, ata);
+        const rawBalance = BigInt(acct.amount.toString());
+        const displayBalance = Number(rawBalance) / 1e9; // 9 decimals
+        const totalSupplyRaw = poolData ? poolData.total_supply * 1e9 : 1e18;
+        creatorHoldings = {
+          wallet: token.creator_wallet,
+          balance_raw: rawBalance.toString(),
+          balance: displayBalance.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+          pct_of_supply: totalSupplyRaw > 0 ? ((Number(rawBalance) / totalSupplyRaw) * 100).toFixed(2) : '0',
+        };
+      } catch {
+        // ATA doesn't exist or creator sold everything
+        creatorHoldings = {
+          wallet: token.creator_wallet,
+          balance_raw: '0',
+          balance: '0',
+          pct_of_supply: '0',
+        };
+      }
+    }
+
     // Get recent jobs
     const recentJobs = stmts.listJobsByProvider.all(agent.wallet_address, 10, 0);
 
@@ -565,6 +595,7 @@ export default async function tokenRoutes(fastify) {
       tokenized: !!token,
       pool: poolData,
       devBuys: devBuyData,
+      creatorHoldings,
       fees: {
         unclaimed_sol: feeSummary?.unclaimed_lamports ? (feeSummary.unclaimed_lamports / 1e9).toFixed(9) : '0',
         claimed_sol: claimStats?.total_claimed_lamports ? (claimStats.total_claimed_lamports / 1e9).toFixed(9) : '0',

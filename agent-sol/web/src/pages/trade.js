@@ -575,6 +575,10 @@ async function loadTradePageData(mintAddress) {
           <span class="text-muted text-xs">Dev tokens received</span>
           <span class="font-mono text-xs">${poolData.dev_buy_tokens}</span>
         </div>
+        <div class="stat-row mt-05" style="border-top:1px solid rgba(255,255,255,0.05);padding-top:6px">
+          <span class="text-muted text-xs">Current holdings</span>
+          <span class="font-mono text-xs" style="color:#14F195">${poolData.creator_current_balance || '—'} <span class="text-muted">(${poolData.creator_current_pct || '0'}%)</span></span>
+        </div>
         <p class="text-muted text-xs mt-1">All dev buys happen at the same bonding curve price as public buyers.</p>
       `;
     }
