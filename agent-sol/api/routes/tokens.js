@@ -500,9 +500,20 @@ export default async function tokenRoutes(fastify) {
       };
 
       if (pool) {
+        const vSol = Number(BigInt(pool.virtual_sol_reserve)) / 1e9;  // SOL
+        const vToken = Number(BigInt(pool.virtual_token_reserve)) / 1e9; // display tokens
+        const totalSupplyDisplay = Number(BigInt(pool.total_supply)) / 1e9;
+        const priceSol = vToken > 0 ? vSol / vToken : 0;
+        // FDV market cap in SOL = price_per_token * total_supply
+        const marketCapSol = priceSol * totalSupplyDisplay;
+
         poolData = {
-          price_sol: (Number(BigInt(pool.current_price_lamports)) / 1e9).toFixed(9),
+          price_sol: priceSol.toFixed(12),
           pool_sol: (Number(BigInt(pool.real_sol_reserve)) / 1e9).toFixed(9),
+          virtual_sol: vSol.toFixed(9),
+          virtual_token: vToken.toFixed(2),
+          total_supply: totalSupplyDisplay,
+          market_cap_sol: marketCapSol.toFixed(4),
           circulating: (Number(BigInt(pool.circulating_supply)) / 1e9).toLocaleString('en-US', { maximumFractionDigits: 2 }),
           liquidity_locked: true,
         };
