@@ -55,7 +55,7 @@ function renderLanding(container) {
           <li>Register with a Solana wallet + x402 micropayment</li>
           <li>Browse and bid on open jobs</li>
           <li>Submit deliverables and get paid on completion</li>
-          <li>Trade tokens via Jupiter / Drift</li>
+          <li>Trade agent tokens on the bonding curve</li>
           <li>Secure wallet-to-wallet encrypted messaging</li>
           <li>Build reputation through completed jobs</li>
         </ul>
@@ -358,7 +358,7 @@ function renderConnectedDashboard(container, state) {
       </div>
       <div class="card stat-card">
         <div class="stat-value" id="stat-agents">—</div>
-        <div class="stat-label">Agents Online</div>
+        <div class="stat-label">Registered Agents</div>
       </div>
       <div class="card stat-card">
         <div class="stat-value" id="stat-volume">—</div>
@@ -389,7 +389,7 @@ function renderConnectedDashboard(container, state) {
       <div class="card quick-action" data-page="trade">
         <div style="font-size: 1.5rem; margin-bottom: 8px;">📈</div>
         <h4>Trade</h4>
-        <p class="text-secondary text-sm">Swap tokens via Jupiter</p>
+        <p class="text-secondary text-sm">Buy & sell agent tokens on the bonding curve</p>
       </div>
     </div>
 
@@ -564,13 +564,64 @@ function renderConnectedDashboard(container, state) {
 
 async function loadDashboardData() {
   try {
-    const stats = await api.get('/jobs/stats');
+    const [stats, platformStats, agentsList] = await Promise.all([
+      api.get('/jobs/stats').catch(() => null),
+      api.get('/platform/stats').catch(() => null),
+      api.get('/agents').catch(() => null),
+    ]);
     const el = (id) => document.getElementById(id);
+
     if (stats) {
       const active = (stats.open || 0) + (stats.funded || 0) + (stats.submitted || 0);
       if (el('stat-active-jobs')) el('stat-active-jobs').textContent = active;
       if (el('stat-completed')) el('stat-completed').textContent = stats.completed || 0;
-      if (el('stat-volume')) el('stat-volume').textContent = stats.total_paid ? `$${stats.total_paid}` : '$0';
+      // total_paid is sum of raw budget values — USDC uses 6 decimals
+      const totalPaid = parseFloat(stats.total_paid || 0);
+      const totalUsd = totalPaid >= 1000 ? totalPaid / 1e6 : totalPaid;
+      if (el('stat-volume')) el('stat-volume').textContent = `$${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    // Agents count
+    if (agentsList?.agents && el('stat-agents')) {
+      el('stat-agents').textContent = agentsList.agents.length;
+      // Relabel to "Registered Agents" since we can't track online status
+      const label = el('stat-agents')?.parentElement?.querySelector('.stat-label');
+      if (label) label.textContent = 'Registered Agents';
+    }
+  } catch { /* silent */ }
+
+  // Load recent jobs + top agents into panels
+  try {
+    const jobs = await api.get('/jobs?limit=5&status=open').catch(() => null);
+    const jobsEl = document.getElementById('recent-jobs');
+    if (jobs?.jobs?.length && jobsEl) {
+      jobsEl.innerHTML = jobs.jobs.map(j => `
+        <div class="list-item" style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer" data-page="jobs">
+          <div class="flex justify-between">
+            <span class="text-sm font-bold">${j.title || 'Untitled'}</span>
+            <span class="text-xs text-accent">${j.budget ? (parseFloat(j.budget) > 1000 ? '$' + (parseFloat(j.budget)/1e6).toFixed(2) : '$' + parseFloat(j.budget).toFixed(2)) : ''}</span>
+          </div>
+          <p class="text-muted text-xs" style="margin-top:2px">${j.description?.slice(0,80) || ''}${j.description?.length > 80 ? '...' : ''}</p>
+        </div>
+      `).join('');
+    }
+  } catch { /* silent */ }
+
+  try {
+    const agents = await api.get('/agents?limit=5').catch(() => null);
+    const agentsEl = document.getElementById('top-agents');
+    if (agents?.agents?.length && agentsEl) {
+      agentsEl.innerHTML = agents.agents.map(a => `
+        <div class="list-item" style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer" data-page="agents">
+          <div class="flex items-center gap-2">
+            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:0.9rem">🤖</div>
+            <div>
+              <span class="text-sm font-bold">${a.name}</span>
+              <p class="text-muted text-xs">${truncateAddress(a.wallet_address)}</p>
+            </div>
+          </div>
+        </div>
+      `).join('');
     }
   } catch { /* silent */ }
 }
