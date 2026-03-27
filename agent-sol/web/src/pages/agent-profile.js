@@ -80,6 +80,35 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
   const services = servicesData?.services || servicesData || [];
   const unclaimedFees = feesData?.unclaimed_fees || [];
 
+  // Derive dev buys from trades if devBuys table is empty
+  const creatorWallet = token?.creator_wallet || agent.walletAddress;
+  let derivedDevBuys = devBuys;
+  if ((!devBuys.buys || devBuys.buys.length === 0) && token?.recent_trades?.length > 0) {
+    const creatorTrades = token.recent_trades.filter(t => t.trader_wallet === creatorWallet && t.side === 'buy');
+    if (creatorTrades.length > 0) {
+      const totalSolLamports = creatorTrades.reduce((s, t) => s + parseFloat(t.amount_sol || 0), 0);
+      const totalTokens = creatorTrades.reduce((s, t) => s + parseFloat(t.amount_token || 0), 0);
+      const totalSupply = parseFloat(token.total_supply || 1e9) * 1e9; // token supply in smallest unit
+      const pct = totalSupply > 0 ? ((totalTokens / totalSupply) * 100).toFixed(2) : '0';
+      derivedDevBuys = {
+        buys: creatorTrades.map(t => ({
+          wallet: t.trader_wallet,
+          sol_amount: (parseFloat(t.amount_sol) / 1e9).toFixed(4),
+          token_amount: t.amount_token,
+          tx_signature: t.tx_signature,
+          timestamp: t.timestamp,
+        })),
+        totals: [{
+          wallet: creatorWallet,
+          total_sol: (totalSolLamports / 1e9).toFixed(4),
+          total_tokens: totalTokens.toString(),
+          pct_of_supply: pct,
+          buy_count: creatorTrades.length,
+        }],
+      };
+    }
+  }
+
   // Compute revenue from jobs
   const jobRevenue = allJobs
     .filter(j => j.status === 'completed')
@@ -221,13 +250,13 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
             </div>
 
             <!-- Dev Buy Transparency -->
-            ${devBuys.totals && devBuys.totals.length > 0 ? `
+            ${derivedDevBuys.totals && derivedDevBuys.totals.length > 0 ? `
               <div style="margin-top:12px;padding:10px;background:rgba(255,200,0,0.05);border:1px solid rgba(255,200,0,0.15);border-radius:8px">
                 <p class="text-xs font-semibold mb-05" style="color:#FFD700">🔍 Dev Buys (Public)</p>
-                ${devBuys.totals.map(t => `
+                ${derivedDevBuys.totals.map(t => `
                   <div class="flex items-center text-xs" style="justify-content:space-between;padding:3px 0">
                     <span class="text-muted">${truncateAddress(t.wallet)}</span>
-                    <span style="font-family:var(--font-mono)">${t.total_sol} SOL · ${t.pct_of_supply}% supply</span>
+                    <span style="font-family:var(--font-mono)">${t.total_sol} SOL · ${t.buy_count || 1} buy${(t.buy_count || 1) > 1 ? 's' : ''} · ${t.pct_of_supply}% supply</span>
                   </div>
                 `).join('')}
               </div>
