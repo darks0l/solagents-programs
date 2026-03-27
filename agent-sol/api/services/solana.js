@@ -390,10 +390,6 @@ export async function buildBuyTransaction({
   const { blockhash } = await conn.getLatestBlockhash();
   const tx = new Transaction({ recentBlockhash: blockhash, feePayer: buyer });
 
-  // Request 256KB heap (default 32KB causes OOM on Anchor programs with many accounts)
-  tx.add(ComputeBudgetProgram.requestHeapFrame({ bytes: 256 * 1024 }));
-  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
-
   // Create ATA if buyer doesn't have one yet
   if (createATA) {
     tx.add(createAssociatedTokenAccountInstruction(buyer, buyerATA, buyer, mint));
@@ -442,10 +438,6 @@ export async function buildSellTransaction({
 
   const { blockhash } = await conn.getLatestBlockhash();
   const tx = new Transaction({ recentBlockhash: blockhash, feePayer: seller });
-
-  // Request 256KB heap (default 32KB causes OOM on Anchor programs)
-  tx.add(ComputeBudgetProgram.requestHeapFrame({ bytes: 256 * 1024 }));
-  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
 
   tx.add(ix);
 
