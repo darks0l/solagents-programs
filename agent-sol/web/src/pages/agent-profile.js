@@ -28,6 +28,16 @@ export async function renderAgentProfile(container, state, agentId) {
     let feesData = null;
     try { feesData = await api.get(`/agents/${agentId}/fees`); } catch {}
 
+    // Fetch SOL/USD price for market cap display
+    let _solPriceUsd = 0;
+    try {
+      const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+      const cgData = await cgRes.json();
+      _solPriceUsd = cgData.solana?.usd || 0;
+    } catch {}
+    // Attach to data so buildProfileHTML can use it
+    data._solPriceUsd = _solPriceUsd;
+
     // Fetch jobs where this agent is client OR provider (by wallet)
     const wallet = data.agent.walletAddress;
     let jobsData = { jobs: [] };
@@ -74,6 +84,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
   const token = data.token;
   const pool = data.pool;
   const fees = data.fees || {};
+  const _solPriceUsd = data._solPriceUsd || 0;
   const devBuys = data.devBuys || { buys: [], totals: [] };
   const isOwner = window.solana?.publicKey?.toString() === agent.walletAddress;
   const allJobs = jobsData?.jobs || data.recentJobs || [];
@@ -206,10 +217,15 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
               <div>
                 <p class="text-muted text-xs">Market Cap</p>
                 <p class="font-bold">${(() => {
-                  const price = parseFloat(token.current_price || 0);
-                  const circ = parseFloat(String(token.circulating || 0).replace(/,/g, ''));
-                  const mcap = price * circ;
-                  return mcap > 0 ? fmtSol(mcap) + ' SOL' : '—';
+                  // FDV: (virtual_sol / virtual_token) * total_supply * SOL_USD
+                  // API now provides pool.market_cap_sol as FDV in SOL
+                  const mcapSol = parseFloat(pool?.market_cap_sol || 0);
+                  if (mcapSol > 0 && _solPriceUsd > 0) {
+                    return '$' + (mcapSol * _solPriceUsd).toLocaleString(undefined, { maximumFractionDigits: 0 });
+                  } else if (mcapSol > 0) {
+                    return fmtSol(mcapSol) + ' SOL';
+                  }
+                  return '—';
                 })()} </p>
               </div>
               <div>
