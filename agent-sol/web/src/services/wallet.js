@@ -131,6 +131,22 @@ export async function tryAutoConnect() {
   }
 }
 
+// ── Base64 Helpers ───────────────────────────────────────────
+
+/**
+ * Robust base64 → Uint8Array decoder.
+ * Handles padding, whitespace, and works in all browsers/WebViews.
+ */
+function base64ToBytes(b64) {
+  // Clean up: remove whitespace, ensure padding
+  const cleaned = b64.replace(/\s/g, '');
+  const padded = cleaned + '=='.slice(0, (4 - cleaned.length % 4) % 4);
+  const raw = atob(padded);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes;
+}
+
 // ── Transaction Signing + Sending ────────────────────────────
 
 /**
@@ -143,8 +159,8 @@ export async function tryAutoConnect() {
 export async function signAndSendTransaction(base64Tx, options = {}) {
   if (!_wallet || !_publicKey) throw new Error('Wallet not connected');
 
-  // Deserialize the transaction (browser-native base64 decode)
-  const txBuffer = Uint8Array.from(atob(base64Tx), c => c.charCodeAt(0));
+  // Deserialize the transaction
+  const txBuffer = base64ToBytes(base64Tx);
 
   const { Transaction, Connection } = await import('@solana/web3.js');
 
@@ -172,7 +188,7 @@ export async function signAndSendTransaction(base64Tx, options = {}) {
 export async function signTransaction(base64Tx) {
   if (!_wallet || !_publicKey) throw new Error('Wallet not connected');
 
-  const txBuffer = Uint8Array.from(atob(base64Tx), c => c.charCodeAt(0));
+  const txBuffer = base64ToBytes(base64Tx);
   const { Transaction } = await import('@solana/web3.js');
   const transaction = Transaction.from(txBuffer);
 
