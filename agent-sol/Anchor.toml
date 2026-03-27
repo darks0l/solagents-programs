@@ -16,12 +16,14 @@ bonding_curve = "nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof"
 [registry]
 url = "https://api.apr.dev"
 
-# ⚠️  MAINNET: these are DEVNET IDs — generate fresh keypairs before deploying to mainnet.
-# Run: solana-keygen grind --starts-with agc:1 && solana-keygen grind --starts-with bdc:1
-# Then update declare_id!() in each program's lib.rs to match the new IDs.
 [programs.mainnet]
-agentic_commerce = "Ddpj5GCjz8jFuBQXopUfzxkAmkWPCCwC7mhpL6SY9fdx"
-bonding_curve = "nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof"
+# IMPORTANT: Generate fresh keypairs for mainnet before deploying.
+# These are PLACEHOLDER IDs — replace before any mainnet deployment:
+# solana-keygen new -o target/deploy/bonding_curve-mainnet-keypair.json
+# solana-keygen new -o target/deploy/agentic_commerce-mainnet-keypair.json
+# Then update declare_id!() in each program's lib.rs to match the new IDs.
+agentic_commerce = "11111111111111111111111111111111"
+bonding_curve = "11111111111111111111111111111111"
 
 [provider]
 cluster = "Localnet"

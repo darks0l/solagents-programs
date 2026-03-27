@@ -365,7 +365,15 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
     // After Raydium CPI, LP tokens land in lp_token_account.
     // We keep them locked — never burn, never withdraw.
     // This means: liquidity is permanent + creator fees claimable (Path A only).
-    let lp_amount = ctx.accounts.lp_token_account.lamports(); // placeholder — real from CPI
+    // Manually deserialize SPL token balance from account data (offset 64..72 = amount field).
+    let lp_amount = {
+        let lp_data = ctx.accounts.lp_token_account.try_borrow_data()?;
+        if lp_data.len() >= 72 {
+            u64::from_le_bytes(lp_data[64..72].try_into().unwrap())
+        } else {
+            0
+        }
+    };
     msg!("LP tokens locked in program PDA: {}", lp_amount);
 
     // ── Mark pool as graduated ──────────────────────────────
@@ -373,7 +381,7 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
     pool.graduated_at = Clock::get()?.unix_timestamp;
     pool.raydium_pool = ctx.accounts.raydium_pool_state.key();
     pool.raydium_lp_mint = ctx.accounts.raydium_lp_mint.key();
-    pool.lp_tokens_locked = 0; // Set by Raydium CPI response
+    pool.lp_tokens_locked = lp_amount;
     pool.raydium_fees_claimed_token_0 = 0;
     pool.raydium_fees_claimed_token_1 = 0;
     pool.real_sol_balance = total_unclaimed_fees; // Only fees remain
