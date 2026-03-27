@@ -28,8 +28,23 @@ export async function renderAgentProfile(container, state, agentId) {
     let feesData = null;
     try { feesData = await api.get(`/agents/${agentId}/fees`); } catch {}
 
-    let jobsData = null;
-    try { jobsData = await api.get(`/jobs?agentId=${agentId}&limit=20`); } catch {}
+    // Fetch jobs where this agent is client OR provider (by wallet)
+    const wallet = data.agent.walletAddress;
+    let jobsData = { jobs: [] };
+    try {
+      const [asClient, asProvider] = await Promise.all([
+        api.get(`/jobs?client=${wallet}&limit=20`).catch(() => ({ jobs: [] })),
+        api.get(`/jobs?provider=${wallet}&limit=20`).catch(() => ({ jobs: [] })),
+      ]);
+      // Merge and deduplicate by job id
+      const seen = new Set();
+      const merged = [];
+      for (const j of [...(asClient.jobs || []), ...(asProvider.jobs || [])]) {
+        if (!seen.has(j.id)) { seen.add(j.id); merged.push(j); }
+      }
+      merged.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+      jobsData = { jobs: merged };
+    } catch {}
 
     let servicesData = null;
     try { servicesData = await api.get(`/services/agent/${agentId}`); } catch {}
@@ -90,13 +105,17 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
             </p>
             <p class="text-muted text-xs mt-05">Registered ${new Date(agent.registeredAt * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
           </div>
-          ${data.tokenized && token?.token_symbol ? `
-            <div style="text-align:right">
+          <div style="text-align:right">
+            ${data.tokenized && token?.token_symbol ? `
               <button class="btn btn-primary btn-glow" id="btn-trade-token">
                 Trade $${token.token_symbol} →
               </button>
-            </div>
-          ` : ''}
+            ` : `
+              <button class="btn" id="btn-trade-token" disabled style="opacity:0.35;cursor:not-allowed;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.08)">
+                Not Tokenized
+              </button>
+            `}
+          </div>
         </div>
 
         <!-- Description -->
@@ -330,15 +349,24 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
         <span class="text-muted text-xs">${allJobs.length} job${allJobs.length !== 1 ? 's' : ''}</span>
       </div>
       <div class="card-body">
-        ${allJobs.length > 0 ? allJobs.map(j => `
+        ${allJobs.length > 0 ? allJobs.map(j => {
+          const role = j.provider === agent.walletAddress ? 'provider' : j.client === agent.walletAddress ? 'client' : 'evaluator';
+          const roleLabel = role === 'provider' ? '🔧 Provider' : role === 'client' ? '📋 Client' : '⚖️ Evaluator';
+          const roleBg = role === 'provider' ? 'rgba(20,241,149,0.1)' : role === 'client' ? 'rgba(59,130,246,0.1)' : 'rgba(153,69,255,0.1)';
+          const roleFg = role === 'provider' ? '#14F195' : role === 'client' ? '#3B82F6' : '#9945FF';
+          const budgetDisplay = j.budget >= 1e6 ? (j.budget / 1e6).toFixed(2) : j.budget;
+          return `
           <div style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
             <div class="flex items-center" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
               <div style="flex:1;min-width:200px">
+                <div class="flex items-center gap-05" style="margin-bottom:4px">
+                  <span style="padding:2px 8px;border-radius:8px;font-size:0.7rem;font-weight:600;background:${roleBg};color:${roleFg}">${roleLabel}</span>
+                </div>
                 <p class="font-semibold text-sm">${j.description?.substring(0, 80) || 'Untitled Job'}${j.description?.length > 80 ? '...' : ''}</p>
-                <p class="text-muted text-xs mt-05">${j.job_type || 'general'} · ${timeAgo(j.created_at || j.createdAt)}</p>
+                <p class="text-muted text-xs mt-05">${timeAgo(j.created_at || j.createdAt)}</p>
               </div>
               <div class="flex items-center gap-1">
-                ${j.budget ? `<span class="text-sm font-bold" style="font-family:var(--font-mono)">${j.budget} USDC</span>` : ''}
+                ${j.budget ? `<span class="text-sm font-bold" style="font-family:var(--font-mono)">${budgetDisplay} USDC</span>` : ''}
                 <span style="
                   padding:3px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;
                   background:${statusColor(j.status).bg};color:${statusColor(j.status).fg}
@@ -346,7 +374,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
               </div>
             </div>
           </div>
-        `).join('') : `
+        `}).join('') : `
           <div class="text-center p-3">
             <p class="text-muted">No jobs yet</p>
             <p class="text-muted text-xs mt-1">This agent hasn't completed any jobs on the platform.</p>
