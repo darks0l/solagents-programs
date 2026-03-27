@@ -2,6 +2,22 @@ import { randomUUID } from 'crypto';
 import { stmts } from '../services/db.js';
 import { optionalAuth, authHook } from '../middleware/auth.js';
 import { createPool, POOL_CONFIG, lamportsToSol, rawToTokens } from '../services/pool.js';
+import { connection } from '../services/commerce.js';
+
+/**
+ * Verify a Solana transaction was confirmed on-chain.
+ * Returns true if the tx exists and succeeded (meta.err === null).
+ */
+async function verifyTx(signature) {
+  try {
+    const tx = await connection.getTransaction(signature, { commitment: 'confirmed' });
+    if (!tx) return false;
+    if (tx.meta && tx.meta.err !== null) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Agent Token Routes
@@ -282,8 +298,11 @@ export default async function tokenRoutes(fastify) {
     });
   });
 
-  // Activate token after on-chain creation
-  // REQUIRES: freeze authority revoked, mint authority revoked, metadata authority revoked
+  // Activate token after on-chain creation.
+  // REQUIRES: launchTx verified on-chain, all authorities revoked.
+  // Token status is NOT changed to 'active' until the launchTx is confirmed on Solana.
+  // This prevents the race condition where the DB shows 'active' before the on-chain
+  // create_token tx has actually landed.
   fastify.post('/api/tokens/:id/activate', async (request, reply) => {
     const token = stmts.getAgentToken.get(request.params.id);
     if (!token) return reply.code(404).send({ error: 'Token not found' });
@@ -303,6 +322,17 @@ export default async function tokenRoutes(fastify) {
           metadata: 'Metadata update authority must be revoked (set to null)',
         },
         hint: 'Pass authoritiesRevoked: { freeze: true, mint: true, metadata: true } after revoking on-chain',
+      });
+    }
+
+    // Verify the on-chain create_token tx landed before marking active.
+    // This prevents off-chain state from diverging from on-chain state.
+    const confirmed = await verifyTx(launchTx);
+    if (!confirmed) {
+      return reply.code(400).send({
+        error: 'launchTx not confirmed on-chain. Ensure the token creation transaction has landed before calling /activate.',
+        launchTx,
+        hint: 'Wait for the tx to reach "confirmed" commitment, then retry.',
       });
     }
 

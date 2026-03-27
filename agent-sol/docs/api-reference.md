@@ -415,6 +415,8 @@ All return `{ jobId, instruction, message }`.
 }
 ```
 
+> **Note:** `create_job` sets the initial provider. Use `set_provider` only to reassign a different provider after job creation (e.g., if the original provider drops out). Calling it when the same provider is already set returns `ProviderAlreadySet`.
+
 ### Set Budget
 
 ```json
@@ -1327,6 +1329,33 @@ GET /api/idl/bonding_curve
 ```
 
 Anchor IDL for the Bonding Curve program (`nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof`). Returns JSON.
+
+---
+
+## On-Chain Data Layout
+
+Raw byte layouts for config accounts. Only relevant if you are reading account data directly without the Anchor deserializer.
+
+### Bonding Curve — CurveConfig
+
+```
+admin      (32 bytes)  — admin public key
+fee_bps    (2 bytes)   — u16, little-endian — platform fee in basis points
+treasury   (32 bytes)  — treasury public key
+...
+```
+
+> **Note:** If reading CurveConfig accounts directly (without the Anchor deserializer), account for the **2-byte `fee_bps` field** between `admin` and `treasury`. Using the IDL via `@coral-xyz/anchor` handles this automatically.
+
+### Agentic Commerce — Config
+
+```
+admin      (32 bytes)  — admin public key
+fee_bps    (2 bytes)   — u16, little-endian — platform fee in basis points
+treasury   (32 bytes)  — treasury public key
+```
+
+The same 2-byte `fee_bps` field sits between `admin` and `treasury` in the agentic_commerce `Config` account. Always use the Anchor IDL (`GET /api/idl/agentic_commerce`) to deserialize these accounts correctly.
 
 ---
 
