@@ -146,21 +146,21 @@ export async function signAndSendTransaction(base64Tx, options = {}) {
   // Deserialize the transaction (browser-native base64 decode)
   const txBuffer = Uint8Array.from(atob(base64Tx), c => c.charCodeAt(0));
 
-  // Determine if this is a VersionedTransaction or legacy Transaction
-  let transaction;
-  try {
-    // Try legacy Transaction first
-    const { Transaction } = await import('@solana/web3.js');
-    transaction = Transaction.from(txBuffer);
-  } catch {
-    const { VersionedTransaction } = await import('@solana/web3.js');
-    transaction = VersionedTransaction.deserialize(txBuffer);
-  }
+  const { Transaction, Connection } = await import('@solana/web3.js');
 
-  // Sign with user's wallet
-  const { signature } = await _wallet.signAndSendTransaction(transaction, {
+  // Deserialize as legacy Transaction
+  const transaction = Transaction.from(txBuffer);
+
+  // Sign with user wallet (Phantom signs but does NOT send)
+  const signed = await _wallet.signTransaction(transaction);
+
+  // Send via our own RPC connection (devnet)
+  const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+  const rawTx = signed.serialize();
+  const signature = await connection.sendRawTransaction(rawTx, {
     skipPreflight: options.skipPreflight ?? false,
     maxRetries: options.maxRetries ?? 3,
+    preflightCommitment: 'confirmed',
   });
 
   return signature;

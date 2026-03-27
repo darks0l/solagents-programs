@@ -594,7 +594,9 @@ async function executeBuy(mintAddress) {
     // Refresh
     setTimeout(() => loadTradePageData(mintAddress), 2000);
   } catch (err) {
-    toast(`Buy failed: ${err.message}`, 'error');
+    console.error('Buy error:', err);
+    const msg = err?.message || err?.toString() || 'Unknown error';
+    toast(`Buy failed: ${msg}`, 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Buy Tokens';
@@ -641,7 +643,9 @@ async function executeSell(mintAddress) {
     toast(`✅ Sold! SOL returned to your wallet.`, 'success');
     setTimeout(() => loadTradePageData(mintAddress), 2000);
   } catch (err) {
-    toast(`Sell failed: ${err.message}`, 'error');
+    console.error('Sell error:', err);
+    const msg = err?.message || err?.toString() || 'Unknown error';
+    toast(`Sell failed: ${msg}`, 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Sell Tokens';
