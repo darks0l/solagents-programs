@@ -24,10 +24,17 @@ import {
   LAMPORTS_PER_SOL,
   BONDING_CURVE_PROGRAM_ID,
 } from '../services/solana.js';
+import {
+  getRaydiumPoolState,
+  quoteRaydiumSwap,
+  buildPostGradBuyTransaction,
+  buildPostGradSellTransaction,
+  createRaydiumPool,
+} from '../services/raydium.js';
 import { stmts } from '../services/db.js';
 import { emitTrade } from '../services/ws-feed.js';
 import { PublicKey } from '@solana/web3.js';
-import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID, getAccount } from '@solana/spl-token';
+import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID, getAccount, NATIVE_MINT } from '@solana/spl-token';
 
 export default async function chainRoutes(fastify) {
 
@@ -787,6 +794,514 @@ export default async function chainRoutes(fastify) {
       };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // POST-GRADUATION — Raydium CPMM trading after 85 SOL threshold
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * GET /api/chain/quote/post-grad
+   * Quote a post-graduation trade through Raydium CPMM.
+   * Query: ?mint=<mintAddress>&side=buy|sell&amount=<rawUnits>
+   *
+   * Returns expected output and price impact.
+   */
+  fastify.get('/api/chain/quote/post-grad', async (request, reply) => {
+    const { mint, side, amount } = request.query;
+    if (!mint)   return reply.code(400).send({ error: 'mint required' });
+    if (!side)   return reply.code(400).send({ error: 'side required (buy|sell)' });
+    if (!amount) return reply.code(400).send({ error: 'amount required (raw units)' });
+    if (side !== 'buy' && side !== 'sell') {
+      return reply.code(400).send({ error: 'side must be buy or sell' });
+    }
+
+    try {
+      // Look up Raydium pool address from DB
+      const dbToken = stmts.getAgentTokenByMint?.get(mint);
+      if (!dbToken) return reply.code(404).send({ error: 'Token not found in DB' });
+
+      const dbPool = stmts.getPool?.get(dbToken.id);
+      if (!dbPool?.raydium_pool_address) {
+        return reply.code(404).send({ error: 'Token has not graduated to Raydium yet' });
+      }
+
+      // Read live pool state from chain
+      const poolState = await getRaydiumPoolState(dbPool.raydium_pool_address);
+
+      // Determine input mint by side
+      const inputMint = side === 'buy' ? NATIVE_MINT : new PublicKey(mint);
+      const amountBig = BigInt(amount);
+
+      const quote = quoteRaydiumSwap(poolState, inputMint, amountBig);
+
+      // Our platform fee on top of Raydium's
+      const totalPlatformFeeBps = (dbToken.creator_fee_bps || 140) + (dbToken.platform_fee_bps || 60);
+      const platformFeeOnInput  = amountBig * BigInt(totalPlatformFeeBps) / 10000n;
+
+      if (side === 'buy') {
+        // input: SOL (lamports), output: tokens (raw)
+        const netInput   = amountBig - platformFeeOnInput;
+        const buyQuote   = quoteRaydiumSwap(poolState, NATIVE_MINT, netInput);
+        return {
+          side: 'buy',
+          input_lamports:   amount,
+          input_sol:        (Number(amountBig) / LAMPORTS_PER_SOL).toFixed(9),
+          output_tokens:    buyQuote.amountOut.toString(),
+          output_tokens_ui: (Number(buyQuote.amountOut) / 1e9).toFixed(6),
+          platform_fee_sol: (Number(platformFeeOnInput) / LAMPORTS_PER_SOL).toFixed(6),
+          raydium_fee_sol:  (Number(buyQuote.raydiumFee) / LAMPORTS_PER_SOL).toFixed(6),
+          price_impact:     buyQuote.priceImpact.toFixed(2) + '%',
+          pool:             dbPool.raydium_pool_address,
+        };
+      } else {
+        // input: tokens (raw), output: SOL (lamports)
+        const sellQuote       = quoteRaydiumSwap(poolState, new PublicKey(mint), amountBig);
+        const platformFeeOnOut = sellQuote.amountOut * BigInt(totalPlatformFeeBps) / 10000n;
+        const netOutput        = sellQuote.amountOut - platformFeeOnOut;
+        return {
+          side: 'sell',
+          input_tokens:     amount,
+          input_tokens_ui:  (Number(amountBig) / 1e9).toFixed(6),
+          output_lamports:  netOutput.toString(),
+          output_sol:       (Number(netOutput) / LAMPORTS_PER_SOL).toFixed(9),
+          platform_fee_sol: (Number(platformFeeOnOut) / LAMPORTS_PER_SOL).toFixed(6),
+          raydium_fee_sol:  (Number(sellQuote.raydiumFee) / LAMPORTS_PER_SOL).toFixed(6),
+          price_impact:     sellQuote.priceImpact.toFixed(2) + '%',
+          pool:             dbPool.raydium_pool_address,
+        };
+      }
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  /**
+   * POST /api/chain/build/post-grad/buy
+   * Build a post-graduation BUY transaction (Raydium CPMM).
+   *
+   * Body: { mintAddress, buyerWallet, solAmount, slippageBps? }
+   * Returns: { transaction, expectedTokens, expectedTokensUi, fee, priceImpact }
+   */
+  fastify.post('/api/chain/build/post-grad/buy', async (request, reply) => {
+    const { mintAddress, buyerWallet, solAmount, slippageBps = 100 } = request.body || {};
+
+    if (!mintAddress)  return reply.code(400).send({ error: 'mintAddress required' });
+    if (!buyerWallet)  return reply.code(400).send({ error: 'buyerWallet required' });
+    if (!solAmount || solAmount <= 0) return reply.code(400).send({ error: 'solAmount required (in SOL)' });
+
+    try {
+      // Validate buyer wallet
+      let buyerPk;
+      try { buyerPk = new PublicKey(buyerWallet); } catch {
+        return reply.code(400).send({ error: 'Invalid buyerWallet address' });
+      }
+
+      // Look up token + pool in DB
+      const dbToken = stmts.getAgentTokenByMint?.get(mintAddress);
+      if (!dbToken) return reply.code(404).send({ error: 'Token not found' });
+      if (dbToken.status !== 'graduated') {
+        return reply.code(400).send({ error: 'Token has not graduated yet. Use /api/chain/build/buy instead.' });
+      }
+
+      const dbPool = stmts.getPool?.get(dbToken.id);
+      if (!dbPool?.raydium_pool_address) {
+        return reply.code(404).send({ error: 'Raydium pool address not found in DB. Run /api/chain/graduate/trigger first.' });
+      }
+
+      // Get creator wallet from token record
+      const creatorWallet = dbToken.creator_wallet;
+      if (!creatorWallet) return reply.code(500).send({ error: 'Creator wallet not set on token' });
+
+      // Treasury = deployer wallet
+      const { getDeployer } = await import('../services/solana.js');
+      const deployer = getDeployer();
+      const treasuryWallet = deployer.publicKey.toBase58();
+
+      // Fee rates (from DB, with sensible defaults)
+      const creatorFeeBps  = dbToken.creator_fee_bps  ?? 140;
+      const platformFeeBps = dbToken.platform_fee_bps ?? 60;
+
+      const result = await buildPostGradBuyTransaction({
+        buyerWallet,
+        raydiumPoolAddress: dbPool.raydium_pool_address,
+        mintAddress,
+        solAmount,
+        slippageBps,
+        creatorWallet,
+        treasuryWallet,
+        creatorFeeBps,
+        platformFeeBps,
+      });
+
+      return {
+        transaction:       result.transaction,
+        expectedTokens:    result.expectedTokens,
+        expectedTokensUi:  result.expectedTokensUi,
+        minOut:            result.minOut,
+        fee:               result.fee,
+        priceImpact:       result.priceImpact.toFixed(2) + '%',
+        raydiumPool:       dbPool.raydium_pool_address,
+        tokenName:         dbToken.token_name,
+        tokenSymbol:       dbToken.token_symbol,
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: `Failed to build post-grad buy tx: ${err.message}` });
+    }
+  });
+
+  /**
+   * POST /api/chain/build/post-grad/sell
+   * Build a post-graduation SELL transaction (Raydium CPMM).
+   *
+   * Body: { mintAddress, sellerWallet, tokenAmount, slippageBps? }
+   * Returns: { transaction, expectedSol, grossSol, fee, priceImpact }
+   */
+  fastify.post('/api/chain/build/post-grad/sell', async (request, reply) => {
+    const { mintAddress, sellerWallet, tokenAmount, slippageBps = 100 } = request.body || {};
+
+    if (!mintAddress)  return reply.code(400).send({ error: 'mintAddress required' });
+    if (!sellerWallet) return reply.code(400).send({ error: 'sellerWallet required' });
+    if (!tokenAmount)  return reply.code(400).send({ error: 'tokenAmount required (raw units)' });
+
+    try {
+      // Validate seller wallet
+      try { new PublicKey(sellerWallet); } catch {
+        return reply.code(400).send({ error: 'Invalid sellerWallet address' });
+      }
+
+      // Look up token + pool in DB
+      const dbToken = stmts.getAgentTokenByMint?.get(mintAddress);
+      if (!dbToken) return reply.code(404).send({ error: 'Token not found' });
+      if (dbToken.status !== 'graduated') {
+        return reply.code(400).send({ error: 'Token has not graduated yet. Use /api/chain/build/sell instead.' });
+      }
+
+      const dbPool = stmts.getPool?.get(dbToken.id);
+      if (!dbPool?.raydium_pool_address) {
+        return reply.code(404).send({ error: 'Raydium pool address not found in DB' });
+      }
+
+      const creatorWallet = dbToken.creator_wallet;
+      if (!creatorWallet) return reply.code(500).send({ error: 'Creator wallet not set on token' });
+
+      const { getDeployer } = await import('../services/solana.js');
+      const deployer = getDeployer();
+      const treasuryWallet = deployer.publicKey.toBase58();
+
+      const creatorFeeBps  = dbToken.creator_fee_bps  ?? 140;
+      const platformFeeBps = dbToken.platform_fee_bps ?? 60;
+
+      const result = await buildPostGradSellTransaction({
+        sellerWallet,
+        raydiumPoolAddress: dbPool.raydium_pool_address,
+        mintAddress,
+        tokenAmount,
+        slippageBps,
+        creatorWallet,
+        treasuryWallet,
+        creatorFeeBps,
+        platformFeeBps,
+      });
+
+      return {
+        transaction:      result.transaction,
+        expectedSol:      result.expectedSol,
+        grossSol:         result.grossSol,
+        minWsolOut:       result.minWsolOut,
+        fee:              result.fee,
+        priceImpact:      result.priceImpact.toFixed(2) + '%',
+        raydiumPool:      dbPool.raydium_pool_address,
+        tokenName:        dbToken.token_name,
+        tokenSymbol:      dbToken.token_symbol,
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: `Failed to build post-grad sell tx: ${err.message}` });
+    }
+  });
+
+  /**
+   * POST /api/chain/sync/trade/post-grad
+   * Sync a post-graduation Raydium trade to DB after tx confirms.
+   *
+   * Body: { txSignature, mintAddress, traderWallet, side? }
+   * Returns: { synced, txSignature }
+   */
+  fastify.post('/api/chain/sync/trade/post-grad', async (request, reply) => {
+    const { txSignature, mintAddress, traderWallet, side } = request.body || {};
+
+    if (!txSignature) return reply.code(400).send({ error: 'txSignature required' });
+    if (!mintAddress) return reply.code(400).send({ error: 'mintAddress required' });
+
+    try {
+      const conn = getConnection();
+
+      // Confirm or find existing tx
+      const txCheck = await conn.getTransaction(txSignature, {
+        maxSupportedTransactionVersion: 0,
+        commitment: 'confirmed',
+      });
+
+      if (!txCheck) {
+        try {
+          const latestBlockhash = await conn.getLatestBlockhash();
+          await conn.confirmTransaction({
+            signature: txSignature,
+            blockhash: latestBlockhash.blockhash,
+            lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+          }, 'confirmed');
+        } catch {
+          return reply.code(400).send({ error: 'Transaction not found on-chain', txSignature });
+        }
+      }
+
+      const tx = await conn.getTransaction(txSignature, {
+        maxSupportedTransactionVersion: 0,
+        commitment: 'confirmed',
+      });
+
+      const dbToken = stmts.getAgentTokenByMint?.get(mintAddress);
+      const tokenId = dbToken?.id;
+
+      if (!tokenId) {
+        return reply.code(404).send({ error: 'Token not found in DB' });
+      }
+
+      // Read Raydium pool for current price
+      const dbPool = stmts.getPool?.get(tokenId);
+      let priceLamports = 0;
+      if (dbPool?.raydium_pool_address) {
+        try {
+          const poolState = await getRaydiumPoolState(dbPool.raydium_pool_address);
+          // Price = SOL reserve / token reserve (in raw units)
+          const isToken0Wsol = poolState.token0Mint.equals(NATIVE_MINT);
+          const solReserve   = isToken0Wsol ? poolState.token0Balance : poolState.token1Balance;
+          const tokReserve   = isToken0Wsol ? poolState.token1Balance : poolState.token0Balance;
+          if (tokReserve > 0n) {
+            // price in lamports per raw token unit, scaled for human tokens (1e9 decimals)
+            priceLamports = Number((solReserve * BigInt(1e9)) / tokReserve);
+          }
+        } catch (_) { /* price read failed, use 0 */ }
+      }
+
+      // Determine trade side from tx logs or body parameter
+      let tradeSide = side || 'buy';
+      if (!side && tx?.meta?.logMessages) {
+        const logs = tx.meta.logMessages.join(' ').toLowerCase();
+        if (logs.includes('sell') || logs.includes('swap_base_input')) {
+          // For Raydium, we check token balance changes to determine side
+          const preToken  = tx.meta.preTokenBalances?.find(b => b.owner === traderWallet && b.mint === mintAddress);
+          const postToken = tx.meta.postTokenBalances?.find(b => b.owner === traderWallet && b.mint === mintAddress);
+          const preAmt    = BigInt(preToken?.uiTokenAmount?.amount  || '0');
+          const postAmt   = BigInt(postToken?.uiTokenAmount?.amount || '0');
+          tradeSide = postAmt > preAmt ? 'buy' : 'sell';
+        }
+      }
+
+      // Extract amounts from balance changes
+      let solAmount   = '0';
+      let tokenAmount = '0';
+      if (tx?.meta) {
+        const accountKeys = tx.transaction?.message?.staticAccountKeys
+          || tx.transaction?.message?.accountKeys || [];
+        const traderIdx = accountKeys.findIndex(k => k.toBase58() === (traderWallet || ''));
+        if (traderIdx >= 0) {
+          const pre  = tx.meta.preBalances?.[traderIdx]  || 0;
+          const post = tx.meta.postBalances?.[traderIdx] || 0;
+          solAmount  = Math.abs(post - pre).toString();
+        }
+        const preToken  = tx.meta.preTokenBalances?.find(b => b.owner === (traderWallet || '') && b.mint === mintAddress);
+        const postToken = tx.meta.postTokenBalances?.find(b => b.owner === (traderWallet || '') && b.mint === mintAddress);
+        const preAmt    = BigInt(preToken?.uiTokenAmount?.amount  || '0');
+        const postAmt   = BigInt(postToken?.uiTokenAmount?.amount || '0');
+        tokenAmount     = (postAmt > preAmt ? postAmt - preAmt : preAmt - postAmt).toString();
+      }
+
+      // Record trade in DB
+      if (stmts.insertTokenTrade) {
+        const tradeId = randomUUID();
+        stmts.insertTokenTrade.run(
+          tradeId, tokenId, traderWallet || '', tradeSide,
+          tokenAmount, solAmount, priceLamports.toString(), txSignature
+        );
+      }
+
+      // Insert price snapshot for charts
+      if (priceLamports > 0 && stmts.insertTokenPrice) {
+        const priceSol = priceLamports / LAMPORTS_PER_SOL;
+        stmts.insertTokenPrice.run(tokenId, priceSol.toFixed(12), null, '0', '0', null);
+      }
+
+      // Emit WebSocket event
+      const tradePayload = {
+        type:         'trade',
+        side:         tradeSide,
+        wallet:       traderWallet || '',
+        price:        (priceLamports / LAMPORTS_PER_SOL).toFixed(12),
+        amount_token: tokenAmount,
+        amount_sol:   solAmount,
+        txSignature,
+        symbol:       dbToken?.token_symbol || '',
+        name:         dbToken?.token_name   || '',
+        mintAddress,
+        postGrad:     true,
+        raydium:      true,
+      };
+      if (tokenId)    emitTrade(tokenId, tradePayload);
+      if (mintAddress) emitTrade(mintAddress, tradePayload);
+
+      return { synced: true, txSignature, side: tradeSide, solAmount, tokenAmount, priceLamports };
+    } catch (err) {
+      return reply.code(200).send({
+        synced:    false,
+        error:     err.message,
+        txSignature,
+        note: 'Trade confirmed on-chain but DB sync failed.',
+      });
+    }
+  });
+
+  /**
+   * POST /api/chain/graduate/trigger
+   * API-triggered graduation — creates Raydium CPMM pool and updates DB.
+   * Runs server-side using the deployer keypair.
+   *
+   * Body: { mintAddress, solAmount?, slippageBps? }
+   * - solAmount: SOL to seed pool (default: full bonding curve balance ~85 SOL)
+   *
+   * This endpoint:
+   *   1. Reads on-chain bonding curve pool for current reserves
+   *   2. Calculates token amount for price continuity
+   *   3. Creates Raydium CPMM pool with deployer key
+   *   4. Updates DB: agent_tokens.status → 'graduated', token_pools.raydium_pool_address
+   */
+  fastify.post('/api/chain/graduate/trigger', async (request, reply) => {
+    const { mintAddress, solAmount, slippageBps = 50 } = request.body || {};
+
+    if (!mintAddress) return reply.code(400).send({ error: 'mintAddress required' });
+
+    try {
+      const conn = getConnection();
+
+      // Verify token exists in DB
+      const dbToken = stmts.getAgentTokenByMint?.get(mintAddress);
+      if (!dbToken) return reply.code(404).send({ error: 'Token not found in DB' });
+      if (dbToken.status === 'graduated') {
+        const dbPool = stmts.getPool?.get(dbToken.id);
+        return reply.code(409).send({
+          error:       'Token already graduated',
+          raydiumPool: dbPool?.raydium_pool_address || null,
+        });
+      }
+
+      // Read on-chain pool state
+      const pool = await readPool(mintAddress);
+      if (!pool) return reply.code(404).send({ error: 'Bonding curve pool not found on-chain' });
+
+      // Check graduation threshold (85 SOL)
+      const GRADUATION_THRESHOLD = 85n * BigInt(LAMPORTS_PER_SOL);
+      const realSol = BigInt(pool.realSolBalance.toString());
+      if (realSol < GRADUATION_THRESHOLD) {
+        return reply.code(400).send({
+          error:    'Pool has not reached graduation threshold',
+          realSol:  (Number(realSol) / LAMPORTS_PER_SOL).toFixed(4) + ' SOL',
+          required: '85 SOL',
+          progress: ((Number(realSol) / Number(GRADUATION_THRESHOLD)) * 100).toFixed(2) + '%',
+        });
+      }
+
+      // Calculate SOL and tokens to seed Raydium pool
+      // Price continuity: tokens_for_raydium = sol_for_raydium / bonding_curve_price
+      // bonding_curve_price (SOL per raw token) = virtualSolReserve / virtualTokenReserve
+      const vSol    = BigInt(pool.virtualSolReserve.toString());
+      const vToken  = BigInt(pool.virtualTokenReserve.toString());
+      const realTok = BigInt(pool.realTokenBalance.toString());
+
+      const seedSolLamports = solAmount
+        ? BigInt(Math.round(solAmount * LAMPORTS_PER_SOL))
+        : realSol; // default: all bonding curve SOL
+
+      // tokens_for_raydium = seedSol * vToken / vSol
+      // This preserves the current bonding curve price in Raydium
+      const seedTokenAmount = (seedSolLamports * vToken) / vSol;
+
+      // Ensure we don't try to seed more tokens than are in the pool
+      const actualTokenAmount = seedTokenAmount > realTok ? realTok : seedTokenAmount;
+
+      // Create Raydium pool (server-side, deployer signs)
+      let raydiumResult;
+      try {
+        raydiumResult = await createRaydiumPool({
+          mintAddress,
+          solLamports:  seedSolLamports,
+          tokenAmount:  actualTokenAmount,
+        });
+      } catch (raydiumErr) {
+        // Return helpful error if pool creation fails (e.g. missing config)
+        return reply.code(500).send({
+          error:   `Raydium pool creation failed: ${raydiumErr.message}`,
+          hint:    'Ensure RAYDIUM_CREATE_POOL_FEE and RAYDIUM_AMM_CONFIG env vars are set correctly.',
+          seedSol: (Number(seedSolLamports) / LAMPORTS_PER_SOL).toFixed(4),
+          seedTokens: (Number(actualTokenAmount) / 1e9).toFixed(2),
+        });
+      }
+
+      // Update DB: mark pool as graduated with Raydium pool address
+      stmts.graduatePool?.run(raydiumResult.poolAddress, dbToken.id);
+
+      // Update agent_tokens status to 'graduated'
+      // Keep existing mint_address and pool_address, just update status
+      stmts.updateAgentTokenStatus?.run(
+        'graduated',
+        dbToken.mint_address || mintAddress,
+        dbToken.pool_address || null,
+        dbToken.launch_tx    || null,
+        dbToken.id
+      );
+
+      // Insert price snapshot with Raydium's initial price
+      const priceSol = Number(seedSolLamports) / Number(actualTokenAmount); // SOL per raw token
+      if (stmts.insertTokenPrice) {
+        stmts.insertTokenPrice.run(
+          dbToken.id,
+          priceSol.toFixed(12),
+          null,
+          '0',
+          '0',
+          null
+        );
+      }
+
+      // Emit graduation event via WebSocket
+      const graduationPayload = {
+        type:        'graduation',
+        mintAddress,
+        raydiumPool: raydiumResult.poolAddress,
+        seedSol:     (Number(seedSolLamports) / LAMPORTS_PER_SOL).toFixed(4),
+        seedTokens:  (Number(actualTokenAmount) / 1e9).toFixed(2),
+        txSignature: raydiumResult.tx,
+        symbol:      dbToken.token_symbol,
+        name:        dbToken.token_name,
+      };
+      emitTrade(dbToken.id,   graduationPayload);
+      emitTrade(mintAddress,  graduationPayload);
+
+      return {
+        graduated:       true,
+        mintAddress,
+        raydiumPool:     raydiumResult.poolAddress,
+        lpMint:          raydiumResult.lpMint,
+        token0Mint:      raydiumResult.token0Mint,
+        token1Mint:      raydiumResult.token1Mint,
+        seedSolLamports: seedSolLamports.toString(),
+        seedSol:         (Number(seedSolLamports)    / LAMPORTS_PER_SOL).toFixed(4) + ' SOL',
+        seedTokens:      (Number(actualTokenAmount)  / 1e9).toFixed(2),
+        txSignature:     raydiumResult.tx,
+        explorer: `https://explorer.solana.com/tx/${raydiumResult.tx}?cluster=${process.env.SOLANA_CLUSTER || 'devnet'}`,
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: `Graduation failed: ${err.message}` });
     }
   });
 }
