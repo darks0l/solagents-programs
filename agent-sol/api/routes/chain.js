@@ -23,13 +23,14 @@ import {
   poolAccountToDb,
   LAMPORTS_PER_SOL,
   BONDING_CURVE_PROGRAM_ID,
+  buildGraduateTransaction,
+  getDeployer,
 } from '../services/solana.js';
 import {
   getRaydiumPoolState,
   quoteRaydiumSwap,
   buildPostGradBuyTransaction,
   buildPostGradSellTransaction,
-  createRaydiumPool,
 } from '../services/raydium.js';
 import { stmts } from '../services/db.js';
 import { emitTrade } from '../services/ws-feed.js';
@@ -1235,29 +1236,38 @@ export default async function chainRoutes(fastify) {
       // Cap at available pool tokens (excess burned on-chain by graduate instruction)
       const actualTokenAmount = seedTokenAmount > realTok ? realTok : seedTokenAmount;
 
-      // Create Raydium pool (server-side, deployer signs)
-      let raydiumResult;
+      // Graduate on-chain via the bonding-curve graduate instruction.
+      // This handles: token burn, pre-transfer to payer ATAs, Raydium CPI, LP burn,
+      // and on-chain pool status → Graduated.
+      const deployer = getDeployer();
+      let txSignature, graduateResult;
       try {
-        raydiumResult = await createRaydiumPool({
+        graduateResult = await buildGraduateTransaction({
           mintAddress,
-          solLamports:  seedSolLamports,
-          tokenAmount:  actualTokenAmount,
+          payer: deployer.publicKey.toBase58(),
         });
-      } catch (raydiumErr) {
-        // Return helpful error if pool creation fails (e.g. missing config)
+        graduateResult.tx.sign(deployer);
+        txSignature = await conn.sendRawTransaction(
+          graduateResult.tx.serialize(),
+          { skipPreflight: false }
+        );
+        await conn.confirmTransaction(txSignature, 'confirmed');
+      } catch (gradErr) {
         return reply.code(500).send({
-          error:   `Raydium pool creation failed: ${raydiumErr.message}`,
-          hint:    'Ensure RAYDIUM_CREATE_POOL_FEE and RAYDIUM_AMM_CONFIG env vars are set correctly.',
+          error:   `On-chain graduation failed: ${gradErr.message}`,
+          hint:    'Check bonding curve pool state and Raydium config. Ensure graduation threshold is met.',
           seedSol: (Number(seedSolLamports) / LAMPORTS_PER_SOL).toFixed(4),
           seedTokens: (Number(actualTokenAmount) / 1e9).toFixed(2),
         });
       }
 
+      const raydiumPoolAddress = graduateResult.raydiumPoolState;
+      const raydiumLpMint = graduateResult.raydiumLpMint;
+
       // Update DB: mark pool as graduated with Raydium pool address
-      stmts.graduatePool?.run(raydiumResult.poolAddress, dbToken.id);
+      stmts.graduatePool?.run(raydiumPoolAddress, dbToken.id);
 
       // Update agent_tokens status to 'graduated'
-      // Keep existing mint_address and pool_address, just update status
       stmts.updateAgentTokenStatus?.run(
         'graduated',
         dbToken.mint_address || mintAddress,
@@ -1283,10 +1293,10 @@ export default async function chainRoutes(fastify) {
       const graduationPayload = {
         type:        'graduation',
         mintAddress,
-        raydiumPool: raydiumResult.poolAddress,
+        raydiumPool: raydiumPoolAddress,
         seedSol:     (Number(seedSolLamports) / LAMPORTS_PER_SOL).toFixed(4),
         seedTokens:  (Number(actualTokenAmount) / 1e9).toFixed(2),
-        txSignature: raydiumResult.tx,
+        txSignature,
         symbol:      dbToken.token_symbol,
         name:        dbToken.token_name,
       };
@@ -1296,15 +1306,13 @@ export default async function chainRoutes(fastify) {
       return {
         graduated:       true,
         mintAddress,
-        raydiumPool:     raydiumResult.poolAddress,
-        lpMint:          raydiumResult.lpMint,
-        token0Mint:      raydiumResult.token0Mint,
-        token1Mint:      raydiumResult.token1Mint,
+        raydiumPool:     raydiumPoolAddress,
+        lpMint:          raydiumLpMint,
         seedSolLamports: seedSolLamports.toString(),
         seedSol:         (Number(seedSolLamports)    / LAMPORTS_PER_SOL).toFixed(4) + ' SOL',
         seedTokens:      (Number(actualTokenAmount)  / 1e9).toFixed(2),
-        txSignature:     raydiumResult.tx,
-        explorer: `https://explorer.solana.com/tx/${raydiumResult.tx}?cluster=${process.env.SOLANA_CLUSTER || 'devnet'}`,
+        txSignature,
+        explorer: `https://explorer.solana.com/tx/${txSignature}?cluster=${process.env.SOLANA_CLUSTER || 'devnet'}`,
       };
     } catch (err) {
       return reply.code(500).send({ error: `Graduation failed: ${err.message}` });

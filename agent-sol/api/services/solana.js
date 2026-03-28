@@ -633,11 +633,13 @@ export async function claimPlatformFees(mintAddress) {
 /**
  * Build a graduation transaction.
  * Permissionless — anyone can trigger once threshold is met.
- * NOTE: Raydium CPI is currently stubbed in the program.
- * This will need real Raydium accounts once graduate.rs is completed.
+ *
+ * Payer (caller) acts as Raydium creator:
+ * - Pre-transfer: tokens/SOL moved from pool vaults → payer ATAs
+ * - Raydium CPI with payer as creator (plain invoke, payer already signed)
+ * - LP tokens burned immediately from payer's LP ATA
  */
 export async function buildGraduateTransaction({ mintAddress, payer }) {
-  const program = getBondingCurveProgram();
   const conn = getConnection();
   const mint = new PublicKey(mintAddress);
   const payerPk = new PublicKey(payer);
@@ -647,8 +649,42 @@ export async function buildGraduateTransaction({ mintAddress, payer }) {
   const [solVault] = getSolVaultPDA(poolPDA);
   const [tokenVault] = getTokenVaultPDA(poolPDA);
 
-  // TODO: Add Raydium CPMM accounts once graduate.rs is fully implemented
-  // For now, this builds the instruction with the accounts the stubbed version needs
+  // ── Raydium CPMM accounts ─────────────────────────────────
+  const {
+    RAYDIUM_CPMM_PROGRAM_ID,
+    RAYDIUM_AMM_CONFIG,
+    RAYDIUM_CREATE_POOL_FEE,
+    getRaydiumAuthPDA,
+    getRaydiumPoolPDA,
+    getRaydiumLpMintPDA,
+    getRaydiumVaultPDA,
+    getRaydiumObservationPDA,
+  } = await import('./raydium.js');
+
+  const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
+
+  // Raydium requires token_0 < token_1
+  const agentIsToken0 = mint.toBuffer().compare(WSOL_MINT.toBuffer()) < 0;
+  const [token0Mint, token1Mint] = agentIsToken0 ? [mint, WSOL_MINT] : [WSOL_MINT, mint];
+
+  const [raydiumAuth] = getRaydiumAuthPDA();
+  const [raydiumPoolState] = getRaydiumPoolPDA(RAYDIUM_AMM_CONFIG, token0Mint, token1Mint);
+  const [raydiumLpMint] = getRaydiumLpMintPDA(raydiumPoolState);
+  const [vault0] = getRaydiumVaultPDA(raydiumPoolState, token0Mint);
+  const [vault1] = getRaydiumVaultPDA(raydiumPoolState, token1Mint);
+  const [raydiumObservation] = getRaydiumObservationPDA(raydiumPoolState);
+
+  // Payer ATAs
+  const payerAgentAta = await getAssociatedTokenAddress(mint, payerPk);
+  const payerWsolAta = await getAssociatedTokenAddress(WSOL_MINT, payerPk);
+  const lpTokenAccount = await getAssociatedTokenAddress(raydiumLpMint, payerPk);
+
+  // Vault ordering: program uses swap internally, so pass:
+  //   raydium_token_0_vault = agent vault (vault1 when !agentIsToken0)
+  //   raydium_token_1_vault = wsol vault (vault0 when !agentIsToken0)
+  const [structVault0, structVault1] = agentIsToken0 ? [vault0, vault1] : [vault1, vault0];
+
+  const program = getBondingCurveProgram();
   const tx = await program.methods
     .graduate()
     .accounts({
@@ -658,16 +694,38 @@ export async function buildGraduateTransaction({ mintAddress, payer }) {
       solVault,
       tokenVault,
       mint,
+      payerAgentAta,
+      payerWsolAta,
+      raydiumProgram: RAYDIUM_CPMM_PROGRAM_ID,
+      raydiumAmmConfig: RAYDIUM_AMM_CONFIG,
+      raydiumPoolState,
+      raydiumAuthority: raydiumAuth,
+      raydiumToken0Vault: structVault0,
+      raydiumToken1Vault: structVault1,
+      raydiumLpMint,
+      lpTokenAccount,
+      raydiumObservation,
+      createPoolFee: RAYDIUM_CREATE_POOL_FEE,
+      wsolMint: WSOL_MINT,
+      raydiumPermission: SystemProgram.programId,  // dummy for Path B
       tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
-      // Raydium accounts will be added here when CPI is complete
+      rent: SYSVAR_RENT_PUBKEY,
     })
     .transaction();
 
   tx.feePayer = payerPk;
   tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 800_000 }));
+  tx.add(ComputeBudgetProgram.requestHeapFrame({ bytes: 262144 }));
 
-  return { tx, poolPDA: poolPDA.toBase58() };
+  return {
+    tx,
+    poolPDA: poolPDA.toBase58(),
+    raydiumPoolState: raydiumPoolState.toBase58(),
+    raydiumLpMint: raydiumLpMint.toBase58(),
+  };
 }
 
 // ── Event Parsing ────────────────────────────────────────────
