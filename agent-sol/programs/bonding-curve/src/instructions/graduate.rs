@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::program::invoke_signed;
+use anchor_lang::solana_program::program::{invoke, invoke_signed};
 use anchor_lang::solana_program::system_instruction;
 use anchor_spl::token::{self, Token, TokenAccount, Burn};
 use anchor_spl::associated_token::AssociatedToken;
@@ -16,27 +16,16 @@ pub mod wsol {
 /// Graduation: migrate bonding curve liquidity to Raydium CPMM.
 ///
 /// Dual-path design:
+///   Path A (permission mode): `initialize_with_permission` — creator fees on all post-grad trades
+///   Path B (standard):        `initialize`                 — no post-grad creator fees
 ///
-/// **Path A — Permission mode** (`config.raydium_permission_enabled = true`):
-///   Uses `initialize_with_permission` to create Raydium pool.
-///   - Our pool PDA becomes `pool_creator` on Raydium
-///   - Enables creator fee collection on ALL post-graduation trades
-///   - Fees split 50/50 via `claim_raydium_fees`
-///   - Requires: Raydium Permission PDA for our wallet (admin must apply)
-///
-/// **Path B — Standard mode** (fallback):
-///   Uses standard `initialize` to create Raydium pool.
-///   - No creator fee privileges post-graduation
-///   - Pool uses AmmConfig's default trade/protocol/fund fees only
-///   - Revenue comes entirely from pre-graduation bonding curve fees
-///   - No Permission PDA needed — works immediately
-///
-/// Both paths:
-/// - Pool PDA is the "creator" for Raydium (owns token accounts, pays rent)
-/// - LP tokens burned permanently (liquidity can never be pulled)
-/// - Pool marked as Graduated
-/// - Permissionless trigger (anyone can call once threshold met)
-/// - Mint ordering enforced (token_0 < token_1, required by Raydium)
+/// Core mechanic:
+/// - Price-matching burn: excess tokens burned so Raydium opens at curve's exact final price
+/// - Payer (caller) acts as Raydium "creator" — plain keypair, no data, system transfers work
+/// - Pre-transfer: tokens/SOL moved from pool vaults → payer ATAs before Raydium CPI
+/// - LP burn: Raydium sends LP tokens to payer's LP ATA; we burn immediately
+/// - Permanent liquidity: LP burned = can never be pulled
+/// - Permissionless trigger: anyone can call once threshold met
 #[derive(Accounts)]
 pub struct Graduate<'info> {
     #[account(mut)]
@@ -66,7 +55,7 @@ pub struct Graduate<'info> {
     )]
     pub sol_vault: SystemAccount<'info>,
 
-    /// Token vault — remaining tokens get transferred to Raydium
+    /// Token vault — remaining tokens transferred to Raydium
     #[account(
         mut,
         seeds = [CurvePool::TOKEN_VAULT_SEED, pool.key().as_ref()],
@@ -81,6 +70,26 @@ pub struct Graduate<'info> {
     #[account(mut, address = pool.mint)]
     pub mint: UncheckedAccount<'info>,
 
+    // ── Payer token accounts (Raydium creator = payer) ──────
+
+    /// Payer's ATA for the agent token — funded from token_vault before Raydium CPI
+    #[account(
+        init_if_needed,
+        payer = payer,
+        associated_token::mint = mint,
+        associated_token::authority = payer,
+    )]
+    pub payer_agent_ata: Account<'info, TokenAccount>,
+
+    /// Payer's WSOL ATA — SOL wrapped here before Raydium CPI
+    #[account(
+        init_if_needed,
+        payer = payer,
+        associated_token::mint = wsol_mint,
+        associated_token::authority = payer,
+    )]
+    pub payer_wsol_ata: Account<'info, TokenAccount>,
+
     // ── Raydium CPMM accounts ───────────────────────────────
 
     /// Raydium CPMM program
@@ -88,7 +97,7 @@ pub struct Graduate<'info> {
     #[account(address = raydium_cpi::RAYDIUM_CPMM_PROGRAM)]
     pub raydium_program: UncheckedAccount<'info>,
 
-    /// Raydium AMM config (pre-existing, determines fee structure)
+    /// Raydium AMM config
     /// CHECK: Owned by Raydium program, validated in CPI
     pub raydium_amm_config: UncheckedAccount<'info>,
 
@@ -101,12 +110,12 @@ pub struct Graduate<'info> {
     /// CHECK: Derived by Raydium program
     pub raydium_authority: UncheckedAccount<'info>,
 
-    /// Raydium token 0 vault
+    /// Raydium token 0 vault — created by CPI
     /// CHECK: Created by Raydium CPI
     #[account(mut)]
     pub raydium_token_0_vault: UncheckedAccount<'info>,
 
-    /// Raydium token 1 vault (WSOL)
+    /// Raydium token 1 vault — created by CPI
     /// CHECK: Created by Raydium CPI
     #[account(mut)]
     pub raydium_token_1_vault: UncheckedAccount<'info>,
@@ -116,20 +125,11 @@ pub struct Graduate<'info> {
     #[account(mut)]
     pub raydium_lp_mint: UncheckedAccount<'info>,
 
-    /// LP token account — receives LP tokens (burned after CPI)
-    /// CHECK: Created for LP locking
+    /// Payer's LP token ATA — created by Raydium CPI (payer pays rent as creator)
+    /// We burn LP tokens from here immediately after graduation.
+    /// CHECK: Created by Raydium CPI
     #[account(mut)]
     pub lp_token_account: UncheckedAccount<'info>,
-
-    /// Pool PDA's WSOL token account — SOL is wrapped here before Raydium deposit.
-    /// Created if needed, authority = pool PDA (signs via invoke_signed).
-    #[account(
-        init_if_needed,
-        payer = payer,
-        associated_token::mint = wsol_mint,
-        associated_token::authority = pool,
-    )]
-    pub wsol_ata: Account<'info, TokenAccount>,
 
     /// Raydium observation state
     /// CHECK: Created by Raydium CPI
@@ -146,10 +146,7 @@ pub struct Graduate<'info> {
     #[account(address = wsol::ID)]
     pub wsol_mint: UncheckedAccount<'info>,
 
-    /// Raydium Permission PDA (optional — only needed for Path A).
-    /// Seeds: ["permission", payer_pubkey] on Raydium program.
-    /// If `config.raydium_permission_enabled` is false, this can be any account
-    /// (it won't be used in the CPI).
+    /// Raydium Permission PDA (Path A only; pass any account for Path B)
     /// CHECK: Validated in CPI by Raydium when permission mode is active
     pub raydium_permission: UncheckedAccount<'info>,
 
@@ -182,39 +179,36 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
         CurveError::NotReadyToGraduate
     );
 
-    // ── Calculate amounts for Raydium pool ──────────────────
     let sol_for_raydium = net_sol;
 
-    // ── Price-matching: calculate tokens for Raydium ────────
-    // Bonding curve spot price = virtual_sol_reserve / virtual_token_reserve
-    // Raydium must open at same price: sol / tokens = virtual_sol / virtual_token
-    // Therefore: tokens_for_raydium = sol * virtual_token / virtual_sol
+    // ── Price-matching: tokens for Raydium ──────────────────
+    // tokens_for_raydium = sol * virtual_token / virtual_sol
+    // This ensures Raydium opens at the same price as the curve's final spot price.
     let tokens_for_raydium = (sol_for_raydium as u128)
         .checked_mul(pool.virtual_token_reserve as u128)
         .ok_or(CurveError::MathOverflow)?
         .checked_div(pool.virtual_sol_reserve as u128)
         .ok_or(CurveError::MathOverflow)? as u64;
 
-    // Excess tokens are burned — they represented the virtual SOL's "phantom" contribution
+    // Excess tokens burned — they represent the virtual SOL's phantom contribution
     let tokens_to_burn = pool.real_token_balance
         .checked_sub(tokens_for_raydium)
         .ok_or(CurveError::MathOverflow)?;
 
-    msg!("Graduating pool: {} SOL + {} tokens to Raydium, burning {} tokens", sol_for_raydium, tokens_for_raydium, tokens_to_burn);
-    msg!("Unclaimed fees reserved: {} creator + {} platform", unclaimed_creator_fees, unclaimed_platform_fees);
+    msg!("Graduating pool: {} SOL + {} tokens to Raydium, burning {} tokens",
+        sol_for_raydium, tokens_for_raydium, tokens_to_burn);
     msg!("Permission mode: {}", config.raydium_permission_enabled);
 
     // ── Burn excess tokens for price continuity ─────────────
-    // Without this burn, Raydium would open ~26% below the curve's final price
-    // because virtual SOL (30 SOL) inflates the curve price but doesn't exist as real liquidity.
-    if tokens_to_burn > 0 {
-        let mint_key_for_burn = pool.mint;
-        let burn_pool_seeds: &[&[u8]] = &[
-            CurvePool::SEED,
-            mint_key_for_burn.as_ref(),
-            &[pool.bump],
-        ];
+    let mint_key = pool.mint;
+    let pool_key = pool.key();
+    let pool_bump = pool.bump;
+    let vault_bump = pool.vault_bump;
 
+    let pool_seeds: &[&[u8]] = &[CurvePool::SEED, mint_key.as_ref(), &[pool_bump]];
+    let vault_seeds: &[&[u8]] = &[CurvePool::VAULT_SEED, pool_key.as_ref(), &[vault_bump]];
+
+    if tokens_to_burn > 0 {
         token::burn(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -223,33 +217,15 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
                     from: ctx.accounts.token_vault.to_account_info(),
                     authority: pool.to_account_info(),
                 },
-                &[burn_pool_seeds],
+                &[pool_seeds],
             ),
             tokens_to_burn,
         )?;
-        msg!("Burned {} excess tokens for price continuity", tokens_to_burn);
+        msg!("Burned {} excess tokens", tokens_to_burn);
     }
 
-    // Capture keys + bumps before mutable borrow of pool
-    let mint_key = pool.mint;
-    let pool_key = pool.key();
-    let pool_bump = pool.bump;
-    let vault_bump = pool.vault_bump;
-
-    let pool_seeds: &[&[u8]] = &[
-        CurvePool::SEED,
-        mint_key.as_ref(),
-        &[pool_bump],
-    ];
-
-    let vault_seeds: &[&[u8]] = &[
-        CurvePool::VAULT_SEED,
-        pool_key.as_ref(),
-        &[vault_bump],
-    ];
-
-    // ── Mint ordering: Raydium requires token_0_mint < token_1_mint ─
-    // Determine which is token_0 and which is token_1 based on pubkey ordering.
+    // ── Mint ordering ───────────────────────────────────────
+    // Raydium requires token_0_mint < token_1_mint (lexicographic pubkey order)
     let agent_mint_key = ctx.accounts.mint.key();
     let wsol_mint_key = ctx.accounts.wsol_mint.key();
     let agent_is_token_0 = agent_mint_key < wsol_mint_key;
@@ -260,9 +236,9 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
         (ctx.accounts.wsol_mint.to_account_info(), ctx.accounts.mint.to_account_info())
     };
     let (creator_token_0_info, creator_token_1_info) = if agent_is_token_0 {
-        (ctx.accounts.token_vault.to_account_info(), ctx.accounts.wsol_ata.to_account_info())
+        (ctx.accounts.payer_agent_ata.to_account_info(), ctx.accounts.payer_wsol_ata.to_account_info())
     } else {
-        (ctx.accounts.wsol_ata.to_account_info(), ctx.accounts.token_vault.to_account_info())
+        (ctx.accounts.payer_wsol_ata.to_account_info(), ctx.accounts.payer_agent_ata.to_account_info())
     };
     let (init_amount_0, init_amount_1) = if agent_is_token_0 {
         (tokens_for_raydium, sol_for_raydium)
@@ -274,73 +250,57 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
     } else {
         (ctx.accounts.raydium_token_1_vault.to_account_info(), ctx.accounts.raydium_token_0_vault.to_account_info())
     };
+    msg!("agent_is_token_0={}", agent_is_token_0);
 
-    msg!("Mint ordering: agent_is_token_0={}, agent={}, wsol={}", agent_is_token_0, agent_mint_key, wsol_mint_key);
-
-    // ── Fund pool PDA for Raydium account rent ──────────────
-    // Raydium's initialize creates several accounts (LP mint, vaults, pool state,
-    // observation state) with payer = creator. Our pool PDA is the creator, so it
-    // needs enough lamports to pay rent for all new accounts + create_pool_fee.
-    // Estimate: ~0.3 SOL covers all rent + fees generously.
-    let raydium_rent_budget: u64 = 300_000_000; // 0.3 SOL
-    let funding_amount = std::cmp::min(raydium_rent_budget, sol_for_raydium / 10);
-
-    invoke_signed(
-        &system_instruction::transfer(
-            ctx.accounts.sol_vault.key,
-            &pool_key,
-            funding_amount,
+    // ── Pre-transfer: agent tokens → payer ATA ──────────────
+    // Raydium pulls tokens from creator's ATA (authority = payer).
+    // Pool PDA is the current authority of token_vault; transfer via invoke_signed.
+    token::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            token::Transfer {
+                from: ctx.accounts.token_vault.to_account_info(),
+                to: ctx.accounts.payer_agent_ata.to_account_info(),
+                authority: pool.to_account_info(),
+            },
+            &[pool_seeds],
         ),
-        &[
-            ctx.accounts.sol_vault.to_account_info(),
-            pool.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-        &[vault_seeds],
+        tokens_for_raydium,
     )?;
-    msg!("Funded pool PDA with {} lamports for Raydium rent", funding_amount);
+    msg!("Transferred {} tokens to payer ATA", tokens_for_raydium);
 
-    // ── Wrap SOL → WSOL in pool's ATA ──────────────────────
-    // Transfer SOL from sol_vault into the pool's WSOL ATA, then sync_native
-    // so the SPL token balance matches. Raydium reads the token balance, not lamports.
+    // ── Pre-wrap: SOL → payer WSOL ATA ──────────────────────
+    // Transfer SOL from vault to payer's WSOL ATA, then sync_native.
     invoke_signed(
         &system_instruction::transfer(
             ctx.accounts.sol_vault.key,
-            ctx.accounts.wsol_ata.to_account_info().key,
+            ctx.accounts.payer_wsol_ata.to_account_info().key,
             sol_for_raydium,
         ),
         &[
             ctx.accounts.sol_vault.to_account_info(),
-            ctx.accounts.wsol_ata.to_account_info(),
+            ctx.accounts.payer_wsol_ata.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
         ],
         &[vault_seeds],
     )?;
-
     token::sync_native(CpiContext::new(
         ctx.accounts.token_program.to_account_info(),
-        token::SyncNative {
-            account: ctx.accounts.wsol_ata.to_account_info(),
-        },
+        token::SyncNative { account: ctx.accounts.payer_wsol_ata.to_account_info() },
     ))?;
+    msg!("Wrapped {} lamports to WSOL in payer ATA", sol_for_raydium);
 
-    // ── CPI to Raydium — dual path ──────────────────────────
-    // Pool PDA is the "creator" for Raydium in BOTH paths:
-    // - It owns the token accounts (token_vault authority, wsol_ata authority)
-    // - It pays rent for new Raydium accounts (LP mint, vaults, pool state, observation)
-    // - It signs via invoke_signed with pool_seeds
-    // Raydium internally calls transfer_from_user_to_pool_vault using creator as authority,
-    // so the creator MUST be the authority of the token accounts — i.e., our pool PDA.
+    // ── CPI to Raydium ──────────────────────────────────────
+    // Payer (wallet keypair, no data) is the Raydium creator.
+    // Payer signed the original tx, so their signature propagates through the CPI.
     let open_time = Clock::get()?.unix_timestamp as u64 + 1;
 
     if config.raydium_permission_enabled {
-        // ═══ PATH A: initialize_with_permission ═══
-        msg!("PATH A: Using initialize_with_permission (creator fees enabled)");
-
+        msg!("PATH A: initialize_with_permission");
         let ix = raydium_cpi::build_initialize_with_permission_ix(
             ctx.accounts.raydium_program.key(),
-            pool_key,                                      // Pool PDA = payer/creator
-            pool_key,                                      // Pool PDA = pool_creator (for fee claims)
+            ctx.accounts.payer.key(),   // payer = creator
+            ctx.accounts.payer.key(),   // payer = pool_creator
             ctx.accounts.raydium_amm_config.key(),
             ctx.accounts.raydium_authority.key(),
             ctx.accounts.raydium_pool_state.key(),
@@ -365,12 +325,11 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
             open_time,
             raydium_cpi::RaydiumCreatorFeeOn::BothToken,
         );
-
-        invoke_signed(
+        invoke(
             &ix,
             &[
-                pool.to_account_info(),                               // creator (PDA signer, pays rent)
-                pool.to_account_info(),                               // pool_creator (same PDA)
+                ctx.accounts.payer.to_account_info(),
+                ctx.accounts.payer.to_account_info(),   // pool_creator = payer
                 ctx.accounts.raydium_amm_config.to_account_info(),
                 ctx.accounts.raydium_authority.to_account_info(),
                 ctx.accounts.raydium_pool_state.to_account_info(),
@@ -389,15 +348,12 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
                 ctx.accounts.associated_token_program.to_account_info(),
                 ctx.accounts.system_program.to_account_info(),
             ],
-            &[pool_seeds],
         )?;
     } else {
-        // ═══ PATH B: standard initialize (fallback) ═══
-        msg!("PATH B: Using standard initialize (no creator fees on Raydium)");
-
+        msg!("PATH B: standard initialize");
         let ix = raydium_cpi::build_initialize_ix(
             ctx.accounts.raydium_program.key(),
-            pool_key,                                      // Pool PDA = creator
+            ctx.accounts.payer.key(),   // payer = creator
             ctx.accounts.raydium_amm_config.key(),
             ctx.accounts.raydium_authority.key(),
             ctx.accounts.raydium_pool_state.key(),
@@ -421,11 +377,10 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
             init_amount_1,
             open_time,
         );
-
-        invoke_signed(
+        invoke(
             &ix,
             &[
-                pool.to_account_info(),                               // creator (PDA signer, pays rent)
+                ctx.accounts.payer.to_account_info(),   // creator
                 ctx.accounts.raydium_amm_config.to_account_info(),
                 ctx.accounts.raydium_authority.to_account_info(),
                 ctx.accounts.raydium_pool_state.to_account_info(),
@@ -444,47 +399,35 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
                 ctx.accounts.system_program.to_account_info(),
                 ctx.accounts.rent.to_account_info(),
             ],
-            &[pool_seeds],
         )?;
     }
+    msg!("Raydium pool created");
 
     // ── Burn LP tokens ──────────────────────────────────────
-    // After Raydium CPI, LP tokens land in lp_token_account.
-    // We burn them permanently — liquidity can never be pulled.
-    // This is stronger than locking: burned = gone forever, no key can recover them.
-    let lp_amount = {
-        let lp_data = ctx.accounts.lp_token_account.try_borrow_data()?;
-        if lp_data.len() >= 72 {
-            u64::from_le_bytes(lp_data[64..72].try_into().unwrap())
-        } else {
-            0
-        }
-    };
+    // Raydium sent LP tokens to payer's LP ATA. Burn them permanently.
+    // Payer is authority of lp_token_account and already signed the tx.
+    let lp_data = ctx.accounts.lp_token_account.try_borrow_data()?;
+    let lp_amount = if lp_data.len() >= 72 {
+        u64::from_le_bytes(lp_data[64..72].try_into().unwrap())
+    } else { 0 };
+    drop(lp_data);
 
     if lp_amount > 0 {
-        let mint_key_for_lp = pool.mint;
-        let lp_pool_seeds: &[&[u8]] = &[
-            CurvePool::SEED,
-            mint_key_for_lp.as_ref(),
-            &[pool.bump],
-        ];
-
         token::burn(
-            CpiContext::new_with_signer(
+            CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 Burn {
                     mint: ctx.accounts.raydium_lp_mint.to_account_info(),
                     from: ctx.accounts.lp_token_account.to_account_info(),
-                    authority: pool.to_account_info(),
+                    authority: ctx.accounts.payer.to_account_info(),
                 },
-                &[lp_pool_seeds],
             ),
             lp_amount,
         )?;
         msg!("Burned {} LP tokens (permanent liquidity)", lp_amount);
     }
 
-    // ── Mark pool as graduated ──────────────────────────────
+    // ── Mark pool graduated ─────────────────────────────────
     pool.status = PoolStatus::Graduated;
     pool.graduated_at = Clock::get()?.unix_timestamp;
     pool.raydium_pool = ctx.accounts.raydium_pool_state.key();
@@ -492,14 +435,12 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
     pool.lp_tokens_locked = lp_amount;
     pool.raydium_fees_claimed_token_0 = 0;
     pool.raydium_fees_claimed_token_1 = 0;
-    pool.real_sol_balance = total_unclaimed_fees; // Only fees remain
+    pool.real_sol_balance = total_unclaimed_fees;
     pool.real_token_balance = 0;
 
-    // ── Update global stats ─────────────────────────────────
     let config = &mut ctx.accounts.config;
     config.tokens_graduated = config.tokens_graduated
-        .checked_add(1)
-        .ok_or(CurveError::MathOverflow)?;
+        .checked_add(1).ok_or(CurveError::MathOverflow)?;
 
     emit!(PoolGraduated {
         pool: pool.key(),
@@ -530,6 +471,5 @@ pub struct PoolGraduated {
     pub total_trades: u64,
     pub lifetime_creator_fees: u64,
     pub lifetime_platform_fees: u64,
-    /// Whether creator fee collection was enabled on Raydium
     pub permission_mode: bool,
 }
