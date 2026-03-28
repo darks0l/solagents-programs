@@ -305,7 +305,6 @@ document.addEventListener('DOMContentLoaded', () => {
   updateAdminNavVisibility();
   // Re-check on storage changes and after navigation
   window.addEventListener('storage', updateAdminNavVisibility);
-  const _origNavigate = navigate;
   // Periodically check (covers login/logout within same tab)
   setInterval(updateAdminNavVisibility, 2000);
 

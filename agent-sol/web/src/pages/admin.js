@@ -13,8 +13,6 @@ let _adminTs = null;
 let _adminRole = null;
 let _dashboardData = null;
 
-const API_BASE = api.base;
-
 // === Admin Fetch Helper ===
 async function adminFetch(path, options = {}) {
   const wallet = _adminWallet || localStorage.getItem('adminWallet');
@@ -32,7 +30,7 @@ async function adminFetch(path, options = {}) {
     ...options.headers,
   };
 
-  const res = await fetch(API_BASE + path, { ...options, headers });
+  const res = await fetch(api.base + path, { ...options, headers });
   return res.json();
 }
 
@@ -110,7 +108,7 @@ async function handleAdminConnect() {
       'Content-Type': 'application/json',
     };
 
-    const res = await fetch(API_BASE + '/admin/dashboard', { headers });
+    const res = await fetch(api.base + '/admin/dashboard', { headers });
     const data = await res.json();
 
     if (data.error || res.status === 403 || res.status === 401) {
@@ -439,7 +437,7 @@ async function loadSystemInfo() {
           </div>
           <div class="stat-row" style="padding:4px 0">
             <span class="text-muted text-xs">API</span>
-            <span class="font-mono text-xs">${API_BASE}</span>
+            <span class="font-mono text-xs">${api.base}</span>
           </div>
           <div class="stat-row" style="padding:4px 0">
             <span class="text-muted text-xs">Network</span>
