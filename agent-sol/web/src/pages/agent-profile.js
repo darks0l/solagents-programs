@@ -1,4 +1,5 @@
 import { api, toast, truncateAddress } from '../main.js';
+import { isConnected, getPublicKey, signAndSendTransaction } from '../services/wallet.js';
 
 export async function renderAgentProfile(container, state, agentId) {
   if (!agentId) {
@@ -27,6 +28,13 @@ export async function renderAgentProfile(container, state, agentId) {
     const data = await api.get(`/agents/${agentId}/dashboard`);
     let feesData = null;
     try { feesData = await api.get(`/agents/${agentId}/fees`); } catch {}
+
+    // Fetch on-chain pool state for real fee data
+    let onChainPool = null;
+    if (data.token?.mint_address) {
+      try { onChainPool = await api.get(`/chain/state/pool/${data.token.mint_address}`); } catch {}
+    }
+    data._onChainPool = onChainPool;
 
     // Fetch SOL/USD price for market cap display
     let _solPriceUsd = 0;
@@ -86,7 +94,8 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
   const fees = data.fees || {};
   const _solPriceUsd = data._solPriceUsd || 0;
   const devBuys = data.devBuys || { buys: [], totals: [] };
-  const isOwner = window.solana?.publicKey?.toString() === agent.walletAddress;
+  const connectedKey = isConnected() ? getPublicKey() : (window.solana?.publicKey?.toString() || null);
+  const isOwner = connectedKey === agent.walletAddress;
   const allJobs = jobsData?.jobs || data.recentJobs || [];
   const services = servicesData?.services || servicesData || [];
   const unclaimedFees = feesData?.unclaimed_fees || [];
@@ -209,7 +218,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
         <div class="text-muted text-xs">Earned (USDC)</div>
       </div>
       <div class="card glass text-center p-2">
-        <div class="text-2xl font-bold" style="color:#9945FF">${fees.total_sol || '0'}</div>
+        <div class="text-2xl font-bold" style="color:#9945FF">${parseFloat(data._onChainPool?.creator_fees_earned || fees.total_sol || '0').toFixed(4)}</div>
         <div class="text-muted text-xs">Trading Fees (SOL)</div>
       </div>
     </div>
@@ -374,26 +383,39 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
               <h2 class="font-semibold">💰 Trading Fee Revenue</h2>
             </div>
             <div class="card-body">
-              <div class="grid grid-3 gap-1">
-                <div class="text-center">
-                  <div class="font-bold text-lg" style="color:#14F195">${fees.unclaimed_sol || '0'}</div>
-                  <div class="text-muted text-xs">Unclaimed SOL</div>
-                </div>
-                <div class="text-center">
-                  <div class="font-bold text-lg">${fees.claimed_sol || '0'}</div>
-                  <div class="text-muted text-xs">Claimed SOL</div>
-                </div>
-                <div class="text-center">
-                  <div class="font-bold text-lg">${fees.total_sol || '0'}</div>
-                  <div class="text-muted text-xs">Total SOL</div>
-                </div>
-              </div>
-
-              ${isOwner && parseFloat(fees.unclaimed_sol || '0') > 0 ? `
-                <button class="btn btn-primary btn-glow mt-2" style="width:100%" id="btn-claim-fees" data-agent-id="${agentId}">
-                  💰 Claim ${fees.unclaimed_sol} SOL
-                </button>
-              ` : ''}
+              ${(() => {
+                const ocp = data._onChainPool;
+                const earned = parseFloat(ocp?.creator_fees_earned || fees.total_sol || '0');
+                const claimed = parseFloat(ocp?.creator_fees_claimed || fees.claimed_sol || '0');
+                const unclaimed = earned - claimed;
+                const earnedUsd = _solPriceUsd > 0 ? ' (~$' + (earned * _solPriceUsd).toFixed(2) + ')' : '';
+                const unclaimedUsd = _solPriceUsd > 0 ? ' (~$' + (unclaimed * _solPriceUsd).toFixed(2) + ')' : '';
+                return `
+                  <div class="grid grid-3 gap-1">
+                    <div class="text-center">
+                      <div class="font-bold text-lg" style="color:#14F195">${unclaimed > 0 ? unclaimed.toFixed(6) : '0'}</div>
+                      <div class="text-muted text-xs">Unclaimed SOL${unclaimedUsd}</div>
+                    </div>
+                    <div class="text-center">
+                      <div class="font-bold text-lg">${claimed > 0 ? claimed.toFixed(6) : '0'}</div>
+                      <div class="text-muted text-xs">Claimed SOL</div>
+                    </div>
+                    <div class="text-center">
+                      <div class="font-bold text-lg">${earned > 0 ? earned.toFixed(6) : '0'}</div>
+                      <div class="text-muted text-xs">Total Earned${earnedUsd}</div>
+                    </div>
+                  </div>
+                  ${ocp ? '<p class="text-muted text-xs mt-1" style="text-align:center;opacity:0.5">📡 On-chain verified</p>' : ''}
+                  ${unclaimed > 0.000001 ? `
+                    <button class="btn btn-primary btn-glow mt-2" style="width:100%" id="btn-claim-fees"
+                      data-agent-id="${agentId}" data-mint="${token?.mint_address || ''}"
+                      data-unclaimed="${unclaimed.toFixed(9)}">
+                      💰 Claim ${unclaimed.toFixed(6)} SOL${unclaimedUsd}
+                    </button>
+                    <p class="text-muted text-xs mt-1" style="text-align:center">Signs an on-chain transaction with your wallet</p>
+                  ` : isOwner ? '<p class="text-muted text-xs mt-2" style="text-align:center">No unclaimed fees. Keep trading!</p>' : ''}
+                `;
+              })()}
 
               <!-- Fee History -->
               ${unclaimedFees.length > 0 ? `
@@ -553,27 +575,46 @@ function wireProfileEvents(content, data, agentId, state) {
     }
   });
 
-  // Claim fees
+  // Claim fees — on-chain transaction
   content.querySelector('#btn-claim-fees')?.addEventListener('click', async (e) => {
     const btn = e.target;
+    const mintAddress = btn.dataset.mint;
+    const unclaimed = btn.dataset.unclaimed;
     btn.disabled = true;
-    btn.textContent = 'Claiming...';
+    btn.textContent = '⏳ Building transaction...';
     try {
-      if (!window.solana?.isConnected) {
+      if (!isConnected()) {
         toast('Connect your wallet first', 'error');
         btn.disabled = false;
-        btn.textContent = '💰 Claim fees';
+        btn.textContent = `💰 Claim ${parseFloat(unclaimed).toFixed(6)} SOL`;
         return;
       }
-      const wallet = window.solana.publicKey.toString();
-      const result = await api.post(`/agents/${agentId}/fees/claim`, { callerWallet: wallet });
-      if (result.error) throw new Error(result.error);
-      toast(`✅ Claimed ${result.creator_payout} SOL!`, 'success');
-      setTimeout(() => renderAgentProfile(content.closest('.main-content') || content.parentElement, state, agentId), 1500);
+      const creatorWallet = getPublicKey();
+
+      // 1. Build on-chain claim tx
+      const { transaction } = await api.post('/chain/build/claim-fees', {
+        creatorWallet,
+        mintAddress,
+      });
+      if (!transaction) throw new Error('Server returned no transaction');
+
+      // 2. Sign & send with Phantom
+      btn.textContent = '✍️ Sign in wallet...';
+      const signature = await signAndSendTransaction(transaction);
+
+      // 3. Success
+      btn.textContent = '✅ Claimed!';
+      toast(`✅ Claimed ${parseFloat(unclaimed).toFixed(6)} SOL! TX: ${signature.slice(0, 12)}...`, 'success');
+
+      // 4. Also sync DB (fire-and-forget)
+      api.post(`/agents/${agentId}/fees/claim`, { callerWallet }).catch(() => {});
+
+      // 5. Refresh page after a short delay
+      setTimeout(() => renderAgentProfile(content.closest('.main-content') || content.parentElement, state, agentId), 2000);
     } catch (err) {
       toast(`Claim failed: ${err.message}`, 'error');
       btn.disabled = false;
-      btn.textContent = '💰 Claim fees';
+      btn.textContent = `💰 Claim ${parseFloat(unclaimed).toFixed(6)} SOL`;
     }
   });
 
