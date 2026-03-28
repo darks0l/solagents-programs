@@ -602,15 +602,30 @@ function wireProfileEvents(content, data, agentId, state) {
       btn.textContent = '✍️ Sign in wallet...';
       const signature = await signAndSendTransaction(transaction);
 
-      // 3. Success
-      btn.textContent = '✅ Claimed!';
+      // 3. Wait for on-chain confirmation then refresh
+      btn.textContent = '⏳ Confirming on-chain...';
       toast(`✅ Claimed ${parseFloat(unclaimed).toFixed(6)} SOL! TX: ${signature.slice(0, 12)}...`, 'success');
 
       // 4. Also sync DB (fire-and-forget)
       api.post(`/agents/${agentId}/fees/claim`, { callerWallet }).catch(() => {});
 
-      // 5. Refresh page after a short delay
-      setTimeout(() => renderAgentProfile(content.closest('.main-content') || content.parentElement, state, agentId), 2000);
+      // 5. Poll on-chain state until claimed amount updates (max 10s)
+      const mintAddr = mintAddress;
+      let confirmed = false;
+      for (let i = 0; i < 5; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const fresh = await api.get(`/chain/state/pool/${mintAddr}`);
+          if (parseFloat(fresh.creator_fees_claimed || '0') > parseFloat(data._onChainPool?.creator_fees_claimed || '0')) {
+            confirmed = true;
+            break;
+          }
+        } catch {}
+      }
+
+      btn.textContent = '✅ Claimed!';
+      const parent = content.closest('.main-content') || content.parentElement;
+      if (parent) renderAgentProfile(parent, state, agentId);
     } catch (err) {
       toast(`Claim failed: ${err.message}`, 'error');
       btn.disabled = false;
