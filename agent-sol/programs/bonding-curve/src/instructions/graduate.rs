@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke_signed;
 use anchor_lang::solana_program::system_instruction;
-use anchor_spl::token::{self, Token, TokenAccount};
+use anchor_spl::token::{self, Token, TokenAccount, Burn};
 use anchor_spl::associated_token::AssociatedToken;
 use crate::state::{CurveConfig, CurvePool, PoolStatus};
 use crate::errors::CurveError;
@@ -181,12 +181,52 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
     );
 
     // ── Calculate amounts for Raydium pool ──────────────────
-    let tokens_for_raydium = pool.real_token_balance;
     let sol_for_raydium = net_sol;
 
-    msg!("Graduating pool: {} SOL + {} tokens to Raydium", sol_for_raydium, tokens_for_raydium);
+    // ── Price-matching: calculate tokens for Raydium ────────
+    // Bonding curve spot price = virtual_sol_reserve / virtual_token_reserve
+    // Raydium must open at same price: sol_for_raydium / tokens_for_raydium = virtual_sol / virtual_token
+    // Therefore: tokens_for_raydium = sol_for_raydium * virtual_token_reserve / virtual_sol_reserve
+    let tokens_for_raydium = (sol_for_raydium as u128)
+        .checked_mul(pool.virtual_token_reserve as u128)
+        .ok_or(CurveError::MathOverflow)?
+        .checked_div(pool.virtual_sol_reserve as u128)
+        .ok_or(CurveError::MathOverflow)? as u64;
+
+    // Excess tokens are burned — they represented the virtual SOL's "phantom" contribution
+    let tokens_to_burn = pool.real_token_balance
+        .checked_sub(tokens_for_raydium)
+        .ok_or(CurveError::MathOverflow)?;
+
+    msg!("Graduating pool: {} SOL + {} tokens to Raydium, burning {} tokens", sol_for_raydium, tokens_for_raydium, tokens_to_burn);
     msg!("Unclaimed fees reserved: {} creator + {} platform", unclaimed_creator_fees, unclaimed_platform_fees);
     msg!("Permission mode: {}", config.raydium_permission_enabled);
+
+    // ── Burn excess tokens for price continuity ─────────────
+    // Without this burn, Raydium would open ~26% below the curve's final price
+    // because virtual SOL (30 SOL) inflates the curve price but doesn't exist as real liquidity.
+    if tokens_to_burn > 0 {
+        let mint_key_for_burn = pool.mint;
+        let burn_pool_seeds: &[&[u8]] = &[
+            CurvePool::SEED,
+            mint_key_for_burn.as_ref(),
+            &[pool.bump],
+        ];
+
+        token::burn(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Burn {
+                    mint: ctx.accounts.mint.to_account_info(),
+                    from: ctx.accounts.token_vault.to_account_info(),
+                    authority: pool.to_account_info(),
+                },
+                &[burn_pool_seeds],
+            ),
+            tokens_to_burn,
+        )?;
+        msg!("Burned {} excess tokens for price continuity", tokens_to_burn);
+    }
 
     // Capture keys + bumps before mutable borrow of pool
     let mint_key = pool.mint;
@@ -361,11 +401,10 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
         )?;
     }
 
-    // ── Lock LP tokens ──────────────────────────────────────
+    // ── Burn LP tokens ──────────────────────────────────────
     // After Raydium CPI, LP tokens land in lp_token_account.
-    // We keep them locked — never burn, never withdraw.
-    // This means: liquidity is permanent + creator fees claimable (Path A only).
-    // Manually deserialize SPL token balance from account data (offset 64..72 = amount field).
+    // We burn them permanently — liquidity can never be pulled.
+    // This is stronger than locking: burned = gone forever, no key can recover them.
     let lp_amount = {
         let lp_data = ctx.accounts.lp_token_account.try_borrow_data()?;
         if lp_data.len() >= 72 {
@@ -374,7 +413,29 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
             0
         }
     };
-    msg!("LP tokens locked in program PDA: {}", lp_amount);
+
+    if lp_amount > 0 {
+        let mint_key_for_lp = pool.mint;
+        let lp_pool_seeds: &[&[u8]] = &[
+            CurvePool::SEED,
+            mint_key_for_lp.as_ref(),
+            &[pool.bump],
+        ];
+
+        token::burn(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Burn {
+                    mint: ctx.accounts.raydium_lp_mint.to_account_info(),
+                    from: ctx.accounts.lp_token_account.to_account_info(),
+                    authority: pool.to_account_info(),
+                },
+                &[lp_pool_seeds],
+            ),
+            lp_amount,
+        )?;
+        msg!("Burned {} LP tokens (permanent liquidity)", lp_amount);
+    }
 
     // ── Mark pool as graduated ──────────────────────────────
     pool.status = PoolStatus::Graduated;
@@ -399,6 +460,7 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
         creator: pool.creator,
         sol_to_raydium: sol_for_raydium,
         tokens_to_raydium: tokens_for_raydium,
+        tokens_burned: tokens_to_burn,
         total_volume: pool.total_volume_sol,
         total_trades: pool.total_trades,
         lifetime_creator_fees: pool.creator_fees_earned,
@@ -416,6 +478,7 @@ pub struct PoolGraduated {
     pub creator: Pubkey,
     pub sol_to_raydium: u64,
     pub tokens_to_raydium: u64,
+    pub tokens_burned: u64,
     pub total_volume: u64,
     pub total_trades: u64,
     pub lifetime_creator_fees: u64,
