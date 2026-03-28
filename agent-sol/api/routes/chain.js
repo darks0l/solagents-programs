@@ -792,7 +792,7 @@ export default async function chainRoutes(fastify) {
   // ═══════════════════════════════════════════════════════════
 
   // ═══════════════════════════════════════════════════════════
-  // POST-GRADUATION — Raydium CPMM trading after 85 SOL threshold
+  // POST-GRADUATION — Raydium CPMM trading after graduation threshold
   // ═══════════════════════════════════════════════════════════
 
   /**
