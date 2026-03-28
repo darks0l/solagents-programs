@@ -14,6 +14,8 @@ import {
   buildSellTransaction,
   buildCreateTokenTransaction,
   buildClaimCreatorFeesTransaction,
+  buildGraduateTransaction,
+  getDeployer,
   getCurveConfigPDA,
   getCurvePoolPDA,
   getSolVaultPDA,
@@ -325,6 +327,16 @@ export default async function chainRoutes(fastify) {
     if (!solAmount || solAmount <= 0) return reply.code(400).send({ error: 'solAmount required (in SOL)' });
 
     try {
+      // Guard: check if token is graduating or graduated
+      const dbTokenCheck = stmts.getAgentTokenByMint?.get(mintAddress);
+      if (dbTokenCheck?.status === 'graduating') {
+        return reply.code(423).send({ error: 'Token is graduating to Raydium CPMM. Trading will resume shortly.', status: 'graduating' });
+      }
+      if (dbTokenCheck?.status === 'graduated') {
+        const dbPoolCheck = stmts.getPool?.get(dbTokenCheck.id);
+        return reply.code(400).send({ error: 'Token has graduated to Raydium. Use post-grad trading endpoints.', status: 'graduated', raydiumPool: dbPoolCheck?.raydium_pool_address });
+      }
+
       const solAmountLamports = Math.round(solAmount * LAMPORTS_PER_SOL);
 
       // Read current pool state to calculate expected output + slippage
@@ -385,6 +397,16 @@ export default async function chainRoutes(fastify) {
     if (!tokenAmount) return reply.code(400).send({ error: 'tokenAmount required (raw units)' });
 
     try {
+      // Guard: check if token is graduating or graduated
+      const dbTokenCheck = stmts.getAgentTokenByMint?.get(mintAddress);
+      if (dbTokenCheck?.status === 'graduating') {
+        return reply.code(423).send({ error: 'Token is graduating to Raydium CPMM. Trading will resume shortly.', status: 'graduating' });
+      }
+      if (dbTokenCheck?.status === 'graduated') {
+        const dbPoolCheck = stmts.getPool?.get(dbTokenCheck.id);
+        return reply.code(400).send({ error: 'Token has graduated to Raydium. Use post-grad trading endpoints.', status: 'graduated', raydiumPool: dbPoolCheck?.raydium_pool_address });
+      }
+
       const pool = await readPool(mintAddress);
       if (!pool) return reply.code(404).send({ error: 'Pool not found on-chain' });
 
@@ -594,6 +616,81 @@ export default async function chainRoutes(fastify) {
       if (tokenId) emitTrade(tokenId, tradePayload);
       if (mintAddress) emitTrade(mintAddress, tradePayload);
 
+      // ── Auto-graduation check ──
+      // After syncing the trade, check if pool has hit the graduation threshold.
+      // The trade already succeeded on-chain — graduation is a bonus step.
+      let graduationResult = null;
+      try {
+        const config = await readCurveConfig();
+        if (config && tokenId) {
+          const realSol = BigInt(pool.realSolBalance.toString());
+          const threshold = BigInt(config.graduationThreshold.toString());
+
+          // pool.status: 0 = Active, 1 = Graduated (on-chain enum)
+          const poolStatus = typeof pool.status === 'number' ? pool.status : (pool.graduated ? 1 : 0);
+          const dbTokenStatus = dbToken?.status;
+
+          if (realSol >= threshold && poolStatus === 0 && dbTokenStatus !== 'graduating' && dbTokenStatus !== 'graduated') {
+            // Set status to 'graduating' to block new trades
+            stmts.updateAgentTokenStatus?.run('graduating', mintAddress, dbToken?.pool_address, dbToken?.launch_tx, tokenId);
+
+            // Notify clients
+            emitTrade(mintAddress, {
+              type: 'graduating',
+              mintAddress,
+              message: 'Token is graduating to Raydium CPMM...',
+              symbol: dbToken?.token_symbol,
+            });
+            if (tokenId) {
+              emitTrade(tokenId, {
+                type: 'graduating',
+                mintAddress,
+                message: 'Token is graduating to Raydium CPMM...',
+                symbol: dbToken?.token_symbol,
+              });
+            }
+
+            // Execute graduation
+            const deployer = getDeployer();
+            const graduateResult = await buildGraduateTransaction({
+              mintAddress,
+              payer: deployer.publicKey.toBase58(),
+            });
+            graduateResult.tx.sign(deployer);
+
+            const gradConn = getConnection();
+            const gradTxSig = await gradConn.sendRawTransaction(graduateResult.tx.serialize(), { skipPreflight: false });
+            await gradConn.confirmTransaction(gradTxSig, 'confirmed');
+
+            // Update DB with graduation info
+            stmts.graduatePool?.run(graduateResult.raydiumPoolState, tokenId);
+            stmts.updateAgentTokenStatus?.run('graduated', mintAddress, dbToken?.pool_address, dbToken?.launch_tx, tokenId);
+
+            // Notify clients of graduation
+            const gradPayload = {
+              type: 'graduation',
+              mintAddress,
+              raydiumPool: graduateResult.raydiumPoolState,
+              txSignature: gradTxSig,
+              symbol: dbToken?.token_symbol,
+            };
+            emitTrade(mintAddress, gradPayload);
+            if (tokenId) emitTrade(tokenId, gradPayload);
+
+            graduationResult = {
+              graduatedTo: graduateResult.raydiumPoolState,
+              graduationTx: gradTxSig,
+            };
+          }
+        }
+      } catch (gradErr) {
+        // Graduation failed — revert status back to active so trading can continue
+        if (tokenId && dbToken) {
+          stmts.updateAgentTokenStatus?.run('active', mintAddress, dbToken?.pool_address, dbToken?.launch_tx, tokenId);
+        }
+        console.error(`[auto-graduation] Failed for ${mintAddress}:`, gradErr.message);
+      }
+
       return {
         synced: true,
         txSignature,
@@ -603,6 +700,7 @@ export default async function chainRoutes(fastify) {
           realSolBalance: pool.realSolBalance.toString(),
           totalTrades: pool.totalTrades?.toNumber() || 0,
         },
+        ...(graduationResult || {}),
       };
     } catch (err) {
       // Don't fail hard — trade went through on-chain even if sync fails

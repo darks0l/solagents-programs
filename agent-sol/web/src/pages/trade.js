@@ -24,6 +24,7 @@ const MAX_WS_RETRIES = 5;
 // When true, all buy/sell/quote calls route to post-grad endpoints.
 let _isGraduated = false;
 let _cachedSolPriceUsd = 0;
+let _graduationPollTimer = null;
 
 // ── Wallet Balances ──────────────────────────────────────────
 let _solBalance = null;   // in SOL (number)
@@ -160,6 +161,16 @@ function _openWs(mintAddress) {
         if (msg.event === 'trade') {
           handleLiveTrade(msg.data, mintAddress);
         }
+        // Graduation lifecycle events
+        if (msg.type === 'graduating') {
+          showGraduatingOverlay(mintAddress);
+        }
+        if (msg.type === 'graduation') {
+          _isGraduated = true;
+          hideGraduatingOverlay();
+          toast('🎓 Token graduated to Raydium CPMM!', 'success');
+          loadTradePageData(mintAddress);
+        }
       } catch { /* ignore malformed */ }
     };
 
@@ -190,6 +201,7 @@ function disconnectLiveFeed() {
   }
   stopPolling();
   stopBalancePolling();
+  hideGraduatingOverlay();
   const indicator = document.getElementById('live-indicator');
   if (indicator) indicator.style.display = 'none';
 }
@@ -673,11 +685,12 @@ async function loadTradePageData(mintAddress) {
     const gradBar = document.getElementById('graduation-bar');
     if (gradBar && poolData.status !== 'graduated') {
       const realSolVal = parseFloat(poolData.real_sol_balance || poolData.pool_sol || 0);
-      const pct = Math.min((realSolVal / 85) * 100, 100);
+      const gradThreshold = parseFloat(poolData.graduation_threshold || 85);
+      const pct = Math.min((realSolVal / gradThreshold) * 100, 100);
       gradBar.style.display = '';
       document.getElementById('graduation-pct').textContent = pct.toFixed(1) + '%';
       document.getElementById('graduation-fill').style.width = pct + '%';
-      document.getElementById('graduation-sol').textContent = `${realSolVal.toFixed(2)} / 85 SOL`;
+      document.getElementById('graduation-sol').textContent = `${realSolVal.toFixed(2)} / ${gradThreshold} SOL`;
     } else if (gradBar && poolData.status === 'graduated') {
       gradBar.style.display = '';
       document.getElementById('graduation-pct').textContent = '🎓 Graduated — Now on Raydium';
@@ -987,13 +1000,20 @@ async function executeBuy(mintAddress) {
 
     // Sync DB
     const syncBuyEndpoint = _isGraduated ? '/chain/sync/trade/post-grad' : '/chain/sync/trade';
-    await api.post(syncBuyEndpoint, {
+    const syncResult = await api.post(syncBuyEndpoint, {
       txSignature: signature,
       mintAddress,
       traderWallet: getPublicKey(),
     });
 
     toast(`✅ Bought! Transaction confirmed.`, 'success');
+
+    // Check if this buy triggered graduation
+    if (syncResult.graduatedTo) {
+      _isGraduated = true;
+      showGraduatingOverlay(mintAddress, syncResult.graduationTx);
+      setTimeout(() => loadTradePageData(mintAddress), 3000);
+    }
 
     // Refresh balances after trade
     refreshBalances(mintAddress);
@@ -1007,6 +1027,11 @@ async function executeBuy(mintAddress) {
       loadTradePageData(mintAddress);
     }, 1500);
   } catch (err) {
+    // Handle 423 — graduation in progress
+    if (err.status === 423 || err.message?.includes('graduating')) {
+      showGraduatingOverlay(mintAddress);
+      return;
+    }
     console.error('Buy error:', err);
     const msg = err?.message || err?.toString() || 'Unknown error';
     toast(`Buy failed: ${msg}`, 'error');
@@ -1052,13 +1077,20 @@ async function executeSell(mintAddress) {
     toast(`Transaction submitted!`, 'info');
 
     const syncSellEndpoint = _isGraduated ? '/chain/sync/trade/post-grad' : '/chain/sync/trade';
-    await api.post(syncSellEndpoint, {
+    const syncSellResult = await api.post(syncSellEndpoint, {
       txSignature: signature,
       mintAddress,
       traderWallet: getPublicKey(),
     });
 
     toast(`✅ Sold! SOL returned to your wallet.`, 'success');
+
+    // Check if this sell triggered graduation
+    if (syncSellResult.graduatedTo) {
+      _isGraduated = true;
+      showGraduatingOverlay(mintAddress, syncSellResult.graduationTx);
+      setTimeout(() => loadTradePageData(mintAddress), 3000);
+    }
 
     // Refresh balances after trade
     refreshBalances(mintAddress);
@@ -1071,12 +1103,80 @@ async function executeSell(mintAddress) {
       loadTradePageData(mintAddress);
     }, 1500);
   } catch (err) {
+    // Handle 423 — graduation in progress
+    if (err.status === 423 || err.message?.includes('graduating')) {
+      showGraduatingOverlay(mintAddress);
+      return;
+    }
     console.error('Sell error:', err);
     const msg = err?.message || err?.toString() || 'Unknown error';
     toast(`Sell failed: ${msg}`, 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Sell Tokens';
+  }
+}
+
+// ── Graduation Overlay ───────────────────────────────────────
+
+function showGraduatingOverlay(mintAddress, txSig) {
+  if (document.getElementById('graduating-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'graduating-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;';
+  overlay.innerHTML = `
+    <div style="text-align:center;max-width:400px;padding:40px;">
+      <div style="font-size:4rem;margin-bottom:20px;animation:pulse 1.5s ease-in-out infinite">🎓</div>
+      <h2 style="color:#14F195;font-size:1.5rem;margin-bottom:12px">Graduating to Raydium</h2>
+      <p style="color:rgba(255,255,255,0.7);font-size:0.95rem;line-height:1.5">
+        This token has reached the graduation threshold!<br>
+        Creating Raydium CPMM pool...
+      </p>
+      <div style="margin-top:24px;">
+        <div style="width:200px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin:0 auto;overflow:hidden">
+          <div style="width:100%;height:100%;background:linear-gradient(90deg,#14F195,#9945FF);animation:shimmer 2s linear infinite;transform:translateX(-100%)"></div>
+        </div>
+      </div>
+      <p style="color:rgba(255,255,255,0.4);font-size:0.75rem;margin-top:16px">Trading paused during graduation. Will resume automatically.</p>
+      ${txSig ? `<a href="https://explorer.solana.com/tx/${txSig}?cluster=devnet" target="_blank" style="color:#14F195;font-size:0.75rem;margin-top:8px;display:block">View transaction ↗</a>` : ''}
+    </div>
+  `;
+
+  if (!document.getElementById('graduating-styles')) {
+    const style = document.createElement('style');
+    style.id = 'graduating-styles';
+    style.textContent = `
+      @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(overlay);
+
+  // Poll for graduation completion
+  _graduationPollTimer = setInterval(async () => {
+    try {
+      const poolData = await api.get(`/chain/state/pool/${mintAddress}`);
+      if (poolData.status === 'graduated') {
+        clearInterval(_graduationPollTimer);
+        _graduationPollTimer = null;
+        _isGraduated = true;
+        hideGraduatingOverlay();
+        toast('🎓 Token graduated to Raydium CPMM!', 'success');
+        loadTradePageData(mintAddress);
+      }
+    } catch {}
+  }, 10000);
+}
+
+function hideGraduatingOverlay() {
+  const overlay = document.getElementById('graduating-overlay');
+  if (overlay) overlay.remove();
+  if (_graduationPollTimer) {
+    clearInterval(_graduationPollTimer);
+    _graduationPollTimer = null;
   }
 }
 
