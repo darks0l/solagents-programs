@@ -14,6 +14,7 @@ import { renderSkills } from './pages/skills.js';
 import { renderTracker } from './pages/tracker.js';
 import { renderMarketplace } from './pages/marketplace.js';
 import { renderAgentProfile } from './pages/agent-profile.js';
+import { renderAdmin } from './pages/admin.js';
 
 // === State ===
 const state = {
@@ -21,6 +22,8 @@ const state = {
   agent: null,
   wallet: null,
   connected: false,
+  authToken: null,
+  authTokenExpiry: 0,
 };
 
 // === API Client ===
@@ -28,14 +31,36 @@ const state = {
 // frontend is served from Vercel.  Falls back to same-origin /api for local dev.
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 
+/**
+ * Get a cached auth token, re-signing with Phantom only when expired.
+ * Token format: agentId:base64Signature:timestamp
+ * Cached for 4 minutes (server allows 5 min TTL).
+ */
+async function getAuthToken() {
+  const now = Math.floor(Date.now() / 1000);
+  if (state.authToken && state.authTokenExpiry > now) {
+    return state.authToken;
+  }
+  if (!state.agent?.id || !window.solana?.isConnected) return null;
+
+  const ts = now.toString();
+  const message = `AgentSol:${state.agent.id}:${ts}`;
+  const encoded = new TextEncoder().encode(message);
+  const { signature } = await window.solana.signMessage(encoded, 'utf8');
+  const sigB64 = btoa(String.fromCharCode(...signature));
+  state.authToken = `${state.agent.id}:${sigB64}:${ts}`;
+  state.authTokenExpiry = now + 240; // refresh 1 min before server's 5 min expiry
+  return state.authToken;
+}
+
 export const api = {
   base: API_BASE,
 
   async get(path) {
     const headers = {};
     if (state.agent) {
-      const ts = Math.floor(Date.now() / 1000);
-      headers['Authorization'] = `Bearer ${state.agent.id}:placeholder:${ts}`;
+      const token = await getAuthToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
     }
     const res = await fetch(this.base + path, { headers });
     return res.json();
@@ -44,8 +69,8 @@ export const api = {
   async post(path, body) {
     const headers = { 'Content-Type': 'application/json' };
     if (state.agent) {
-      const ts = Math.floor(Date.now() / 1000);
-      headers['Authorization'] = `Bearer ${state.agent.id}:placeholder:${ts}`;
+      const token = await getAuthToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
     }
     const res = await fetch(this.base + path, {
       method: 'POST',
@@ -94,6 +119,7 @@ const pages = {
   tokenize: renderTokenize,
   skills: renderSkills,
   tracker: renderTracker,
+  admin: renderAdmin,
 };
 
 // === URL helpers ===
@@ -101,6 +127,7 @@ function pathForPage(page, params = {}) {
   if (page === 'dashboard') return '/';
   if (page === 'trade' && params.mintAddress) return `/trade/${params.mintAddress}`;
   if (page === 'agent' && (params.agentId || params.id)) return `/agent/${params.agentId || params.id}`;
+  if (page === 'admin') return '/admin';
   return `/${page}`;
 }
 
@@ -165,6 +192,8 @@ async function connectWallet() {
     state.connected = false;
     state.wallet = null;
     state.agent = null;
+    state.authToken = null;
+    state.authTokenExpiry = 0;
     btn.textContent = 'Connect Wallet';
     btn.className = 'btn btn-primary btn-glow';
     toast('Wallet disconnected', 'info');
@@ -265,6 +294,20 @@ document.addEventListener('DOMContentLoaded', () => {
       navigate(e.detail.page, e.detail);
     }
   });
+
+  // Show admin nav link if admin wallet stored
+  function updateAdminNavVisibility() {
+    const isAdmin = !!localStorage.getItem('adminWallet');
+    document.querySelectorAll('.admin-nav-link').forEach(el => {
+      el.style.display = isAdmin ? '' : 'none';
+    });
+  }
+  updateAdminNavVisibility();
+  // Re-check on storage changes and after navigation
+  window.addEventListener('storage', updateAdminNavVisibility);
+  const _origNavigate = navigate;
+  // Periodically check (covers login/logout within same tab)
+  setInterval(updateAdminNavVisibility, 2000);
 
   // Initial render — parse URL so deep links and refresh work
   const { page: initPage, params: initParams } = pageFromPath(window.location.pathname);

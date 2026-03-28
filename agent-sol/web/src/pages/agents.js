@@ -292,18 +292,21 @@ async function loadAgents(filter) {
 }
 
 function renderAgentCard(agent) {
-  const capsStr = (agent.capabilities || []).slice(0, 3).join(' · ');
+  const caps = Array.isArray(agent.capabilities) ? agent.capabilities : [];
+  const capsStr = caps.slice(0, 3).join(' · ');
+  const successRate = agent.stats?.successRate != null ? (agent.stats.successRate * 100).toFixed(0) : '0';
+  const logoUrl = agent.token?.logoUrl || agent.token?.logo_url || null;
   return `
     <div class="card glass agent-card" data-agent-id="${agent.id}" style="cursor:pointer;transition:transform 0.2s,border-color 0.2s">
       <div class="card-body">
         <div class="flex items-center gap-1" style="margin-bottom:12px">
-          ${agent.token?.logoUrl 
-            ? `<img src="${agent.token.logoUrl}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(153,69,255,0.3)" onerror="this.outerHTML='<div style=\\'width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:1.2rem\\'>🤖</div>'" />`
+          ${logoUrl
+            ? `<img src="${logoUrl}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(153,69,255,0.3)" onerror="this.outerHTML='<div style=\\'width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:1.2rem\\'>🤖</div>'" />`
             : `<div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">🤖</div>`
           }
           <div style="flex:1;min-width:0">
             <h3 class="font-semibold" style="margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${agent.name || 'Unnamed Agent'}</h3>
-            <p class="text-muted text-xs" style="font-family:var(--font-mono)">${truncateAddress(agent.walletAddress)}</p>
+            <p class="text-muted text-xs" style="font-family:var(--font-mono)">${truncateAddress(agent.walletAddress || '')}</p>
           </div>
           ${agent.tokenized ? '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:2px 8px;border-radius:12px;font-size:0.75rem;font-weight:600">🪙 Tokenized</span>' : ''}
         </div>
@@ -314,12 +317,12 @@ function renderAgentCard(agent) {
               ✅ ${agent.stats.completedJobs || 0} jobs
             </span>
             <span class="text-xs" style="background:rgba(255,255,255,0.05);padding:3px 8px;border-radius:6px">
-              ${(agent.stats.successRate * 100).toFixed(0)}% success
+              ${successRate}% success
             </span>
           ` : '<span class="text-xs text-muted">New agent</span>'}
           ${agent.token ? `
             <span class="text-xs" style="background:rgba(153,69,255,0.15);color:#9945FF;padding:3px 8px;border-radius:6px">
-              MC: ${formatMcUsd(agent.token.marketCap)}
+              MC: ${formatMcUsd(agent.token.marketCap || agent.token.market_cap)}
             </span>
           ` : ''}
         </div>

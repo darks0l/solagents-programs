@@ -14,7 +14,6 @@ import {
   buildSellTransaction,
   buildCreateTokenTransaction,
   buildClaimCreatorFeesTransaction,
-  initializeBondingCurve,
   getCurveConfigPDA,
   getCurvePoolPDA,
   getSolVaultPDA,
@@ -23,8 +22,6 @@ import {
   poolAccountToDb,
   LAMPORTS_PER_SOL,
   BONDING_CURVE_PROGRAM_ID,
-  buildGraduateTransaction,
-  getDeployer,
 } from '../services/solana.js';
 import {
   getRaydiumPoolState,
@@ -689,114 +686,12 @@ export default async function chainRoutes(fastify) {
     }
   });
 
-  // Admin: update token mint address in DB
-  fastify.post('/api/chain/admin/update-token-mint', async (request, reply) => {
-    const { tokenId, mintAddress, poolAddress, launchTx } = request.body || {};
-    if (!tokenId || !mintAddress) return reply.code(400).send({ error: 'tokenId and mintAddress required' });
-    try {
-      stmts.updateAgentTokenStatus.run('active', mintAddress, poolAddress || null, launchTx || null, tokenId);
-      return { updated: true, tokenId, mintAddress };
-    } catch (err) {
-      return reply.code(500).send({ error: err.message });
-    }
-  });
-
   // ═══════════════════════════════════════════════════════════
-  // ADMIN — one-time setup operations
+  // ADMIN ROUTES MOVED → /api/admin/* (see api/routes/admin.js)
+  // Routes removed: /api/chain/admin/wallet, /api/chain/admin/initialize,
+  //   /api/chain/admin/reset-token, /api/chain/admin/update-token-mint,
+  //   /api/chain/graduate/trigger
   // ═══════════════════════════════════════════════════════════
-
-  // Initialize bonding curve config on-chain (admin only, requires deployer key)
-  fastify.post('/api/chain/admin/initialize', async (request, reply) => {
-    try {
-      // Check if already initialized
-      const existing = await readCurveConfig();
-      if (existing) {
-        return { status: 'already_initialized', config: {
-          admin: existing.admin.toBase58(),
-          treasury: existing.treasury.toBase58(),
-          creatorFeeBps: existing.creatorFeeBps,
-          platformFeeBps: existing.platformFeeBps,
-        }};
-      }
-
-      const result = await initializeBondingCurve(request.body || {});
-      return {
-        status: 'initialized',
-        tx: result.tx,
-        configPDA: result.configPDA,
-        explorer: `https://explorer.solana.com/tx/${result.tx}?cluster=devnet`,
-      };
-    } catch (err) {
-      return reply.code(500).send({ error: `Initialize failed: ${err.message}` });
-    }
-  });
-
-  // Admin: wipe stale test data and resync token from on-chain state
-  fastify.post('/api/chain/admin/reset-token', async (request, reply) => {
-    const { tokenId } = request.body || {};
-    if (!tokenId) return reply.code(400).send({ error: 'tokenId required' });
-
-    try {
-      // Get token info
-      const token = stmts.getAgentToken?.get(tokenId);
-      if (!token) return reply.code(404).send({ error: 'Token not found' });
-
-      // Delete all stale trades for this token (direct SQL via stmts pattern)
-      stmts.deleteTokenTrades?.run(tokenId);
-      stmts.deleteDevBuys?.run(tokenId);
-
-      // Read on-chain pool state if mint exists
-      let chainState = null;
-      if (token.mint_address && token.mint_address !== 'TestMint111111111111111111111111111111111111') {
-        const pool = await readPool(token.mint_address);
-        if (pool) {
-          chainState = pool;
-          // Update token with on-chain price
-          const vSol = Number(pool.virtualSolReserve);
-          const vToken = Number(pool.virtualTokenReserve);
-          const price = vToken > 0 ? (vSol / vToken).toFixed(12) : '0';
-          const volume = Number(pool.totalVolumeSol || 0);
-          const totalTrades = Number(pool.totalBuys || 0) + Number(pool.totalSells || 0);
-
-          stmts.updateAgentTokenPrice?.run(
-            price,
-            volume.toString(),
-            0,
-            (Number(pool.totalSupply) - Number(pool.realTokenBalance)).toString(),
-            tokenId
-          );
-        }
-      }
-
-      return {
-        reset: true,
-        tokenId,
-        trades_deleted: true,
-        dev_buys_deleted: true,
-        chain_synced: !!chainState,
-      };
-    } catch (err) {
-      return reply.code(500).send({ error: err.message });
-    }
-  });
-
-  // Get deployer wallet info (for admin verification)
-  fastify.get('/api/chain/admin/wallet', async (request, reply) => {
-    try {
-      const { getDeployer } = await import('../services/solana.js');
-      const deployer = getDeployer();
-      const conn = getConnection();
-      const balance = await conn.getBalance(deployer.publicKey);
-      return {
-        publicKey: deployer.publicKey.toBase58(),
-        balance: balance / LAMPORTS_PER_SOL,
-        cluster: process.env.SOLANA_CLUSTER || 'devnet',
-        rpcUrl: process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com',
-      };
-    } catch (err) {
-      return reply.code(500).send({ error: err.message });
-    }
-  });
 
   // ═══════════════════════════════════════════════════════════
   // POST-GRADUATION — Raydium CPMM trading after 85 SOL threshold
@@ -908,7 +803,7 @@ export default async function chainRoutes(fastify) {
 
       const dbPool = stmts.getPool?.get(dbToken.id);
       if (!dbPool?.raydium_pool_address) {
-        return reply.code(404).send({ error: 'Raydium pool address not found in DB. Run /api/chain/graduate/trigger first.' });
+        return reply.code(404).send({ error: 'Raydium pool address not found in DB. Run /api/admin/graduate/:mintAddress first.' });
       }
 
       // Get creator wallet from token record
@@ -1163,159 +1058,4 @@ export default async function chainRoutes(fastify) {
     }
   });
 
-  /**
-   * POST /api/chain/graduate/trigger
-   * API-triggered graduation — creates Raydium CPMM pool and updates DB.
-   * Runs server-side using the deployer keypair.
-   *
-   * Body: { mintAddress, solAmount?, slippageBps? }
-   * - solAmount: SOL to seed pool (default: full bonding curve balance ~85 SOL)
-   *
-   * This endpoint:
-   *   1. Reads on-chain bonding curve pool for current reserves
-   *   2. Calculates token amount for price continuity
-   *   3. Creates Raydium CPMM pool with deployer key
-   *   4. Updates DB: agent_tokens.status → 'graduated', token_pools.raydium_pool_address
-   */
-  fastify.post('/api/chain/graduate/trigger', async (request, reply) => {
-    const { mintAddress, solAmount, slippageBps = 50 } = request.body || {};
-
-    if (!mintAddress) return reply.code(400).send({ error: 'mintAddress required' });
-
-    try {
-      const conn = getConnection();
-
-      // Verify token exists in DB
-      const dbToken = stmts.getAgentTokenByMint?.get(mintAddress);
-      if (!dbToken) return reply.code(404).send({ error: 'Token not found in DB' });
-      if (dbToken.status === 'graduated') {
-        const dbPool = stmts.getPool?.get(dbToken.id);
-        return reply.code(409).send({
-          error:       'Token already graduated',
-          raydiumPool: dbPool?.raydium_pool_address || null,
-        });
-      }
-
-      // Read on-chain pool state
-      const pool = await readPool(mintAddress);
-      if (!pool) return reply.code(404).send({ error: 'Bonding curve pool not found on-chain' });
-
-      // Check graduation threshold (85 SOL)
-      const GRADUATION_THRESHOLD = 85n * BigInt(LAMPORTS_PER_SOL);
-      const realSol = BigInt(pool.realSolBalance.toString());
-      if (realSol < GRADUATION_THRESHOLD) {
-        return reply.code(400).send({
-          error:    'Pool has not reached graduation threshold',
-          realSol:  (Number(realSol) / LAMPORTS_PER_SOL).toFixed(4) + ' SOL',
-          required: '85 SOL',
-          progress: ((Number(realSol) / Number(GRADUATION_THRESHOLD)) * 100).toFixed(2) + '%',
-        });
-      }
-
-      // Calculate SOL and tokens to seed Raydium pool (burn model)
-      //
-      // Price continuity formula:
-      //   tokens_for_raydium = sol_for_raydium * virtual_token_reserve / virtual_sol_reserve
-      //
-      // Excess tokens (remaining - tokens_for_raydium) are burned on-chain by graduate.rs.
-      // LP tokens received from Raydium pool creation are also burned on-chain.
-      // This means: no reserved tokens, no locked LP — everything excess is destroyed.
-      const vSol    = BigInt(pool.virtualSolReserve.toString());
-      const vToken  = BigInt(pool.virtualTokenReserve.toString());
-      const realTok = BigInt(pool.realTokenBalance.toString());
-
-      const seedSolLamports = solAmount
-        ? BigInt(Math.round(solAmount * LAMPORTS_PER_SOL))
-        : realSol; // default: all bonding curve SOL
-
-      // tokens_for_raydium = seedSol * vToken / vSol
-      // This preserves the current bonding curve price in Raydium.
-      // Any remaining tokens (realTok - seedTokenAmount) are burned on-chain.
-      const seedTokenAmount = (seedSolLamports * vToken) / vSol;
-
-      // Cap at available pool tokens (excess burned on-chain by graduate instruction)
-      const actualTokenAmount = seedTokenAmount > realTok ? realTok : seedTokenAmount;
-
-      // Graduate on-chain via the bonding-curve graduate instruction.
-      // This handles: token burn, pre-transfer to payer ATAs, Raydium CPI, LP burn,
-      // and on-chain pool status → Graduated.
-      const deployer = getDeployer();
-      let txSignature, graduateResult;
-      try {
-        graduateResult = await buildGraduateTransaction({
-          mintAddress,
-          payer: deployer.publicKey.toBase58(),
-        });
-        graduateResult.tx.sign(deployer);
-        txSignature = await conn.sendRawTransaction(
-          graduateResult.tx.serialize(),
-          { skipPreflight: false }
-        );
-        await conn.confirmTransaction(txSignature, 'confirmed');
-      } catch (gradErr) {
-        return reply.code(500).send({
-          error:   `On-chain graduation failed: ${gradErr.message}`,
-          hint:    'Check bonding curve pool state and Raydium config. Ensure graduation threshold is met.',
-          seedSol: (Number(seedSolLamports) / LAMPORTS_PER_SOL).toFixed(4),
-          seedTokens: (Number(actualTokenAmount) / 1e9).toFixed(2),
-        });
-      }
-
-      const raydiumPoolAddress = graduateResult.raydiumPoolState;
-      const raydiumLpMint = graduateResult.raydiumLpMint;
-
-      // Update DB: mark pool as graduated with Raydium pool address
-      stmts.graduatePool?.run(raydiumPoolAddress, dbToken.id);
-
-      // Update agent_tokens status to 'graduated'
-      stmts.updateAgentTokenStatus?.run(
-        'graduated',
-        dbToken.mint_address || mintAddress,
-        dbToken.pool_address || null,
-        dbToken.launch_tx    || null,
-        dbToken.id
-      );
-
-      // Insert price snapshot with Raydium's initial price
-      const priceSol = Number(seedSolLamports) / Number(actualTokenAmount); // SOL per raw token
-      if (stmts.insertTokenPrice) {
-        stmts.insertTokenPrice.run(
-          dbToken.id,
-          priceSol.toFixed(12),
-          null,
-          '0',
-          '0',
-          null
-        );
-      }
-
-      // Emit graduation event via WebSocket
-      const graduationPayload = {
-        type:        'graduation',
-        mintAddress,
-        raydiumPool: raydiumPoolAddress,
-        seedSol:     (Number(seedSolLamports) / LAMPORTS_PER_SOL).toFixed(4),
-        seedTokens:  (Number(actualTokenAmount) / 1e9).toFixed(2),
-        txSignature,
-        symbol:      dbToken.token_symbol,
-        name:        dbToken.token_name,
-      };
-      emitTrade(dbToken.id,   graduationPayload);
-      emitTrade(mintAddress,  graduationPayload);
-
-      return {
-        graduated:       true,
-        mintAddress,
-        raydiumPool:     raydiumPoolAddress,
-        lpMint:          raydiumLpMint,
-        seedSolLamports: seedSolLamports.toString(),
-        seedSol:         (Number(seedSolLamports)    / LAMPORTS_PER_SOL).toFixed(4) + ' SOL',
-        seedTokens:      (Number(actualTokenAmount)  / 1e9).toFixed(2),
-        txSignature,
-        explorer: `https://explorer.solana.com/tx/${txSignature}?cluster=${process.env.SOLANA_CLUSTER || 'devnet'}`,
-      };
-    } catch (err) {
-      return reply.code(500).send({ error: `Graduation failed: ${err.message}` });
-    }
-  });
 }

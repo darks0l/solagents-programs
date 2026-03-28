@@ -29,12 +29,25 @@ export default async function tokenRoutes(fastify) {
 
   // === TOKEN DIRECTORY ===
 
-  // List all active agent tokens (with latest price data)
+  // List all active agent tokens (with latest price data + pool reserves)
   fastify.get('/api/tokens', async (request) => {
     const limit = Math.min(parseInt(request.query.limit) || 50, 100);
     const offset = parseInt(request.query.offset) || 0;
     const tokens = stmts.listActiveTokens.all(limit, offset);
-    return { tokens, pagination: { limit, offset } };
+
+    // Enrich with pool reserve data from DB
+    const enriched = tokens.map(t => {
+      const pool = stmts.getPool?.get(t.id);
+      if (pool) {
+        t.real_sol_reserve = (Number(BigInt(pool.real_sol_reserve)) / 1e9).toFixed(9);
+        t.virtual_sol_reserve = (Number(BigInt(pool.virtual_sol_reserve)) / 1e9).toFixed(9);
+        t.virtual_token_reserve = (Number(BigInt(pool.virtual_token_reserve)) / 1e9).toFixed(2);
+        t.pool_status = pool.status;
+      }
+      return t;
+    });
+
+    return { tokens: enriched, pagination: { limit, offset } };
   });
 
   // Top agents sorted by combined revenue (token fees + job revenue)

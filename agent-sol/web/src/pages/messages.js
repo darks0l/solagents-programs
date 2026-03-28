@@ -376,7 +376,7 @@ async function loadDMs(state) {
   `;
 
   document.getElementById('btn-new-dm')?.addEventListener('click', () => {
-    toast('Enter a wallet address or agent ID to start a conversation — coming soon', 'info');
+    toast('Direct messages coming in v2 — encrypted E2E messaging between wallets', 'info');
   });
 }
 

@@ -138,7 +138,10 @@ async function loadTokens() {
     const solPrice = await getSolPrice() || 0;
     _solPriceUsd = solPrice;
 
-    // Enrich with on-chain pool data for liquidity
+    // Use DB pool reserves (from /api/tokens enrichment), then try on-chain for freshest data
+    for (const t of tokens) {
+      t.realSolBalance = parseFloat(t.real_sol_reserve || 0);
+    }
     try {
       const poolsData = await api.get('/chain/pools');
       const pools = poolsData.pools || poolsData || [];
@@ -151,11 +154,9 @@ async function loadTokens() {
         const pool = poolByMint[t.mint];
         if (pool) {
           t.realSolBalance = parseFloat(pool.real_sol || pool.real_sol_balance || pool.realSolBalance || 0);
-        } else {
-          t.realSolBalance = 0;
         }
       }
-    } catch { /* pools unavailable */ }
+    } catch { /* chain unavailable — DB reserves used as fallback */ }
 
     // Update stats
     const totalTokens = tokens.length;
