@@ -171,12 +171,28 @@ async function fetchSolPrice() {
 
 async function loadPlatformStats() {
   try {
-    const stats = await api.get('/platform/stats');
+    const [stats, tokenData] = await Promise.all([
+      api.get('/platform/stats'),
+      api.get('/tokens?limit=100')
+    ]);
     const el = id => document.getElementById(id);
     if (el('stat-agents')) el('stat-agents').textContent = stats.agents || 0;
     if (el('stat-tokenized')) el('stat-tokenized').textContent = stats.tokenized_agents || 0;
     if (el('stat-jobs-total')) el('stat-jobs-total').textContent = stats.total_jobs || 0;
-    if (el('stat-volume')) el('stat-volume').textContent = stats.total_volume_usd ? `$${Number(stats.total_volume_usd).toLocaleString()}` : '$0';
+
+    // Compute total volume from all tokens (values are in SOL)
+    const tokens = tokenData.tokens || tokenData || [];
+    const totalVolSol = tokens.reduce((sum, t) => sum + parseFloat(t.volume_24h || 0), 0);
+    if (el('stat-volume')) {
+      if (totalVolSol > 0 && _solPriceUsd > 0) {
+        const usd = totalVolSol * _solPriceUsd;
+        el('stat-volume').textContent = usd < 1000 ? `$${usd.toFixed(2)}` : `$${(usd / 1000).toFixed(1)}K`;
+      } else if (totalVolSol > 0) {
+        el('stat-volume').textContent = `${totalVolSol.toFixed(2)} SOL`;
+      } else {
+        el('stat-volume').textContent = '$0';
+      }
+    }
   } catch { /* silent */ }
 }
 
@@ -219,8 +235,8 @@ async function loadTokens() {
                 <td style="padding:10px"><strong>${t.agent_name || 'Unknown'}</strong>${t.status === 'graduated' ? ' <span style="font-size:12px;color:#14F195" title="Graduated to Raydium">🎓</span>' : ''}</td>
                 <td style="padding:10px"><span style="color:#14F195;font-family:var(--font-mono)">$${t.token_symbol}</span></td>
                 <td style="padding:10px;text-align:right;font-family:var(--font-mono)">${formatPrice(t.current_price)}</td>
-                <td style="padding:10px;text-align:right">${formatUsd(t.market_cap)}</td>
-                <td style="padding:10px;text-align:right">${formatUsd(t.volume_24h)}</td>
+                <td style="padding:10px;text-align:right">${formatSolAsUsd(t.market_cap)}</td>
+                <td style="padding:10px;text-align:right">${formatSolAsUsd(t.volume_24h)}</td>
                 <td style="padding:10px;text-align:right">${t.holders || 0}</td>
               </tr>
             `).join('')}
@@ -681,16 +697,20 @@ function formatMcUsd(mcSol) {
 
 function formatPrice(price) {
   const p = parseFloat(price || '0');
-  if (p === 0) return '0.000';
-  if (p < 0.001) return p.toFixed(6);
+  if (p === 0) return '0';
+  if (p < 0.000001) return p.toExponential(3);
+  if (p < 0.001) return p.toFixed(9);
   if (p < 1) return p.toFixed(4);
   return p.toFixed(3);
 }
 
-function formatUsd(value) {
-  const v = parseFloat(value || '0');
-  if (v === 0) return '$0';
-  if (v < 1000) return `$${v.toFixed(2)}`;
-  if (v < 1_000_000) return `$${(v / 1000).toFixed(1)}K`;
-  return `$${(v / 1_000_000).toFixed(2)}M`;
+/** Format a SOL value as USD using cached SOL price */
+function formatSolAsUsd(solValue) {
+  const v = parseFloat(solValue || '0');
+  if (v === 0 || !_solPriceUsd) return '$0';
+  const usd = v * _solPriceUsd;
+  if (usd < 1) return `$${usd.toFixed(2)}`;
+  if (usd < 1000) return `$${usd.toFixed(2)}`;
+  if (usd < 1_000_000) return `$${(usd / 1000).toFixed(1)}K`;
+  return `$${(usd / 1_000_000).toFixed(2)}M`;
 }
