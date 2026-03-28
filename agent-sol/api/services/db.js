@@ -650,7 +650,7 @@ export const stmts = {
            (SELECT volume_24h FROM token_prices WHERE token_id = at.id ORDER BY timestamp DESC LIMIT 1) as volume_24h,
            (SELECT holders FROM token_prices WHERE token_id = at.id ORDER BY timestamp DESC LIMIT 1) as holders
     FROM agent_tokens at JOIN agents a ON at.agent_id = a.id
-    WHERE at.status = 'active'
+    WHERE at.status IN ('active', 'graduated', 'graduating')
     ORDER BY at.launched_at DESC LIMIT ? OFFSET ?
   `),
   // Top agents sorted by combined revenue (token trading fees + job earnings)
