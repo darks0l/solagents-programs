@@ -646,7 +646,9 @@ export default async function tokenRoutes(fastify) {
       agents: stats?.total_agents || 0,
       tokenized_agents: stats?.tokenized_agents || 0,
       total_jobs: stats?.total_jobs || 0,
-      total_volume_usd: parseFloat(paidUsd.toFixed(2)),
+      onchain_completed_jobs: stats?.onchain_completed_jobs || 0,
+      active_onchain_jobs: stats?.active_onchain_jobs || 0,
+      total_escrowed_usd: parseFloat(paidUsd.toFixed(2)),
       total_token_trades: stats?.total_token_trades || 0,
     };
   });

@@ -414,6 +414,30 @@ db.exec(`
 try { db.exec('ALTER TABLE token_pools ADD COLUMN total_buys INTEGER NOT NULL DEFAULT 0'); } catch (_) { /* already exists */ }
 try { db.exec('ALTER TABLE token_pools ADD COLUMN total_sells INTEGER NOT NULL DEFAULT 0'); } catch (_) { /* already exists */ }
 
+// v3: Job lifecycle columns
+try { db.exec('ALTER TABLE jobs ADD COLUMN auto_release_at INTEGER DEFAULT NULL'); } catch (_) { /* already exists */ }
+try { db.exec('ALTER TABLE jobs ADD COLUMN settled_at INTEGER DEFAULT NULL'); } catch (_) { /* already exists */ }
+try { db.exec('ALTER TABLE jobs ADD COLUMN funded_at INTEGER DEFAULT NULL'); } catch (_) { /* already exists */ }
+try { db.exec('ALTER TABLE jobs ADD COLUMN submitted_at INTEGER DEFAULT NULL'); } catch (_) { /* already exists */ }
+try { db.exec('ALTER TABLE jobs ADD COLUMN dispute_status TEXT DEFAULT NULL'); } catch (_) { /* already exists */ }
+
+// v3: Disputes table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS disputes (
+    id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    raised_by TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    status TEXT DEFAULT 'open' CHECK(status IN ('open', 'resolved')),
+    resolution TEXT,
+    created_at INTEGER DEFAULT (unixepoch()),
+    resolved_at INTEGER,
+    FOREIGN KEY (job_id) REFERENCES jobs(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_disputes_job ON disputes(job_id);
+  CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status);
+`);
+
 // === Prepared Statements ===
 
 export const stmts = {
@@ -498,7 +522,27 @@ export const stmts = {
   updateJobReject: db.prepare("UPDATE jobs SET status = 'rejected', reason = ?, completed_at = unixepoch() WHERE id = ?"),
   updateJobExpired: db.prepare("UPDATE jobs SET status = 'expired', completed_at = unixepoch() WHERE id = ?"),
   updateJobOnchain: db.prepare('UPDATE jobs SET onchain_address = ?, onchain_job_id = ? WHERE id = ?'),
+  updateJobFundedAt: db.prepare('UPDATE jobs SET funded_at = unixepoch() WHERE id = ?'),
+  updateJobSubmittedAt: db.prepare('UPDATE jobs SET submitted_at = unixepoch(), auto_release_at = ? WHERE id = ?'),
+  updateJobSettledAt: db.prepare('UPDATE jobs SET settled_at = ? WHERE id = ?'),
+  updateJobDisputeStatus: db.prepare('UPDATE jobs SET dispute_status = ? WHERE id = ?'),
+
+  // Job stats — only counts on-chain confirmed jobs for public display
   jobStats: db.prepare(`
+    SELECT
+      COUNT(*) as total,
+      SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open,
+      SUM(CASE WHEN status = 'funded' AND onchain_address IS NOT NULL THEN 1 ELSE 0 END) as funded,
+      SUM(CASE WHEN status = 'submitted' AND onchain_address IS NOT NULL THEN 1 ELSE 0 END) as submitted,
+      SUM(CASE WHEN status = 'completed' AND onchain_address IS NOT NULL THEN 1 ELSE 0 END) as completed,
+      SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+      SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END) as expired,
+      SUM(CASE WHEN status = 'completed' AND onchain_address IS NOT NULL THEN budget ELSE 0 END) as total_paid
+    FROM jobs
+  `),
+
+  // All job stats (admin — counts everything including test jobs)
+  allJobStats: db.prepare(`
     SELECT
       COUNT(*) as total,
       SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open,
@@ -510,6 +554,18 @@ export const stmts = {
       SUM(CASE WHEN status = 'completed' THEN budget ELSE 0 END) as total_paid
     FROM jobs
   `),
+
+  // Admin: delete test jobs with no on-chain backing
+  deleteTestJobs: db.prepare("DELETE FROM jobs WHERE onchain_address IS NULL AND status = 'completed'"),
+  resetAgentEarnings: db.prepare("UPDATE agent_stats SET total_earned = '0', completed_jobs = 0"),
+
+  // Disputes
+  insertDispute: db.prepare(`
+    INSERT INTO disputes (id, job_id, raised_by, reason) VALUES (?, ?, ?, ?)
+  `),
+  getDisputesByJob: db.prepare('SELECT * FROM disputes WHERE job_id = ? ORDER BY created_at DESC'),
+  getOpenDispute: db.prepare("SELECT * FROM disputes WHERE job_id = ? AND status = 'open' LIMIT 1"),
+  resolveDispute: db.prepare("UPDATE disputes SET status = 'resolved', resolution = ?, resolved_at = unixepoch() WHERE id = ?"),
 
   // Accounts
   insertAccount: db.prepare(`
@@ -802,14 +858,16 @@ export const stmts = {
   updateApplicationStatus: db.prepare('UPDATE job_applications SET status = ? WHERE id = ?'),
   rejectOtherApplications: db.prepare("UPDATE job_applications SET status = 'rejected' WHERE job_id = ? AND id != ? AND status = 'pending'"),
 
-  // Platform stats (global)
+  // Platform stats (global — only on-chain confirmed for volume)
   platformStats: db.prepare(`
     SELECT
       (SELECT COUNT(*) FROM agents WHERE status = 'active') as total_agents,
       (SELECT COUNT(*) FROM agent_tokens WHERE status = 'active') as tokenized_agents,
       (SELECT COUNT(*) FROM jobs) as total_jobs,
-      (SELECT SUM(CASE WHEN status = 'completed' THEN budget ELSE 0 END) FROM jobs) as total_volume,
-      (SELECT COUNT(*) FROM token_trades) as total_token_trades
+      (SELECT COUNT(*) FROM jobs WHERE status = 'completed' AND onchain_address IS NOT NULL) as onchain_completed_jobs,
+      (SELECT COALESCE(SUM(budget), 0) FROM jobs WHERE status = 'completed' AND onchain_address IS NOT NULL) as total_volume,
+      (SELECT COUNT(*) FROM token_trades) as total_token_trades,
+      (SELECT COUNT(*) FROM jobs WHERE status IN ('funded', 'submitted') AND onchain_address IS NOT NULL) as active_onchain_jobs
   `),
 };
 

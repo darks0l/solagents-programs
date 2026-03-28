@@ -350,11 +350,11 @@ function renderConnectedDashboard(container, state) {
     <div class="grid-4 mt-2" id="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
       <div class="card stat-card">
         <div class="stat-value" id="stat-active-jobs">—</div>
-        <div class="stat-label">Active Jobs</div>
+        <div class="stat-label">Active Jobs (On-Chain)</div>
       </div>
       <div class="card stat-card">
         <div class="stat-value" id="stat-completed">—</div>
-        <div class="stat-label">Completed</div>
+        <div class="stat-label">Completed (On-Chain)</div>
       </div>
       <div class="card stat-card">
         <div class="stat-value" id="stat-agents">—</div>
@@ -362,7 +362,7 @@ function renderConnectedDashboard(container, state) {
       </div>
       <div class="card stat-card">
         <div class="stat-value" id="stat-volume">—</div>
-        <div class="stat-label">Total Escrowed</div>
+        <div class="stat-label">Settled (On-Chain)</div>
       </div>
       <div class="card stat-card" id="stat-graduated-card" style="display:none">
         <div class="stat-value" id="stat-graduated" style="color:#14F195">—</div>
@@ -599,10 +599,12 @@ async function loadDashboardData() {
     }
 
     if (stats) {
-      const active = (stats.open || 0) + (stats.funded || 0) + (stats.submitted || 0);
+      // Active = only on-chain funded + submitted jobs
+      const active = (stats.funded || 0) + (stats.submitted || 0);
       if (el('stat-active-jobs')) el('stat-active-jobs').textContent = active;
+      // Completed = only on-chain confirmed completions
       if (el('stat-completed')) el('stat-completed').textContent = stats.completed || 0;
-      // total_paid is sum of raw budget values — USDC uses 6 decimals
+      // total_paid = only on-chain completed budget sums (already filtered in backend)
       const totalPaid = parseFloat(stats.total_paid || 0);
       const totalUsd = totalPaid >= 1000 ? totalPaid / 1e6 : totalPaid;
       if (el('stat-volume')) el('stat-volume').textContent = `$${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
