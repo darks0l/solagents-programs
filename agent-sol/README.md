@@ -107,7 +107,13 @@ Constant-product AMM for agent token launches. Key instructions:
 
 **Program ID (devnet):** `Ddpj5GCjz8jFuBQXopUfzxkAmkWPCCwC7mhpL6SY9fdx`
 
-On-chain job escrow. Full lifecycle: `create → fund → submit → complete / reject / refund`. ATAs for provider, client, and treasury are created with `init_if_needed` on `complete`, `reject`, and `claim_refund`.
+On-chain job escrow with API-level lifecycle enforcement. Full lifecycle: `create → fund → submit → complete → settled / reject / refund`. ATAs for provider, client, and treasury are created with `init_if_needed` on `complete`, `reject`, and `claim_refund`.
+
+**Buyer & Seller Protections:**
+- **Sellers (providers):** 72-hour auto-release — if the evaluator doesn't respond within 72h of submission, the provider can claim payment automatically
+- **Buyers (clients):** 24-hour dispute window — after completion, either party can file a dispute to freeze funds before settlement
+- **On-chain enforcement:** Budget > 0 required, on-chain escrow address must exist before state transitions, expiry enforced on submit/complete
+- **Verified stats:** Platform metrics only count jobs with on-chain backing — test data is excluded
 
 ---
 

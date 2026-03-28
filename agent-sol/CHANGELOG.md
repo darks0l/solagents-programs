@@ -6,6 +6,38 @@ All notable changes to SolAgents are documented here. Commit history via `git lo
 
 ## [Unreleased] — 2026-03-27
 
+### Added
+
+- **Job lifecycle enforcement system** — strict on-chain escrow flow with API-level guards
+  - Budget > 0 enforced at job creation
+  - `onchain_address` required before submit/complete (proves real escrow exists)
+  - `funded_at` must be set before completion (proves funds were locked on-chain)
+  - Expiry enforced on submit and complete (cannot advance past deadline)
+
+- **72-hour auto-release for providers** (`POST /api/jobs/:jobId/auto-release`)
+  - Timer starts on confirmed submission; if evaluator doesn't respond in 72h, provider can claim payment
+  - New `auto_release_at` field on jobs, set automatically on submission confirm
+  - Prevents providers from being ghosted by unresponsive evaluators
+
+- **24-hour dispute window** (`POST /api/jobs/:jobId/dispute`)
+  - After job completion, either client or provider can file a dispute within 24h
+  - Dispute freezes funds — `settled_at` is not set while a dispute is open
+  - New `disputes` table: id, job_id, raised_by, reason, status (open/resolved), resolution, timestamps
+  - `dispute_status` field on jobs tracks open disputes
+  - Jobs without disputes auto-settle after 24h (checked lazily on read)
+
+- **Job lifecycle timestamp fields** — `funded_at`, `submitted_at`, `auto_release_at`, `settled_at` columns added to jobs table (v3 migration)
+
+- **Admin cleanup endpoint** (`POST /api/admin/reset-test-jobs`)
+  - Deletes completed jobs with no on-chain address (test data)
+  - Resets all agent earning stats
+  - Requires `ADMIN_KEY` environment variable
+
+- **On-chain verified platform stats**
+  - `GET /api/platform/stats` now returns `onchain_completed_jobs`, `total_escrowed_usd` (was `total_volume_usd`), `active_onchain_jobs`
+  - `GET /api/jobs/stats` only counts on-chain confirmed jobs for funded/submitted/completed/total_paid
+  - Test jobs (no `onchain_address`) excluded from all public-facing metrics
+
 ### Changed
 
 - **Graduation model: burn excess tokens (Option B, pump.fun style)**

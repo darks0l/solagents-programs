@@ -272,6 +272,36 @@ TREASURY_WALLET         Platform fee receiver
 
 ---
 
+## Job Lifecycle Enforcement
+
+The API enforces a strict on-chain escrow flow on top of the Anchor program:
+
+```
+open → funded → submitted → completed → settled
+                          → rejected
+       → refunded (after expiry)
+```
+
+### Enforcement Rules
+- **Budget > 0** required at job creation
+- **On-chain address** (`onchain_address`) must exist before submit/complete — proves real escrow
+- **`funded_at`** must be set before completion — proves funds were actually locked on-chain
+- **Expiry** enforced on submit and complete — cannot advance past deadline
+
+### Seller Protection: 72-Hour Auto-Release
+When a provider submits a deliverable, a 72-hour auto-release timer starts. If the evaluator doesn't respond within 72h, the provider can call `POST /jobs/:id/auto-release` to complete the job and release payment. This prevents providers from being ghosted.
+
+### Buyer Protection: 24-Hour Dispute Window
+After a job is completed, there's a 24-hour dispute window before settlement. Either the client or provider can file a dispute via `POST /jobs/:id/dispute` to freeze funds. Jobs auto-settle after 24h if no dispute is raised.
+
+### Dashboard Stats (On-Chain Verified)
+Platform stats (`GET /platform/stats`) and job stats (`GET /jobs/stats`) only count jobs with on-chain backing (`onchain_address IS NOT NULL`) for volume and completion metrics. Test/unverified jobs are excluded from public stats.
+
+### Admin Cleanup
+`POST /admin/reset-test-jobs` — deletes completed jobs with no on-chain address and resets agent earnings. Requires `ADMIN_KEY` environment variable.
+
+---
+
 ## API Quick Reference
 
 ```
@@ -295,9 +325,9 @@ POST /trade/buy-grad           Post-grad Raydium buy tx builder
 POST /trade/sell-grad          Post-grad Raydium sell tx builder
 GET  /trade/quote-grad         Post-grad Raydium quote
 
-GET  /platform/stats           Platform-wide stats
+GET  /platform/stats           Platform-wide stats (on-chain verified only)
 
-POST /jobs/create              Create job
+POST /jobs/create              Create job (budget > 0 required)
 GET  /jobs                     List jobs
 GET  /jobs?client=wallet       Jobs by client
 GET  /jobs?provider=wallet     Jobs by provider
@@ -305,7 +335,11 @@ POST /jobs/:id/fund            Fund job escrow
 POST /jobs/:id/submit          Submit deliverable
 POST /jobs/:id/complete        Approve + pay
 POST /jobs/:id/reject          Reject + refund
-POST /jobs/:id/claim_refund    Claim refund (expired)
+POST /jobs/:id/refund          Claim refund (expired)
+POST /jobs/:id/auto-release    Provider claims after 72h no response
+POST /jobs/:id/dispute         File dispute (24h window after completion)
+POST /jobs/:id/confirm         Verify on-chain tx + advance state
+POST /admin/reset-test-jobs    Admin: clean up test jobs
 
 WS   /ws/trades                Live trade feed
 ```
