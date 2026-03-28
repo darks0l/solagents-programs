@@ -76,13 +76,48 @@ export function renderAgents(container, state) {
             <input type="text" class="form-input" id="tok-symbol" placeholder="e.g., CRAI" maxlength="10" style="text-transform:uppercase">
           </div>
           <div class="form-group mt-1">
-            <label class="form-label">Logo URL</label>
-            <input type="url" class="form-input" id="tok-logo" placeholder="https://example.com/logo.png">
-            <p class="text-muted text-xs mt-05">Square image, at least 256x256. Shows on Phantom, Jupiter, explorers.</p>
+            <label class="form-label">Token Logo</label>
+            <div id="logo-upload-area" style="border:2px dashed rgba(255,255,255,0.15);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:border-color 0.2s"
+              onclick="document.getElementById('tok-logo-file').click()">
+              <input type="file" id="tok-logo-file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" style="display:none">
+              <div id="logo-upload-placeholder">
+                <div style="font-size:2rem;margin-bottom:8px">🖼️</div>
+                <p class="text-secondary text-sm">Click or drag to upload logo</p>
+                <p class="text-muted text-xs">PNG, JPG, GIF, WebP, SVG — max 5MB</p>
+              </div>
+              <div id="logo-upload-preview" style="display:none">
+                <img id="logo-preview-img" style="width:80px;height:80px;border-radius:12px;object-fit:cover;border:2px solid rgba(153,69,255,0.3)" />
+                <p id="logo-upload-status" class="text-sm mt-1" style="color:#14F195">✓ Uploaded to IPFS</p>
+                <p id="logo-ipfs-cid" class="text-muted text-xs"></p>
+              </div>
+            </div>
+            <input type="hidden" id="tok-logo-cid" value="">
+            <input type="hidden" id="tok-logo-gateway" value="">
           </div>
           <div class="form-group mt-1">
             <label class="form-label">Token Description</label>
             <textarea class="form-input" id="tok-desc" rows="2" placeholder="What does this token represent?" maxlength="500" style="resize:vertical"></textarea>
+          </div>
+          <div class="form-group mt-2">
+            <label class="form-label" style="margin-bottom:12px">Social Links <span class="text-muted text-xs">(optional)</span></label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div>
+                <label class="text-xs text-muted" style="margin-bottom:4px;display:block">Twitter / X</label>
+                <input type="text" class="form-input" id="tok-social-twitter" placeholder="@handle or URL">
+              </div>
+              <div>
+                <label class="text-xs text-muted" style="margin-bottom:4px;display:block">Telegram</label>
+                <input type="text" class="form-input" id="tok-social-telegram" placeholder="@group or t.me link">
+              </div>
+              <div>
+                <label class="text-xs text-muted" style="margin-bottom:4px;display:block">Discord</label>
+                <input type="text" class="form-input" id="tok-social-discord" placeholder="discord.gg/invite">
+              </div>
+              <div>
+                <label class="text-xs text-muted" style="margin-bottom:4px;display:block">Website</label>
+                <input type="url" class="form-input" id="tok-social-website" placeholder="https://...">
+              </div>
+            </div>
           </div>
           <div class="form-group mt-1">
             <label class="form-label">What does your agent do?</label>
@@ -94,11 +129,6 @@ export function renderAgents(container, state) {
             <p class="text-muted text-xs mt-05">Fixed at 1 billion tokens</p>
           </div>
 
-          <!-- Logo Preview -->
-          <div id="logo-preview" style="display:none;margin-top:12px;text-align:center">
-            <img id="logo-preview-img" style="width:64px;height:64px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);object-fit:cover" />
-          </div>
-
           <div class="card glass mt-1 p-2" style="background:rgba(153,69,255,0.08);border-color:rgba(153,69,255,0.2)">
             <p class="text-sm"><strong>Fee Split on Trades:</strong></p>
             <p class="text-sm text-secondary">• <strong>2%</strong> total fee on every trade</p>
@@ -108,10 +138,11 @@ export function renderAgents(container, state) {
           <div class="card glass mt-1 p-2" style="background:rgba(20,241,149,0.05);border-color:rgba(20,241,149,0.15)">
             <p class="text-sm"><strong>What happens:</strong></p>
             <p class="text-sm text-secondary">1. SPL token minted on Solana with your logo + description</p>
-            <p class="text-sm text-secondary">2. Metaplex metadata stored on-chain (name, symbol, image, attributes)</p>
-            <p class="text-sm text-secondary">3. Virtual liquidity pool created (one-sided, permanently locked)</p>
-            <p class="text-sm text-secondary">4. Token immediately tradeable — shows up in Phantom, Jupiter, etc.</p>
-            <p class="text-sm text-secondary">5. Your agent profile becomes your token page</p>
+            <p class="text-sm text-secondary">2. Logo + metadata pinned permanently to IPFS</p>
+            <p class="text-sm text-secondary">3. Metaplex metadata URI points to IPFS (permanent, decentralized)</p>
+            <p class="text-sm text-secondary">4. Virtual liquidity pool created (one-sided, permanently locked)</p>
+            <p class="text-sm text-secondary">5. Token immediately tradeable — shows up in Phantom, Jupiter, etc.</p>
+            <p class="text-sm text-secondary">6. Your agent profile becomes your token page</p>
           </div>
           <div class="flex gap-1 mt-2">
             <button class="btn btn-primary btn-glow flex-1" id="btn-launch-token">🚀 Launch Token</button>
@@ -590,6 +621,16 @@ function renderTokenSection(token, dashData) {
         ` : ''}
 
         ${token.description ? `<p class="text-secondary text-sm mt-1">${token.description}</p>` : ''}
+
+        <!-- Social Links -->
+        ${(token.social_twitter || token.social_telegram || token.social_discord || token.social_website) ? `
+          <div class="flex gap-1 mt-1" style="flex-wrap:wrap">
+            ${token.social_twitter ? `<a href="${token.social_twitter.startsWith('http') ? token.social_twitter : 'https://x.com/' + token.social_twitter.replace('@', '')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);font-size:0.75rem;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(29,155,240,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">𝕏 Twitter</a>` : ''}
+            ${token.social_telegram ? `<a href="${token.social_telegram.startsWith('http') ? token.social_telegram : 'https://t.me/' + token.social_telegram.replace('@', '')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);font-size:0.75rem;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(0,136,204,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">✈️ Telegram</a>` : ''}
+            ${token.social_discord ? `<a href="${token.social_discord.startsWith('http') ? token.social_discord : 'https://discord.gg/' + token.social_discord}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);font-size:0.75rem;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(88,101,242,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">💬 Discord</a>` : ''}
+            ${token.social_website ? `<a href="${token.social_website.startsWith('http') ? token.social_website : 'https://' + token.social_website}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);font-size:0.75rem;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(153,69,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">🌐 Website</a>` : ''}
+          </div>
+        ` : ''}
       </div>
     </div>
   `;
@@ -615,24 +656,55 @@ function openTokenizeWizard(agentId, state = {}, agentWallet = null) {
   modal.classList.remove('hidden');
   modal.dataset.agentId = agentId;
 
-  // Logo preview
-  document.getElementById('tok-logo')?.addEventListener('input', (e) => {
-    const url = e.target.value.trim();
-    const preview = document.getElementById('logo-preview');
-    const img = document.getElementById('logo-preview-img');
-    if (url && url.startsWith('http')) {
-      img.src = url;
-      img.onerror = () => { preview.style.display = 'none'; };
-      img.onload = () => { preview.style.display = 'block'; };
-    } else {
-      preview.style.display = 'none';
-    }
-  });
+  // Logo file upload handler
+  const logoFileInput = document.getElementById('tok-logo-file');
+  if (logoFileInput) {
+    logoFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const uploadArea = document.getElementById('logo-upload-area');
+      const placeholder = document.getElementById('logo-upload-placeholder');
+      const preview = document.getElementById('logo-upload-preview');
+      const previewImg = document.getElementById('logo-preview-img');
+      const statusEl = document.getElementById('logo-upload-status');
+      const cidEl = document.getElementById('logo-ipfs-cid');
+
+      // Show loading state
+      placeholder.style.display = 'none';
+      preview.style.display = 'block';
+      previewImg.src = URL.createObjectURL(file);
+      statusEl.textContent = '⏳ Uploading to IPFS...';
+      statusEl.style.color = '#FFD700';
+      uploadArea.style.borderColor = 'rgba(153,69,255,0.5)';
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const resp = await fetch(`${api.base}/upload/logo`, { method: 'POST', body: formData });
+        const result = await resp.json();
+
+        if (!resp.ok) throw new Error(result.error || 'Upload failed');
+
+        document.getElementById('tok-logo-cid').value = result.cid;
+        document.getElementById('tok-logo-gateway').value = result.gatewayUrl;
+        previewImg.src = result.gatewayUrl;
+        statusEl.textContent = '✓ Pinned to IPFS';
+        statusEl.style.color = '#14F195';
+        cidEl.textContent = result.cid.substring(0, 16) + '...';
+        uploadArea.style.borderColor = 'rgba(20,241,149,0.3)';
+      } catch (err) {
+        statusEl.textContent = '✗ Upload failed — ' + err.message;
+        statusEl.style.color = '#FF4444';
+        uploadArea.style.borderColor = 'rgba(255,68,68,0.3)';
+      }
+    });
+  }
 
   document.getElementById('btn-launch-token')?.addEventListener('click', async () => {
     const tokenName = document.getElementById('tok-name')?.value.trim();
     const tokenSymbol = document.getElementById('tok-symbol')?.value.trim();
-    const logoUrl = document.getElementById('tok-logo')?.value.trim();
     const description = document.getElementById('tok-desc')?.value.trim();
     const agentDescription = document.getElementById('tok-agent-desc')?.value.trim();
 
@@ -648,9 +720,14 @@ function openTokenizeWizard(agentId, state = {}, agentWallet = null) {
         tokenSymbol: tokenSymbol.toUpperCase(),
         totalSupply: '1000000000',
         creatorWallet,
-        logoUrl: logoUrl || null,
+        logoUrl: document.getElementById('tok-logo-gateway')?.value || null,
+        ipfsLogoCid: document.getElementById('tok-logo-cid')?.value || null,
         description: description || null,
         agentDescription: agentDescription || null,
+        socialTwitter: document.getElementById('tok-social-twitter')?.value || null,
+        socialTelegram: document.getElementById('tok-social-telegram')?.value || null,
+        socialDiscord: document.getElementById('tok-social-discord')?.value || null,
+        socialWebsite: document.getElementById('tok-social-website')?.value || null,
       });
 
       if (result.error) return toast(result.error, 'error');

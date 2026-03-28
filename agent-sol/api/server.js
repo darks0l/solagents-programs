@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -23,6 +24,8 @@ import chainRoutes from './routes/chain.js';
 import adminRoutes from './routes/admin.js';
 import servicesRoutes from './routes/services.js';
 import applicationRoutes from './routes/applications.js';
+import uploadRoutes from './routes/upload.js';
+import { initPinata } from './services/ipfs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '3100');
@@ -37,6 +40,12 @@ const fastify = Fastify({
     },
   },
 });
+
+// Multipart file uploads (max 5MB)
+await fastify.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } });
+
+// Initialize Pinata IPFS if configured
+if (process.env.PINATA_JWT) initPinata(process.env.PINATA_JWT);
 
 // CORS — allow Vercel frontend + local dev
 const allowedOrigins = [
@@ -219,6 +228,10 @@ fastify.get('/api/info', async () => ({
       reject: 'POST /api/jobs/:jobId/applications/:appId/reject',
       withdraw: 'POST /api/jobs/:jobId/applications/:appId/withdraw',
     },
+    upload: {
+      logo: 'POST /api/upload/logo — upload logo image to IPFS (multipart, max 5MB)',
+      metadata: 'POST /api/upload/metadata — pin token metadata JSON to IPFS',
+    },
     ws_feed: 'ws://host/ws/trades — real-time trade events (buy/sell/graduation/token_created)',
     feed_stats: 'GET /api/health — includes ws_feed stats',
     platform: 'GET /api/platform/stats',
@@ -244,6 +257,7 @@ await fastify.register(chainRoutes);
 await fastify.register(adminRoutes);
 await fastify.register(servicesRoutes);
 await fastify.register(applicationRoutes);
+await fastify.register(uploadRoutes, { stmts: {} });
 
 // SPA fallback — serve index.html for non-API routes
 fastify.setNotFoundHandler((request, reply) => {

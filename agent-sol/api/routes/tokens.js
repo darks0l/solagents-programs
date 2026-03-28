@@ -237,7 +237,9 @@ export default async function tokenRoutes(fastify) {
     preHandler: [optionalAuth],
   }, async (request, reply) => {
     const { agentId } = request.params;
-    const { tokenName, tokenSymbol, totalSupply, logoUrl, description, agentDescription } = request.body || {};
+    const { tokenName, tokenSymbol, totalSupply, logoUrl, description, agentDescription,
+            socialTwitter, socialTelegram, socialDiscord, socialWebsite,
+            ipfsLogoCid, ipfsMetadataCid } = request.body || {};
     const bodyCreatorWallet = request.body?.creatorWallet;
 
     // Validate agent exists
@@ -285,7 +287,9 @@ export default async function tokenRoutes(fastify) {
     stmts.insertAgentToken.run(
       id, agentId, tokenName, tokenSymbol.toUpperCase(),
       supply, creatorWallet, creatorFeeBps, platformFeeBps,
-      logoUrl || null, description || null, agentDescription || null
+      logoUrl || null, description || null, agentDescription || null,
+      socialTwitter || null, socialTelegram || null, socialDiscord || null, socialWebsite || null,
+      ipfsLogoCid || null, ipfsMetadataCid || null
     );
 
     // Update agent stats to link token
@@ -434,12 +438,31 @@ export default async function tokenRoutes(fastify) {
     const agent = stmts.getAgent.get(token.agent_id);
     const stats = stmts.getAgentStats.get(token.agent_id);
 
+    // Use IPFS image if available, fall back to logo_url
+    const imageUrl = token.ipfs_logo_cid
+      ? `https://gateway.pinata.cloud/ipfs/${token.ipfs_logo_cid}`
+      : (token.logo_url || 'https://solagents.dev/default-agent-logo.png');
+
+    // Build properties
+    const properties = {
+      category: 'agent',
+      creators: [{ address: token.creator_wallet, share: 100 }],
+    };
+
+    // Add social links if they exist
+    const socials = {};
+    if (token.social_twitter) socials.twitter = token.social_twitter;
+    if (token.social_telegram) socials.telegram = token.social_telegram;
+    if (token.social_discord) socials.discord = token.social_discord;
+    if (token.social_website) socials.website = token.social_website;
+    if (Object.keys(socials).length > 0) properties.socials = socials;
+
     // Metaplex Token Metadata Standard
     return {
       name: token.token_name,
       symbol: token.token_symbol,
       description: token.description || `${token.token_name} — an AI agent token on SolAgents. ${token.agent_description || ''}`.trim(),
-      image: token.logo_url || 'https://solagents.dev/default-agent-logo.png',
+      image: imageUrl,
       external_url: `https://solagents.dev/#agents/${token.agent_id}`,
       attributes: [
         { trait_type: 'Agent Name', value: agent?.name || 'Unknown' },
@@ -452,10 +475,7 @@ export default async function tokenRoutes(fastify) {
         ] : []),
         ...(agent?.capabilities ? JSON.parse(agent.capabilities).map(c => ({ trait_type: 'Capability', value: c })) : []),
       ],
-      properties: {
-        category: 'agent',
-        creators: [{ address: token.creator_wallet, share: 100 }],
-      },
+      properties,
     };
   });
 

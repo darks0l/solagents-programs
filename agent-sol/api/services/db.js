@@ -210,6 +210,12 @@ db.exec(`
     logo_url TEXT,
     description TEXT,
     agent_description TEXT,
+    social_twitter TEXT,
+    social_telegram TEXT,
+    social_discord TEXT,
+    social_website TEXT,
+    ipfs_logo_cid TEXT,
+    ipfs_metadata_cid TEXT,
     metadata_uri TEXT,
     lp_locked INTEGER NOT NULL DEFAULT 1,
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'minting', 'active', 'graduated', 'failed')),
@@ -413,6 +419,19 @@ db.exec(`
 // === Migrations (safe to re-run) ===
 try { db.exec('ALTER TABLE token_pools ADD COLUMN total_buys INTEGER NOT NULL DEFAULT 0'); } catch (_) { /* already exists */ }
 try { db.exec('ALTER TABLE token_pools ADD COLUMN total_sells INTEGER NOT NULL DEFAULT 0'); } catch (_) { /* already exists */ }
+
+// v4: Social + IPFS columns for agent_tokens
+const socialIpfsMigrations = [
+  `ALTER TABLE agent_tokens ADD COLUMN social_twitter TEXT`,
+  `ALTER TABLE agent_tokens ADD COLUMN social_telegram TEXT`,
+  `ALTER TABLE agent_tokens ADD COLUMN social_discord TEXT`,
+  `ALTER TABLE agent_tokens ADD COLUMN social_website TEXT`,
+  `ALTER TABLE agent_tokens ADD COLUMN ipfs_logo_cid TEXT`,
+  `ALTER TABLE agent_tokens ADD COLUMN ipfs_metadata_cid TEXT`,
+];
+for (const sql of socialIpfsMigrations) {
+  try { db.exec(sql); } catch (_) { /* column already exists */ }
+}
 
 // v3: Job lifecycle columns
 try { db.exec('ALTER TABLE jobs ADD COLUMN auto_release_at INTEGER DEFAULT NULL'); } catch (_) { /* already exists */ }
@@ -618,8 +637,8 @@ export const stmts = {
 
   // Agent Tokens
   insertAgentToken: db.prepare(`
-    INSERT INTO agent_tokens (id, agent_id, token_name, token_symbol, total_supply, creator_wallet, creator_fee_bps, platform_fee_bps, logo_url, description, agent_description)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO agent_tokens (id, agent_id, token_name, token_symbol, total_supply, creator_wallet, creator_fee_bps, platform_fee_bps, logo_url, description, agent_description, social_twitter, social_telegram, social_discord, social_website, ipfs_logo_cid, ipfs_metadata_cid)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
   getAgentToken: db.prepare('SELECT * FROM agent_tokens WHERE id = ?'),
   getAgentTokenByAgent: db.prepare('SELECT * FROM agent_tokens WHERE agent_id = ?'),
