@@ -419,14 +419,14 @@ function renderConnectedDashboard(container, state) {
       </div>
       <div class="card">
         <div class="card-header">
-          <span class="card-title">Top Agents</span>
-          <a href="#" data-page="agents" class="btn btn-sm btn-ghost">View All</a>
+          <span class="card-title">Top Tokens</span>
+          <a href="#" data-page="trade" class="btn btn-sm btn-ghost">View All</a>
         </div>
-        <div id="top-agents">
+        <div id="top-tokens">
           <div class="empty-state" style="padding: 30px;">
-            <div class="empty-state-icon">🤖</div>
-            <p class="text-sm">No agents registered yet</p>
-            <p class="text-muted text-sm">Be the first!</p>
+            <div class="empty-state-icon">📈</div>
+            <p class="text-sm">No tokens launched yet</p>
+            <p class="text-muted text-sm">Tokenize an agent to get started!</p>
           </div>
         </div>
       </div>
@@ -635,20 +635,40 @@ async function loadDashboardData() {
   } catch { /* silent */ }
 
   try {
-    const agents = await api.get('/agents?limit=5').catch(() => null);
-    const agentsEl = document.getElementById('top-agents');
-    if (agents?.agents?.length && agentsEl) {
-      agentsEl.innerHTML = agents.agents.map(a => `
-        <div class="list-item" style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer" data-page="agents">
-          <div class="flex items-center gap-2">
-            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:0.9rem">🤖</div>
-            <div>
-              <span class="text-sm font-bold">${a.name}</span>
-              <p class="text-muted text-xs">${truncateAddress(a.wallet_address)}</p>
+    const topTokens = await api.get('/tokens/top?limit=5').catch(() => null);
+    const tokensEl = document.getElementById('top-tokens');
+    if (topTokens?.tokens?.length && tokensEl) {
+      // Fetch SOL price for USD display
+      let solUsd = 0;
+      try {
+        const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+        const cgData = await cgRes.json();
+        solUsd = cgData?.solana?.usd || 0;
+      } catch { /* no price available */ }
+
+      tokensEl.innerHTML = topTokens.tokens.map((t, i) => {
+        const feesSOL = parseFloat(t.creator_fees_earned_sol || 0) + parseFloat(t.platform_fees_earned_sol || 0);
+        const jobsUSDC = parseFloat(t.job_revenue_usdc || 0);
+        const totalRevUsd = (feesSOL * solUsd) + jobsUSDC;
+        return `
+          <div class="list-item" style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer" data-page="trade">
+            <div class="flex items-center gap-2" style="justify-content:space-between">
+              <div class="flex items-center gap-2">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:bold;color:#fff">${i + 1}</div>
+                <div>
+                  <span class="text-sm font-bold">${t.token_symbol || t.token_name}</span>
+                  <span class="text-muted text-xs" style="margin-left:6px">${t.agent_name}</span>
+                  <p class="text-muted text-xs" style="margin-top:1px">${t.total_trades || 0} trades · ${parseFloat(t.total_volume_sol || 0).toFixed(2)} SOL vol</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="text-sm font-bold" style="color:#14F195">$${totalRevUsd.toFixed(2)}</div>
+                <div class="text-muted text-xs">revenue</div>
+              </div>
             </div>
           </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
   } catch { /* silent */ }
 }

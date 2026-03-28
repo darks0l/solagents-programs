@@ -37,6 +37,24 @@ export default async function tokenRoutes(fastify) {
     return { tokens, pagination: { limit, offset } };
   });
 
+  // Top tokens sorted by combined revenue (trading fees + job revenue)
+  fastify.get('/api/tokens/top', async (request) => {
+    const limit = Math.min(parseInt(request.query.limit) || 10, 50);
+    const offset = parseInt(request.query.offset) || 0;
+    const tokens = stmts.listTopTokensByRevenue.all(limit, offset);
+    return {
+      tokens: tokens.map(t => ({
+        ...t,
+        creator_fees_earned_sol: (Number(t.creator_fees_earned || 0) / 1e9).toFixed(6),
+        platform_fees_earned_sol: (Number(t.platform_fees_earned || 0) / 1e9).toFixed(6),
+        total_volume_sol: (Number(t.total_volume_sol || 0) / 1e9).toFixed(6),
+        job_revenue_usdc: (Number(t.job_revenue || 0) / 1e6).toFixed(2),
+        combined_revenue_display: (Number(t.combined_revenue || 0) / 1e9).toFixed(6),
+      })),
+      pagination: { limit, offset },
+    };
+  });
+
   // Get specific token details (with pool + dev buy transparency)
   fastify.get('/api/tokens/:id', async (request, reply) => {
     const token = stmts.getAgentToken.get(request.params.id);
