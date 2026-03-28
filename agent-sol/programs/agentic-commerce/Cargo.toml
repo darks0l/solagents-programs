@@ -1,0 +1,23 @@
+[package]
+name = "agentic-commerce"
+version = "0.1.0"
+description = "Agentic Commerce Protocol — EIP-8183 on Solana. Job escrow with evaluator attestation and hooks."
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "agentic_commerce"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = ["init-if-needed"]
+init-if-needed = ["anchor-lang/init-if-needed"]
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[dependencies]
+anchor-lang = "0.31.1"
+anchor-spl = "0.31.1"
+solana-security-txt = "1.1.2"

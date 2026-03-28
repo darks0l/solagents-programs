@@ -8,7 +8,21 @@ pub mod raydium_cpi;
 
 use instructions::*;
 
+#[cfg(not(feature = "no-entrypoint"))]
+use solana_security_txt::security_txt;
+
 declare_id!("nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof");
+
+#[cfg(not(feature = "no-entrypoint"))]
+security_txt! {
+    name: "SolAgents Bonding Curve",
+    project_url: "https://solagents.dev",
+    contacts: "email:darksol@agentmail.to,link:https://solagents.dev",
+    policy: "https://github.com/darks0l/solagents-programs/blob/main/SECURITY.md",
+    preferred_languages: "en",
+    source_code: "https://github.com/darks0l/solagents-programs",
+    auditors: "None"
+}
 
 #[program]
 pub mod bonding_curve {

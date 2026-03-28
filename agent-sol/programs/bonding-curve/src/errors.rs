@@ -1,0 +1,73 @@
+use anchor_lang::prelude::*;
+
+#[error_code]
+pub enum CurveError {
+    #[msg("Only admin can perform this action")]
+    Unauthorized,
+
+    #[msg("Token creation is currently paused")]
+    CreationPaused,
+
+    #[msg("Pool is not active — trading disabled")]
+    PoolNotActive,
+
+    #[msg("Pool has already graduated to Raydium")]
+    AlreadyGraduated,
+
+    #[msg("Pool has not reached graduation threshold")]
+    NotReadyToGraduate,
+
+    #[msg("Slippage tolerance exceeded")]
+    SlippageExceeded,
+
+    #[msg("Insufficient SOL for this trade")]
+    InsufficientSol,
+
+    #[msg("Insufficient tokens for this trade")]
+    InsufficientTokens,
+
+    #[msg("Zero amount not allowed")]
+    ZeroAmount,
+
+    #[msg("Math overflow")]
+    MathOverflow,
+
+    #[msg("Invalid fee configuration — total fees cannot exceed 1000 bps (10%)")]
+    InvalidFees,
+
+    #[msg("Invalid graduation threshold — must be greater than 0")]
+    InvalidThreshold,
+
+    #[msg("No fees available to claim")]
+    NoFeesToClaim,
+
+    #[msg("Token name too long (max 32 chars)")]
+    NameTooLong,
+
+    #[msg("Token symbol too long (max 10 chars)")]
+    SymbolTooLong,
+
+    #[msg("Metadata URI too long (max 200 chars)")]
+    UriTooLong,
+
+    #[msg("Invalid total supply — must be greater than 0")]
+    InvalidSupply,
+
+    #[msg("Invalid decimals — must be between 0 and 9")]
+    InvalidDecimals,
+
+    #[msg("Buy would exceed remaining tokens in pool")]
+    ExceedsPoolBalance,
+
+    #[msg("Sell would exceed real SOL in pool")]
+    ExceedsRealSol,
+
+    #[msg("Creator mismatch — only the token creator can perform this action")]
+    CreatorMismatch,
+
+    #[msg("Pool has not graduated — Raydium fees only available post-graduation")]
+    NotGraduated,
+
+    #[msg("No Raydium creator fees to claim")]
+    NoRaydiumFees,
+}
