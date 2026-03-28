@@ -1211,9 +1211,14 @@ export default async function chainRoutes(fastify) {
         });
       }
 
-      // Calculate SOL and tokens to seed Raydium pool
-      // Price continuity: tokens_for_raydium = sol_for_raydium / bonding_curve_price
-      // bonding_curve_price (SOL per raw token) = virtualSolReserve / virtualTokenReserve
+      // Calculate SOL and tokens to seed Raydium pool (burn model)
+      //
+      // Price continuity formula:
+      //   tokens_for_raydium = sol_for_raydium * virtual_token_reserve / virtual_sol_reserve
+      //
+      // Excess tokens (remaining - tokens_for_raydium) are burned on-chain by graduate.rs.
+      // LP tokens received from Raydium pool creation are also burned on-chain.
+      // This means: no reserved tokens, no locked LP — everything excess is destroyed.
       const vSol    = BigInt(pool.virtualSolReserve.toString());
       const vToken  = BigInt(pool.virtualTokenReserve.toString());
       const realTok = BigInt(pool.realTokenBalance.toString());
@@ -1223,10 +1228,11 @@ export default async function chainRoutes(fastify) {
         : realSol; // default: all bonding curve SOL
 
       // tokens_for_raydium = seedSol * vToken / vSol
-      // This preserves the current bonding curve price in Raydium
+      // This preserves the current bonding curve price in Raydium.
+      // Any remaining tokens (realTok - seedTokenAmount) are burned on-chain.
       const seedTokenAmount = (seedSolLamports * vToken) / vSol;
 
-      // Ensure we don't try to seed more tokens than are in the pool
+      // Cap at available pool tokens (excess burned on-chain by graduate instruction)
       const actualTokenAmount = seedTokenAmount > realTok ? realTok : seedTokenAmount;
 
       // Create Raydium pool (server-side, deployer signs)

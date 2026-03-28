@@ -302,7 +302,7 @@ export async function renderTrade(container, state, mintAddress) {
               </div>
             </div>
             <div class="flex items-center gap-1 mt-1" style="justify-content:center">
-              <span class="text-xs" style="color:#14F195">🔒 Liquidity Locked</span>
+              <span class="text-xs" style="color:#14F195">🔥 LP Burned at Graduation</span>
               <span class="text-muted text-xs">•</span>
               <span class="text-xs" style="color:#9945FF">Authorities Revoked</span>
             </div>

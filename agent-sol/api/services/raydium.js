@@ -686,8 +686,10 @@ export async function buildPostGradSellTransaction({
  *   token0 = whichever of (WSOL, tokenMint) sorts lower by address
  *   token1 = the other one
  *
- * Price continuity formula:
- *   tokensForRaydium = solForRaydium / bondingCurvePriceAtGraduation
+ * Price continuity formula (burn model):
+ *   tokensForRaydium = solForRaydium * virtualTokenReserve / virtualSolReserve
+ *   tokensToburn = remainingTokens - tokensForRaydium  (burned on-chain by graduate.rs)
+ *   LP tokens from pool creation are also burned on-chain (not locked)
  *
  * @param {object} params
  * @param {string} params.mintAddress          - the agent token mint

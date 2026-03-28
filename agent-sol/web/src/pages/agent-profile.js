@@ -291,7 +291,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
               ${pool?.status === 'graduated' ? `
                 <div class="flex items-center" style="justify-content:space-between">
                   <span class="text-muted text-xs">Raydium CPMM</span>
-                  <span class="text-xs" style="color:#14F195">🔒 LP Permanently Locked</span>
+                  <span class="text-xs" style="color:#14F195">🔥 LP Burned</span>
                 </div>
                 <div class="flex items-center mt-05" style="justify-content:space-between">
                   <span class="text-muted text-xs">Fees</span>
@@ -306,14 +306,14 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
                     <div style="height:100%;width:100%;background:linear-gradient(90deg,#9945FF,#14F195);border-radius:3px"></div>
                   </div>
                   <div class="flex items-center text-xs" style="justify-content:space-between;margin-top:3px">
-                    <span style="color:#14F195">✅ Liquidity permanently locked</span>
+                    <span style="color:#14F195">🔥 LP tokens burned — liquidity permanent</span>
                     <span class="text-muted">Raydium CPMM</span>
                   </div>
                 </div>
               ` : `
                 <div class="flex items-center" style="justify-content:space-between">
                   <span class="text-muted text-xs">Bonding Curve</span>
-                  <span class="text-xs" style="color:#14F195">🔒 LP Locked</span>
+                  <span class="text-xs" style="color:#14F195">🔥 LP Burned at Graduation</span>
                 </div>
                 <div class="flex items-center mt-05" style="justify-content:space-between">
                   <span class="text-muted text-xs">Fees</span>
