@@ -138,10 +138,35 @@ export function renderAgents(container, state) {
     document.getElementById('tokenize-modal')?.classList.add('hidden');
   });
 
+  // Clear previous refresh interval if re-rendering
+  if (window._agentsRefreshInterval) clearInterval(window._agentsRefreshInterval);
+
   // Load data
   loadPlatformStats();
-  loadAgents(state._agentFilter || 'all');
-  loadTokens();
+  fetchSolPrice().then(() => {
+    loadAgents(state._agentFilter || 'all');
+    loadTokens();
+  });
+
+  // Live-update MC every 30s
+  window._agentsRefreshInterval = setInterval(async () => {
+    // Only refresh if we're still on the agents page
+    if (!document.getElementById('agents-grid')) {
+      clearInterval(window._agentsRefreshInterval);
+      return;
+    }
+    await fetchSolPrice();
+    loadAgents(state._agentFilter || 'all');
+  }, 30000);
+}
+
+let _solPriceUsd = 0;
+async function fetchSolPrice() {
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+    const data = await res.json();
+    _solPriceUsd = data.solana?.usd || 0;
+  } catch { _solPriceUsd = 0; }
 }
 
 async function loadPlatformStats() {
@@ -278,7 +303,7 @@ function renderAgentCard(agent) {
           ` : '<span class="text-xs text-muted">New agent</span>'}
           ${agent.token ? `
             <span class="text-xs" style="background:rgba(153,69,255,0.15);color:#9945FF;padding:3px 8px;border-radius:6px">
-              $${agent.token.symbol} ${formatPrice(agent.token.currentPrice)} SOL
+              MC: ${formatMcUsd(agent.token.marketCap)}
             </span>
           ` : ''}
         </div>
@@ -643,6 +668,16 @@ async function openTokenDetail(tokenId, state = {}) {
 }
 
 // === Utility Functions ===
+
+function formatMcUsd(mcSol) {
+  const mc = parseFloat(mcSol || '0');
+  if (mc === 0 || !_solPriceUsd) return '$0';
+  const usd = mc * _solPriceUsd;
+  if (usd < 1) return `$${usd.toFixed(2)}`;
+  if (usd < 1000) return `$${usd.toFixed(0)}`;
+  if (usd < 1_000_000) return `$${(usd / 1000).toFixed(1)}K`;
+  return `$${(usd / 1_000_000).toFixed(2)}M`;
+}
 
 function formatPrice(price) {
   const p = parseFloat(price || '0');
