@@ -37,19 +37,28 @@ export default async function tokenRoutes(fastify) {
     return { tokens, pagination: { limit, offset } };
   });
 
-  // Top tokens sorted by combined revenue (trading fees + job revenue)
-  fastify.get('/api/tokens/top', async (request) => {
+  // Top agents sorted by combined revenue (token fees + job revenue)
+  fastify.get('/api/agents/top', async (request) => {
     const limit = Math.min(parseInt(request.query.limit) || 10, 50);
     const offset = parseInt(request.query.offset) || 0;
-    const tokens = stmts.listTopTokensByRevenue.all(limit, offset);
+    const agents = stmts.listTopAgentsByRevenue.all(limit, offset);
     return {
-      tokens: tokens.map(t => ({
-        ...t,
-        creator_fees_earned_sol: (Number(t.creator_fees_earned || 0) / 1e9).toFixed(6),
-        platform_fees_earned_sol: (Number(t.platform_fees_earned || 0) / 1e9).toFixed(6),
-        total_volume_sol: (Number(t.total_volume_sol || 0) / 1e9).toFixed(6),
-        job_revenue_usdc: (Number(t.job_revenue || 0) / 1e6).toFixed(2),
-        combined_revenue_display: (Number(t.combined_revenue || 0) / 1e9).toFixed(6),
+      agents: agents.map(a => ({
+        id: a.id,
+        name: a.name,
+        wallet_address: a.wallet_address,
+        capabilities: JSON.parse(a.capabilities || '[]'),
+        token_symbol: a.token_symbol || null,
+        token_name: a.token_name || null,
+        mint_address: a.mint_address || null,
+        token_status: a.token_status || null,
+        completed_jobs: a.completed_jobs || 0,
+        token_fees_sol: (Number(a.token_fees_earned || 0) / 1e9).toFixed(6),
+        platform_fees_sol: (Number(a.token_platform_fees || 0) / 1e9).toFixed(6),
+        token_volume_sol: (Number(a.token_volume_sol || 0) / 1e9).toFixed(6),
+        token_trades: a.token_trades || 0,
+        job_revenue_usdc: (Number(a.job_revenue || 0) / 1e6).toFixed(2),
+        combined_revenue_lamports: Number(a.combined_revenue || 0),
       })),
       pagination: { limit, offset },
     };

@@ -419,14 +419,14 @@ function renderConnectedDashboard(container, state) {
       </div>
       <div class="card">
         <div class="card-header">
-          <span class="card-title">Top Tokens</span>
-          <a href="#" data-page="trade" class="btn btn-sm btn-ghost">View All</a>
+          <span class="card-title">Top Agents</span>
+          <a href="#" data-page="agents" class="btn btn-sm btn-ghost">View All</a>
         </div>
-        <div id="top-tokens">
+        <div id="top-agents">
           <div class="empty-state" style="padding: 30px;">
-            <div class="empty-state-icon">📈</div>
-            <p class="text-sm">No tokens launched yet</p>
-            <p class="text-muted text-sm">Tokenize an agent to get started!</p>
+            <div class="empty-state-icon">🤖</div>
+            <p class="text-sm">No agents registered yet</p>
+            <p class="text-muted text-sm">Be the first!</p>
           </div>
         </div>
       </div>
@@ -635,9 +635,9 @@ async function loadDashboardData() {
   } catch { /* silent */ }
 
   try {
-    const topTokens = await api.get('/tokens/top?limit=5').catch(() => null);
-    const tokensEl = document.getElementById('top-tokens');
-    if (topTokens?.tokens?.length && tokensEl) {
+    const topAgents = await api.get('/agents/top?limit=5').catch(() => null);
+    const agentsEl = document.getElementById('top-agents');
+    if (topAgents?.agents?.length && agentsEl) {
       // Fetch SOL price for USD display
       let solUsd = 0;
       try {
@@ -646,19 +646,22 @@ async function loadDashboardData() {
         solUsd = cgData?.solana?.usd || 0;
       } catch { /* no price available */ }
 
-      tokensEl.innerHTML = topTokens.tokens.map((t, i) => {
-        const feesSOL = parseFloat(t.creator_fees_earned_sol || 0) + parseFloat(t.platform_fees_earned_sol || 0);
-        const jobsUSDC = parseFloat(t.job_revenue_usdc || 0);
+      agentsEl.innerHTML = topAgents.agents.map((a, i) => {
+        const feesSOL = parseFloat(a.token_fees_sol || 0) + parseFloat(a.platform_fees_sol || 0);
+        const jobsUSDC = parseFloat(a.job_revenue_usdc || 0);
         const totalRevUsd = (feesSOL * solUsd) + jobsUSDC;
+        const hasToken = !!a.token_symbol;
         return `
-          <div class="list-item" style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer" data-page="trade">
+          <div class="list-item" style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer" data-page="agents">
             <div class="flex items-center gap-2" style="justify-content:space-between">
               <div class="flex items-center gap-2">
                 <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:bold;color:#fff">${i + 1}</div>
                 <div>
-                  <span class="text-sm font-bold">${t.token_symbol || t.token_name}</span>
-                  <span class="text-muted text-xs" style="margin-left:6px">${t.agent_name}</span>
-                  <p class="text-muted text-xs" style="margin-top:1px">${t.total_trades || 0} trades · ${parseFloat(t.total_volume_sol || 0).toFixed(2)} SOL vol</p>
+                  <span class="text-sm font-bold">${a.name}</span>
+                  ${hasToken ? `<span class="text-xs" style="margin-left:6px;color:#14F195;background:rgba(20,241,149,0.1);padding:1px 6px;border-radius:8px">$${a.token_symbol}</span>` : ''}
+                  <p class="text-muted text-xs" style="margin-top:1px">
+                    ${a.completed_jobs > 0 ? `${a.completed_jobs} jobs` : ''}${a.completed_jobs > 0 && a.token_trades > 0 ? ' · ' : ''}${a.token_trades > 0 ? `${a.token_trades} trades` : ''}${!a.completed_jobs && !a.token_trades ? truncateAddress(a.wallet_address) : ''}
+                  </p>
                 </div>
               </div>
               <div class="text-right">

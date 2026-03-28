@@ -578,19 +578,21 @@ export const stmts = {
     WHERE at.status = 'active'
     ORDER BY at.launched_at DESC LIMIT ? OFFSET ?
   `),
-  // Top tokens sorted by combined revenue (trading fees + job earnings)
-  listTopTokensByRevenue: db.prepare(`
-    SELECT at.*, a.name as agent_name, a.wallet_address as agent_wallet,
-           tp.creator_fees_earned, tp.platform_fees_earned, tp.total_volume_sol, tp.total_trades,
+  // Top agents sorted by combined revenue (token trading fees + job earnings)
+  listTopAgentsByRevenue: db.prepare(`
+    SELECT a.*,
            COALESCE(ast.total_earned, '0') as job_revenue,
-           (CAST(COALESCE(tp.creator_fees_earned, '0') AS REAL) + CAST(COALESCE(tp.platform_fees_earned, '0') AS REAL) + CAST(COALESCE(ast.total_earned, '0') AS REAL)) as combined_revenue,
-           (SELECT price_sol FROM token_prices WHERE token_id = at.id ORDER BY timestamp DESC LIMIT 1) as current_price,
-           (SELECT market_cap FROM token_prices WHERE token_id = at.id ORDER BY timestamp DESC LIMIT 1) as market_cap
-    FROM agent_tokens at
-    JOIN agents a ON at.agent_id = a.id
+           COALESCE(ast.completed_jobs, 0) as completed_jobs,
+           COALESCE(tp.creator_fees_earned, '0') as token_fees_earned,
+           COALESCE(tp.platform_fees_earned, '0') as token_platform_fees,
+           COALESCE(tp.total_volume_sol, '0') as token_volume_sol,
+           COALESCE(tp.total_trades, 0) as token_trades,
+           at.token_symbol, at.token_name, at.mint_address, at.status as token_status,
+           (CAST(COALESCE(tp.creator_fees_earned, '0') AS REAL) + CAST(COALESCE(tp.platform_fees_earned, '0') AS REAL) + CAST(COALESCE(ast.total_earned, '0') AS REAL)) as combined_revenue
+    FROM agents a
+    LEFT JOIN agent_stats ast ON ast.agent_id = a.id
+    LEFT JOIN agent_tokens at ON at.agent_id = a.id
     LEFT JOIN token_pools tp ON tp.token_id = at.id
-    LEFT JOIN agent_stats ast ON ast.agent_id = at.agent_id
-    WHERE at.status IN ('active', 'graduated')
     ORDER BY combined_revenue DESC
     LIMIT ? OFFSET ?
   `),
