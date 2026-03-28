@@ -24,6 +24,86 @@ const MAX_WS_RETRIES = 5;
 // When true, all buy/sell/quote calls route to post-grad endpoints.
 let _isGraduated = false;
 
+// ── Wallet Balances ──────────────────────────────────────────
+let _solBalance = null;   // in SOL (number)
+let _tokenBalance = null; // in tokens (number, ui amount)
+let _tokenSymbol = '???';
+let _balanceTimer = null;
+let _currentMintAddress = null;
+
+async function refreshBalances(mintAddress) {
+  if (!isConnected()) { _solBalance = null; _tokenBalance = null; _renderBalanceBar(); return; }
+  try {
+    const { Connection, PublicKey } = await import('@solana/web3.js');
+    const connection = new Connection('https://api.devnet.solana.com');
+    const walletPubkey = new PublicKey(getPublicKey());
+
+    // SOL balance
+    const lamports = await connection.getBalance(walletPubkey);
+    _solBalance = lamports / 1e9;
+
+    // Token balance
+    if (mintAddress) {
+      const mintPubkey = new PublicKey(mintAddress);
+      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletPubkey, { mint: mintPubkey });
+      if (tokenAccounts.value.length > 0) {
+        _tokenBalance = tokenAccounts.value[0].account.data.parsed.info.tokenAmount.uiAmount;
+      } else {
+        _tokenBalance = 0;
+      }
+    }
+    _renderBalanceBar();
+  } catch (err) {
+    console.warn('Balance refresh failed:', err.message);
+  }
+}
+
+function _renderBalanceBar() {
+  const bar = document.getElementById('wallet-balances');
+  if (!bar) return;
+  if (!isConnected() || _solBalance === null) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = '';
+  const solStr = _solBalance.toFixed(4);
+  const tokenStr = _tokenBalance !== null ? _formatTokenBalance(_tokenBalance) : '—';
+  bar.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <img src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png" alt="SOL" style="width:16px;height:16px;border-radius:50%">
+        <span class="font-mono text-xs" style="color:var(--green)">${solStr} SOL</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="width:16px;height:16px;border-radius:50%;background:linear-gradient(135deg,#14F195,#9945FF);display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#000">${_tokenSymbol.slice(0, 2)}</span>
+        <span class="font-mono text-xs" style="color:var(--accent-purple)">${tokenStr} ${_tokenSymbol}</span>
+      </div>
+    </div>`;
+
+  // Update inline balance hints on buy/sell forms
+  const buyBal = document.getElementById('buy-sol-balance');
+  if (buyBal) buyBal.textContent = `Balance: ${solStr} SOL`;
+  const sellBal = document.getElementById('sell-token-balance');
+  if (sellBal) sellBal.textContent = _tokenBalance !== null ? `Balance: ${tokenStr} ${_tokenSymbol}` : '';
+}
+
+function _formatTokenBalance(amt) {
+  if (amt === 0) return '0';
+  if (amt >= 1_000_000) return (amt / 1_000_000).toFixed(2) + 'M';
+  if (amt >= 1_000) return (amt / 1_000).toFixed(2) + 'K';
+  return amt.toFixed(2);
+}
+
+function startBalancePolling(mintAddress) {
+  stopBalancePolling();
+  _currentMintAddress = mintAddress;
+  _balanceTimer = setInterval(() => refreshBalances(mintAddress), 15000);
+}
+
+function stopBalancePolling() {
+  if (_balanceTimer) { clearInterval(_balanceTimer); _balanceTimer = null; }
+}
+
 function connectLiveFeed(mintAddress) {
   disconnectLiveFeed();
   _wsMintAddress = mintAddress;
@@ -93,6 +173,7 @@ function disconnectLiveFeed() {
     _ws = null;
   }
   stopPolling();
+  stopBalancePolling();
   const indicator = document.getElementById('live-indicator');
   if (indicator) indicator.style.display = 'none';
 }
@@ -321,7 +402,10 @@ export async function renderTrade(container, state, mintAddress) {
             <!-- Buy form -->
             <div id="buy-form">
               <div class="form-group">
-                <label class="form-label text-sm">SOL Amount</label>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <label class="form-label text-sm">SOL Amount</label>
+                  <span class="font-mono text-xs text-muted" id="buy-sol-balance" style="opacity:0.7"></span>
+                </div>
                 <div class="flex gap-05">
                   <input type="number" class="form-input" id="buy-sol-amount" placeholder="0.1" min="0.001" step="0.01" style="flex:1">
                   <span class="form-input" style="padding:8px 12px;color:var(--text-muted);flex-shrink:0">SOL</span>
@@ -354,7 +438,10 @@ export async function renderTrade(container, state, mintAddress) {
             <!-- Sell form -->
             <div id="sell-form" style="display:none">
               <div class="form-group">
-                <label class="form-label text-sm">Token Amount</label>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <label class="form-label text-sm">Token Amount</label>
+                  <span class="font-mono text-xs text-muted" id="sell-token-balance" style="opacity:0.7"></span>
+                </div>
                 <div class="flex gap-05">
                   <input type="number" class="form-input" id="sell-token-amount" placeholder="1000000" min="1" style="flex:1">
                   <span class="form-input" style="padding:8px 12px;color:var(--text-muted);flex-shrink:0" id="sell-symbol">—</span>
@@ -392,6 +479,7 @@ export async function renderTrade(container, state, mintAddress) {
                 : `<button class="btn btn-sm btn-primary w-full" id="btn-connect-wallet">🔌 Connect Wallet to Trade</button>`
               }
             </div>
+            <div id="wallet-balances" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,0.3);border-radius:8px;border:1px solid rgba(255,255,255,0.06)"></div>
           </div>
         </div>
 
@@ -601,7 +689,14 @@ async function loadTradePageData(mintAddress) {
     document.getElementById('creator-addr').textContent = truncateAddress(poolData.creator || '');
 
     // Symbol for sell form
-    document.getElementById('sell-symbol').textContent = poolData.symbol || 'TOKEN';
+    _tokenSymbol = poolData.symbol || 'TOKEN';
+    document.getElementById('sell-symbol').textContent = _tokenSymbol;
+
+    // Load wallet balances
+    if (isConnected()) {
+      refreshBalances(mintAddress);
+    }
+    startBalancePolling(mintAddress);
 
     // Dev buy card
     if (parseFloat(poolData.dev_buy_sol) > 0) {
@@ -889,6 +984,9 @@ async function executeBuy(mintAddress) {
 
     toast(`✅ Bought! Transaction confirmed.`, 'success');
 
+    // Refresh balances after trade
+    refreshBalances(mintAddress);
+
     // Aggressive refresh — immediate stats + staggered full reload
     _chartData = { mint: null, prices: [] };
     _refreshPoolStats(mintAddress);
@@ -950,6 +1048,10 @@ async function executeSell(mintAddress) {
     });
 
     toast(`✅ Sold! SOL returned to your wallet.`, 'success');
+
+    // Refresh balances after trade
+    refreshBalances(mintAddress);
+
     _chartData = { mint: null, prices: [] };
     _refreshPoolStats(mintAddress);
     loadTrades(mintAddress);
@@ -983,6 +1085,8 @@ function renderWalletSection() {
   const pk = getPublicKey();
   if (pk) {
     section.innerHTML = `<div class="flex items-center gap-1"><span class="wallet-dot"></span><span class="text-xs font-mono">${truncateAddress(pk)}</span></div>`;
+    // Refresh balances after connect
+    if (_currentMintAddress) refreshBalances(_currentMintAddress);
   }
 }
 
