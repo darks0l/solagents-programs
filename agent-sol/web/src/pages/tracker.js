@@ -313,7 +313,7 @@ async function openTokenDetail(tokenId, mint) {
         </div>
         <div>
           <h2 style="margin: 0; font-size: 1.5rem;">${escapeHtml(name)}</h2>
-          <span style="color: var(--text-tertiary); font-size: 0.9rem;">$${escapeHtml(symbol)} · ${status === 'graduated' ? '🎓 Raydium' : '● Bonding Curve'}</span>
+          <span style="color: var(--text-tertiary); font-size: 0.9rem;">$${escapeHtml(symbol)} · ${status === 'graduated' ? '<span style="color:#14F195">🎓 Trading on Raydium CPMM</span>' : '● Bonding Curve'}</span>
         </div>
         <div style="margin-left: auto; text-align: right;">
           <div style="font-size: 1.4rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--green);">${formatPrice(price)} SOL</div>

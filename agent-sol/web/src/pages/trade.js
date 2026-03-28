@@ -19,6 +19,11 @@ let _wsMintAddress = null;
 let _wsRetries = 0;
 const MAX_WS_RETRIES = 5;
 
+// ── Graduated State ──────────────────────────────────────────
+// Tracks whether the current token has graduated to Raydium.
+// When true, all buy/sell/quote calls route to post-grad endpoints.
+let _isGraduated = false;
+
 function connectLiveFeed(mintAddress) {
   disconnectLiveFeed();
   _wsMintAddress = mintAddress;
@@ -576,10 +581,13 @@ async function loadTradePageData(mintAddress) {
       document.getElementById('graduation-sol').textContent = `${realSolVal.toFixed(2)} / 85 SOL`;
     } else if (gradBar && poolData.status === 'graduated') {
       gradBar.style.display = '';
-      document.getElementById('graduation-pct').textContent = '🎓 Graduated';
+      document.getElementById('graduation-pct').textContent = '🎓 Graduated — Now on Raydium';
       document.getElementById('graduation-pct').style.color = '#14F195';
       document.getElementById('graduation-fill').style.width = '100%';
-      document.getElementById('graduation-sol').textContent = '85 / 85 SOL';
+      document.getElementById('graduation-sol').textContent = 'Trades routed through Raydium CPMM • 2% fee';
+      // Update label from "Bonding Curve" to "Raydium CPMM"
+      const bcLabel = gradBar.querySelector('.text-muted');
+      if (bcLabel && bcLabel.textContent.trim() === 'Bonding Curve') bcLabel.textContent = 'Raydium CPMM';
     }
 
     // stat-ath is populated by loadPriceChart
@@ -615,16 +623,42 @@ async function loadTradePageData(mintAddress) {
       `;
     }
 
-    // Disable trading if graduated
+    // Route to Raydium for graduated tokens — trading stays fully enabled
     if (poolData.status === 'graduated') {
-      const buyBtn = document.getElementById('buy-btn');
-      const sellBtn = document.getElementById('sell-btn');
-      if (buyBtn) { buyBtn.disabled = true; buyBtn.textContent = 'Graduated — Trade on Raydium'; }
-      if (sellBtn) { sellBtn.disabled = true; sellBtn.textContent = 'Graduated — Trade on Raydium'; }
-      const buyInput = document.getElementById('buy-amount');
-      const sellInput = document.getElementById('sell-amount');
-      if (buyInput) buyInput.disabled = true;
-      if (sellInput) sellInput.disabled = true;
+      _isGraduated = true;
+
+      // Show "Trading on Raydium CPMM" badge above the trade tabs
+      const tradeBox = document.getElementById('trade-box');
+      if (tradeBox) {
+        const header = tradeBox.querySelector('.card-header');
+        if (header && !header.querySelector('.raydium-badge')) {
+          const badge = document.createElement('div');
+          badge.className = 'raydium-badge';
+          badge.style.cssText = 'text-align:center;padding:6px 12px;margin-bottom:8px;background:rgba(20,241,149,0.08);border:1px solid rgba(20,241,149,0.2);border-radius:8px';
+          badge.innerHTML = '<span style="color:#14F195;font-size:0.8rem;font-weight:600">🎓 Trading on Raydium CPMM</span>'
+            + ' <span class="text-muted text-xs">• Trades routed through Raydium CPMM • 2% fee</span>';
+          header.insertBefore(badge, header.firstChild);
+        }
+      }
+
+      // Add Raydium pool link to mint info section if address is available
+      if (poolData.raydium_pool_address) {
+        const mintInfoCard = document.querySelector('#trade-layout .card.glass.mt-2:last-child .card-body');
+        if (mintInfoCard && !mintInfoCard.querySelector('.raydium-pool-row')) {
+          const row = document.createElement('div');
+          row.className = 'stat-row mt-05 raydium-pool-row';
+          row.innerHTML = `
+            <span class="text-muted text-xs">Raydium Pool</span>
+            <a href="https://raydium.io/liquidity/increase/?mode=add&pool_id=${poolData.raydium_pool_address}"
+               target="_blank" rel="noopener" class="font-mono text-xs" style="color:#14F195">
+              ${poolData.raydium_pool_address.slice(0, 8)}… ↗
+            </a>
+          `;
+          mintInfoCard.appendChild(row);
+        }
+      }
+    } else {
+      _isGraduated = false;
     }
 
     // Draw simple price chart from history
@@ -765,7 +799,10 @@ async function updateBuyQuote(mintAddress) {
 
   try {
     const lamports = Math.round(solAmount * LAMPORTS_PER_SOL);
-    const quote = await api.get(`/chain/quote?mint=${mintAddress}&side=buy&amount=${lamports}`);
+    const quoteEndpoint = _isGraduated
+      ? `/chain/quote/post-grad?mint=${mintAddress}&side=buy&amount=${lamports}`
+      : `/chain/quote?mint=${mintAddress}&side=buy&amount=${lamports}`;
+    const quote = await api.get(quoteEndpoint);
 
     document.getElementById('buy-tokens-out').textContent = quote.output || '—';
     document.getElementById('buy-fee').textContent = `${quote.fee} SOL`;
@@ -788,7 +825,10 @@ async function updateSellQuote(mintAddress) {
 
   try {
     const raw = Math.round(tokenAmount * Math.pow(10, TOKEN_DECIMALS));
-    const quote = await api.get(`/chain/quote?mint=${mintAddress}&side=sell&amount=${raw}`);
+    const quoteEndpoint = _isGraduated
+      ? `/chain/quote/post-grad?mint=${mintAddress}&side=sell&amount=${raw}`
+      : `/chain/quote?mint=${mintAddress}&side=sell&amount=${raw}`;
+    const quote = await api.get(quoteEndpoint);
 
     document.getElementById('sell-sol-out').textContent = quote.output || '—';
     document.getElementById('sell-fee').textContent = `${quote.fee} SOL`;
@@ -819,8 +859,9 @@ async function executeBuy(mintAddress) {
   btn.textContent = 'Building transaction...';
 
   try {
-    // Build on-chain transaction from server
-    const result = await api.post('/chain/build/buy', {
+    // Build on-chain transaction from server (Raydium CPMM if graduated)
+    const buyEndpoint = _isGraduated ? '/chain/build/post-grad/buy' : '/chain/build/buy';
+    const result = await api.post(buyEndpoint, {
       mintAddress,
       buyerWallet: getPublicKey(),
       solAmount,
@@ -839,7 +880,8 @@ async function executeBuy(mintAddress) {
     toast(`Transaction submitted! <a href="https://explorer.solana.com/tx/${signature}?cluster=devnet" target="_blank">View on Explorer ↗</a>`, 'info');
 
     // Sync DB
-    await api.post('/chain/sync/trade', {
+    const syncBuyEndpoint = _isGraduated ? '/chain/sync/trade/post-grad' : '/chain/sync/trade';
+    await api.post(syncBuyEndpoint, {
       txSignature: signature,
       mintAddress,
       traderWallet: getPublicKey(),
@@ -883,7 +925,8 @@ async function executeSell(mintAddress) {
 
   try {
     const raw = Math.round(tokenAmount * Math.pow(10, TOKEN_DECIMALS)).toString();
-    const result = await api.post('/chain/build/sell', {
+    const sellEndpoint = _isGraduated ? '/chain/build/post-grad/sell' : '/chain/build/sell';
+    const result = await api.post(sellEndpoint, {
       mintAddress,
       sellerWallet: getPublicKey(),
       tokenAmount: raw,
@@ -899,7 +942,8 @@ async function executeSell(mintAddress) {
     btn.textContent = 'Confirming...';
     toast(`Transaction submitted!`, 'info');
 
-    await api.post('/chain/sync/trade', {
+    const syncSellEndpoint = _isGraduated ? '/chain/sync/trade/post-grad' : '/chain/sync/trade';
+    await api.post(syncSellEndpoint, {
       txSignature: signature,
       mintAddress,
       traderWallet: getPublicKey(),

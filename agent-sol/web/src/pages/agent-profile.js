@@ -137,7 +137,9 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
           <div style="flex:1;min-width:200px">
             <div class="flex items-center gap-1" style="flex-wrap:wrap">
               <h1 class="text-2xl font-bold" style="margin:0">${agent.name || 'Unnamed Agent'}</h1>
-              ${data.tokenized ? '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600">🪙 Tokenized</span>' : ''}
+              ${data.tokenized ? (pool?.status === 'graduated'
+                ? '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600">🎓 Graduated</span>'
+                : '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600">🪙 Tokenized</span>') : ''}
               ${isOwner ? '<span style="background:rgba(153,69,255,0.15);color:#9945FF;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600">👤 You</span>' : ''}
             </div>
             <p class="text-muted text-sm mt-05" style="font-family:var(--font-mono)">
@@ -146,9 +148,17 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
             <p class="text-muted text-xs mt-05">Registered ${new Date(agent.registeredAt * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
           </div>
           <div style="text-align:right">
-            ${data.tokenized && token?.token_symbol ? `
+            ${data.tokenized && token?.token_symbol ? (pool?.status === 'graduated' ? `
+              <button class="btn btn-primary btn-glow" id="btn-trade-token" style="background:linear-gradient(135deg,rgba(20,241,149,0.2),rgba(153,69,255,0.2));border-color:rgba(20,241,149,0.4)">
+                🎓 Trade on Raydium →
+              </button>
+            ` : `
               <button class="btn btn-primary btn-glow" id="btn-trade-token">
                 Trade $${token.token_symbol} →
+              </button>
+            `) : token?.mint_address && pool?.status === 'graduated' ? `
+              <button class="btn btn-primary btn-glow" id="btn-trade-token" style="background:linear-gradient(135deg,rgba(20,241,149,0.2),rgba(153,69,255,0.2));border-color:rgba(20,241,149,0.4)">
+                🎓 Trade on Raydium →
               </button>
             ` : `
               <button class="btn" id="btn-trade-token" disabled style="opacity:0.35;cursor:not-allowed;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.08)">
@@ -268,31 +278,61 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
               <p class="text-xs" style="font-family:var(--font-mono);word-break:break-all;opacity:0.7">
                 <a href="https://explorer.solana.com/address/${token.mint_address}?cluster=devnet" target="_blank" style="color:inherit">${token.mint_address}</a>
               </p>
+              ${pool?.raydium_pool_address ? `
+                <p class="text-muted text-xs mt-1">Raydium Pool</p>
+                <p class="text-xs" style="font-family:var(--font-mono);word-break:break-all">
+                  <a href="https://raydium.io/liquidity/increase/?mode=add&pool_id=${pool.raydium_pool_address}" target="_blank" rel="noopener" style="color:#14F195">${pool.raydium_pool_address}</a>
+                </p>
+              ` : ''}
             </div>
 
-            <!-- Bonding Curve Info -->
+            <!-- Bonding Curve / Raydium Info -->
             <div style="margin-top:12px;padding:10px;background:rgba(20,241,149,0.03);border:1px solid rgba(20,241,149,0.1);border-radius:8px">
-              <div class="flex items-center" style="justify-content:space-between">
-                <span class="text-muted text-xs">Bonding Curve</span>
-                <span class="text-xs" style="color:#14F195">🔒 LP Locked</span>
-              </div>
-              <div class="flex items-center mt-05" style="justify-content:space-between">
-                <span class="text-muted text-xs">Fees</span>
-                <span class="text-xs">2% — <span style="color:#14F195">1.4%</span> creator / <span style="color:#9945FF">0.6%</span> platform</span>
-              </div>
-              <div style="margin-top:8px">
-                <div class="flex items-center text-xs" style="justify-content:space-between;margin-bottom:4px">
-                  <span class="text-muted">Graduation</span>
-                  <span class="font-mono" style="color:#9945FF;font-weight:600">${(Math.min((parseFloat(pool?.pool_sol || 0) / 85) * 100, 100)).toFixed(1)}%</span>
+              ${pool?.status === 'graduated' ? `
+                <div class="flex items-center" style="justify-content:space-between">
+                  <span class="text-muted text-xs">Raydium CPMM</span>
+                  <span class="text-xs" style="color:#14F195">🔒 LP Permanently Locked</span>
                 </div>
-                <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
-                  <div style="height:100%;width:${Math.min((parseFloat(pool?.pool_sol || 0) / 85) * 100, 100)}%;background:linear-gradient(90deg,#9945FF,#14F195);border-radius:3px"></div>
+                <div class="flex items-center mt-05" style="justify-content:space-between">
+                  <span class="text-muted text-xs">Fees</span>
+                  <span class="text-xs">2% — <span style="color:#14F195">1.4%</span> creator / <span style="color:#9945FF">0.6%</span> platform</span>
                 </div>
-                <div class="flex items-center text-xs" style="justify-content:space-between;margin-top:3px">
-                  <span class="text-muted">${parseFloat(pool?.pool_sol || 0).toFixed(2)} / 85 SOL</span>
-                  <span class="text-muted">→ Raydium</span>
+                <div style="margin-top:8px">
+                  <div class="flex items-center text-xs" style="justify-content:space-between;margin-bottom:4px">
+                    <span class="text-muted">Status</span>
+                    <span class="font-mono" style="color:#14F195;font-weight:600">🎓 Graduated to Raydium</span>
+                  </div>
+                  <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+                    <div style="height:100%;width:100%;background:linear-gradient(90deg,#9945FF,#14F195);border-radius:3px"></div>
+                  </div>
+                  <div class="flex items-center text-xs" style="justify-content:space-between;margin-top:3px">
+                    <span style="color:#14F195">✅ Liquidity permanently locked</span>
+                    <span class="text-muted">Raydium CPMM</span>
+                  </div>
                 </div>
-              </div>
+              ` : `
+                <div class="flex items-center" style="justify-content:space-between">
+                  <span class="text-muted text-xs">Bonding Curve</span>
+                  <span class="text-xs" style="color:#14F195">🔒 LP Locked</span>
+                </div>
+                <div class="flex items-center mt-05" style="justify-content:space-between">
+                  <span class="text-muted text-xs">Fees</span>
+                  <span class="text-xs">2% — <span style="color:#14F195">1.4%</span> creator / <span style="color:#9945FF">0.6%</span> platform</span>
+                </div>
+                <div style="margin-top:8px">
+                  <div class="flex items-center text-xs" style="justify-content:space-between;margin-bottom:4px">
+                    <span class="text-muted">Graduation</span>
+                    <span class="font-mono" style="color:#9945FF;font-weight:600">${(Math.min((parseFloat(pool?.pool_sol || 0) / 85) * 100, 100)).toFixed(1)}%</span>
+                  </div>
+                  <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+                    <div style="height:100%;width:${Math.min((parseFloat(pool?.pool_sol || 0) / 85) * 100, 100)}%;background:linear-gradient(90deg,#9945FF,#14F195);border-radius:3px"></div>
+                  </div>
+                  <div class="flex items-center text-xs" style="justify-content:space-between;margin-top:3px">
+                    <span class="text-muted">${parseFloat(pool?.pool_sol || 0).toFixed(2)} / 85 SOL</span>
+                    <span class="text-muted">→ Raydium</span>
+                  </div>
+                </div>
+              `}
             </div>
 
             <!-- Dev Buy Transparency -->
@@ -494,11 +534,12 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
 }
 
 function wireProfileEvents(content, data, agentId, state) {
-  // Trade button
+  // Trade button — works for both tokenized and graduated tokens
   content.querySelector('#btn-trade-token')?.addEventListener('click', () => {
-    if (data.token?.mint_address) {
+    const mintAddr = data.token?.mint_address || data.pool?.mint?.toString();
+    if (mintAddr) {
       document.dispatchEvent(new CustomEvent('navigate', {
-        detail: { page: 'trade', mintAddress: data.token.mint_address }
+        detail: { page: 'trade', mintAddress: mintAddr }
       }));
     }
   });

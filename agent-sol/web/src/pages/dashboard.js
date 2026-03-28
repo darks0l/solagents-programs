@@ -347,7 +347,7 @@ function renderConnectedDashboard(container, state) {
     ` : ''}
 
     <!-- Stats -->
-    <div class="grid-4 mt-2" id="stats-grid">
+    <div class="grid-4 mt-2" id="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
       <div class="card stat-card">
         <div class="stat-value" id="stat-active-jobs">—</div>
         <div class="stat-label">Active Jobs</div>
@@ -363,6 +363,10 @@ function renderConnectedDashboard(container, state) {
       <div class="card stat-card">
         <div class="stat-value" id="stat-volume">—</div>
         <div class="stat-label">Total Escrowed</div>
+      </div>
+      <div class="card stat-card" id="stat-graduated-card" style="display:none">
+        <div class="stat-value" id="stat-graduated" style="color:#14F195">—</div>
+        <div class="stat-label">🎓 Graduated</div>
       </div>
     </div>
 
@@ -390,6 +394,11 @@ function renderConnectedDashboard(container, state) {
         <div style="font-size: 1.5rem; margin-bottom: 8px;">📈</div>
         <h4>Trade</h4>
         <p class="text-secondary text-sm">Buy & sell agent tokens on the bonding curve</p>
+      </div>
+      <div class="card quick-action" data-page="tracker" id="qa-graduated" style="display:none;border-color:rgba(20,241,149,0.2)">
+        <div style="font-size: 1.5rem; margin-bottom: 8px;">🎓</div>
+        <h4>Graduated Tokens</h4>
+        <p class="text-secondary text-sm" id="qa-graduated-desc">Tokens now trading on Raydium</p>
       </div>
     </div>
 
@@ -564,12 +573,30 @@ function renderConnectedDashboard(container, state) {
 
 async function loadDashboardData() {
   try {
-    const [stats, platformStats, agentsList] = await Promise.all([
+    const [stats, platformStats, agentsList, tokensData] = await Promise.all([
       api.get('/jobs/stats').catch(() => null),
       api.get('/platform/stats').catch(() => null),
       api.get('/agents').catch(() => null),
+      api.get('/tokens?limit=100').catch(() => null),
     ]);
     const el = (id) => document.getElementById(id);
+
+    // Show graduated token count if any
+    if (tokensData) {
+      const tokens = tokensData.tokens || tokensData || [];
+      const graduated = tokens.filter(t => t.status === 'graduated');
+      if (graduated.length > 0) {
+        const gradCard = el('stat-graduated-card');
+        const gradStat = el('stat-graduated');
+        if (gradCard) gradCard.style.display = '';
+        if (gradStat) gradStat.textContent = graduated.length.toString();
+        // Show quick action
+        const qaGrad = el('qa-graduated');
+        const qaGradDesc = el('qa-graduated-desc');
+        if (qaGrad) qaGrad.style.display = '';
+        if (qaGradDesc) qaGradDesc.textContent = `${graduated.length} token${graduated.length !== 1 ? 's' : ''} now trading on Raydium`;
+      }
+    }
 
     if (stats) {
       const active = (stats.open || 0) + (stats.funded || 0) + (stats.submitted || 0);
