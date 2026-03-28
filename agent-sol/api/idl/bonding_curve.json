@@ -1,5 +1,5 @@
 {
-  "address": "So11111111111111111111111111111111111111112",
+  "address": "nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof",
   "metadata": {
     "name": "bonding_curve",
     "version": "0.1.0",
@@ -466,7 +466,7 @@
         },
         {
           "name": "raydium_program",
-          "address": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"
+          "address": "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb"
         },
         {
           "name": "raydium_pool_state",
@@ -1175,7 +1175,7 @@
           "docs": [
             "Raydium CPMM program"
           ],
-          "address": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"
+          "address": "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb"
         },
         {
           "name": "raydium_amm_config",
