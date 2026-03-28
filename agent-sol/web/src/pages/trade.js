@@ -23,6 +23,7 @@ const MAX_WS_RETRIES = 5;
 // Tracks whether the current token has graduated to Raydium.
 // When true, all buy/sell/quote calls route to post-grad endpoints.
 let _isGraduated = false;
+let _cachedSolPriceUsd = 0;
 
 // ── Wallet Balances ──────────────────────────────────────────
 let _solBalance = null;   // in SOL (number)
@@ -85,6 +86,21 @@ function _renderBalanceBar() {
   if (buyBal) buyBal.textContent = `Balance: ${solStr} SOL`;
   const sellBal = document.getElementById('sell-token-balance');
   if (sellBal) sellBal.textContent = _tokenBalance !== null ? `Balance: ${tokenStr} ${_tokenSymbol}` : '';
+}
+
+function _updateMcapDisplay(mcapSolRaw, solPriceUsd) {
+  const el = document.getElementById('stat-mcap');
+  if (!el) return;
+  const mcapSol = parseFloat(mcapSolRaw || 0);
+  if (mcapSol > 0 && solPriceUsd > 0) {
+    const usd = mcapSol * solPriceUsd;
+    el.textContent = '$' + usd.toLocaleString(undefined, { maximumFractionDigits: usd < 100 ? 2 : 0 });
+  } else if (mcapSol > 0) {
+    // No USD price yet — show SOL with label so it's not confusing
+    el.textContent = `${mcapSol.toFixed(2)} SOL`;
+  } else {
+    el.textContent = '—';
+  }
 }
 
 function _formatTokenBalance(amt) {
@@ -257,11 +273,12 @@ async function _refreshPoolStats(mintAddress) {
       const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
       const cgData = await cgRes.json();
       const solPriceUsd = cgData.solana?.usd || 0;
-      const mcapSol = parseFloat(poolData.market_cap_sol || 0);
-      if (mcapSol > 0 && solPriceUsd > 0) {
-        document.getElementById('stat-mcap').textContent = '$' + (mcapSol * solPriceUsd).toLocaleString(undefined, { maximumFractionDigits: 0 });
-      }
-    } catch {}
+      if (solPriceUsd > 0) _cachedSolPriceUsd = solPriceUsd;
+      _updateMcapDisplay(poolData.market_cap_sol, solPriceUsd || _cachedSolPriceUsd);
+    } catch {
+      // CoinGecko failed — use cached price
+      _updateMcapDisplay(poolData.market_cap_sol, _cachedSolPriceUsd);
+    }
   } catch {}
 }
 
@@ -638,24 +655,18 @@ async function loadTradePageData(mintAddress) {
     `;
 
     // Fetch SOL/USD price
-    let solPriceUsd = 0;
+    let solPriceUsd = _cachedSolPriceUsd;
     try {
       const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
       const cgData = await cgRes.json();
       solPriceUsd = cgData.solana?.usd || 0;
+      if (solPriceUsd > 0) _cachedSolPriceUsd = solPriceUsd;
     } catch {}
 
     // Update stats
     const price = parseFloat(poolData.price_sol || poolData.current_price || '0');
     document.getElementById('stat-price').textContent = price < 0.001 ? price.toFixed(10) : price.toFixed(6);
-    const mcapSol = parseFloat(poolData.market_cap_sol || 0);
-    if (mcapSol > 0 && solPriceUsd > 0) {
-      document.getElementById('stat-mcap').textContent = '$' + (mcapSol * solPriceUsd).toLocaleString(undefined, { maximumFractionDigits: 0 });
-    } else if (mcapSol > 0) {
-      document.getElementById('stat-mcap').textContent = `${mcapSol.toFixed(2)} SOL`;
-    } else {
-      document.getElementById('stat-mcap').textContent = '—';
-    }
+    _updateMcapDisplay(poolData.market_cap_sol, solPriceUsd);
     document.getElementById('stat-vol').textContent = poolData.total_volume_sol ? `${parseFloat(poolData.total_volume_sol).toFixed(4)} SOL` : '0 SOL';
 
     // Graduation progress bar
