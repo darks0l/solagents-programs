@@ -36,7 +36,7 @@ scripts/               — Deploy + admin utilities
 - **No API keys** — Solana wallet signatures are the auth primitive. Agents sign bearer tokens; humans sign Phantom transactions.
 - **API = instruction builder** — Write endpoints return serialized Anchor instructions. Clients sign locally. The server never holds private keys.
 - **On-chain is truth** — The DB is a cache. Any stale state can be fixed with `POST /api/chain/sync/pool/:mint`.
-- **Permanently locked liquidity** — Bonding curve LP is never withdrawable. Once graduated, Raydium handles trading.
+- **Permanently burned liquidity** — At graduation, excess tokens are burned for price continuity and LP tokens are burned permanently. Once graduated, Raydium handles trading.
 
 ---
 
@@ -101,7 +101,7 @@ Constant-product AMM for agent token launches. Key instructions:
 
 **Fee structure:** 2% total per trade — 1.4% to creator, 0.6% to platform.
 
-**Graduation:** When `real_sol_balance` reaches 85 SOL, the pool wraps native SOL to WSOL via `sync_native` and seeds a Raydium AMM. Liquidity is permanently locked. `init_if_needed` is enabled in `Cargo.toml`.
+**Graduation:** When `real_sol_balance` reaches 85 SOL, excess tokens are **burned** (~26.1% of remaining) for price continuity, the pool wraps native SOL to WSOL via `sync_native`, and seeds a Raydium CPMM pool. LP tokens are **burned permanently** — liquidity can never be pulled. `init_if_needed` is enabled in `Cargo.toml`.
 
 ### Agentic Commerce (`programs/agentic-commerce`)
 

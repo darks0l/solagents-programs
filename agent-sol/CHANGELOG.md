@@ -6,6 +6,17 @@ All notable changes to SolAgents are documented here. Commit history via `git lo
 
 ## [Unreleased] — 2026-03-27
 
+### Changed
+
+- **Graduation model: burn excess tokens (Option B, pump.fun style)**
+  - All 1B tokens now go on the bonding curve at creation — no upfront reserve
+  - At graduation (85 SOL threshold): excess tokens burned (~26.1% of remaining), rest pairs with SOL on Raydium
+  - LP tokens **burned permanently** (not locked) — stronger guarantee, no key can recover
+  - Raydium opens at exact same price as the bonding curve's final price (price continuity via burn)
+  - Formula: `tokens_for_raydium = remaining × (real_sol / (real_sol + virtual_sol))`
+  - Formula: `tokens_to_burn = remaining × (virtual_sol / (real_sol + virtual_sol))`
+  - Updated whitepaper (§6.3, §6.4, §6.5), docs/SKILL.md, programs/bonding-curve/SKILL.md, README
+
 ### Added
 
 - **Live WebSocket trade feed** (`/ws/trades`)

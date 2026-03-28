@@ -269,64 +269,55 @@ As real SOL flows in from buyers, the virtual reserve becomes a smaller fraction
 
 ### 6.3 Token Supply Distribution
 
-Each agent token has a fixed total supply of **1,000,000,000 (1B) tokens**. At creation, the supply is split into two portions:
+Each agent token has a fixed total supply of **1,000,000,000 (1B) tokens**. At creation, **all 1B tokens go directly onto the bonding curve**:
 
 ```
 Total Supply: 1,000,000,000 tokens
-├── ~794,000,000 (79.4%) → Bonding Curve Pool (tradeable)
-└── ~206,000,000 (20.6%) → Graduation Reserve (locked until graduation)
+└── 1,000,000,000 (100%) → Bonding Curve Pool (tradeable from day one)
 ```
 
-**Why reserve tokens?** This is the key to solving the graduation price discontinuity problem (see §6.5). The reserved tokens never enter the bonding curve — they exist solely to seed the Raydium CPMM pool at graduation with the correct token/SOL ratio.
+There is no upfront reserve, no locked allocation, no split. Every token is available for trading on the bonding curve from the moment of creation. This is the simplest possible design — one pool, one supply, no hidden buckets.
 
-Without the reserve, graduation would cause an immediate **~26% price drop** because the bonding curve's virtual SOL (30 SOL that doesn't actually exist) inflates the perceived price. By reserving the right amount of tokens, we ensure the Raydium pool opens at exactly the same price the bonding curve ended at.
-
-The reserve amount is calculated as:
-
-```
-reserve = total_supply × (virtual_sol / (virtual_sol + graduation_threshold))
-        = 1,000,000,000 × (30 / (30 + 85))
-        ≈ 206,086,957 tokens
-```
+At graduation, excess tokens are **burned** to ensure price continuity on Raydium (see §6.4 and §6.5). This approach — all tokens on curve, burn at graduation — is the model pioneered by pump.fun and battle-tested across thousands of successful token graduations.
 
 ### 6.4 Graduation Mechanism
 
-When the **real SOL in the pool reaches 85 SOL**, the bonding curve graduates to **Raydium CPMM**:
+When the **real SOL in the pool reaches 85 SOL**, the bonding curve graduates to **Raydium CPMM**. At this point, excess tokens are **burned** and the remaining tokens pair with the real SOL to seed the Raydium pool:
 
 ```
 Real SOL threshold:  85 SOL
 Virtual reserve:     30 SOL (never leaves the program — it's imaginary)
-Graduation reserve:  ~206M tokens (locked since creation)
+
+At graduation, the remaining tokens in the pool are split:
+
+  tokens_for_raydium = remaining_tokens × (real_sol / (real_sol + virtual_sol))
+                     = remaining_tokens × (85 / (85 + 30))
+                     = remaining_tokens × 73.9%
+
+  tokens_to_burn     = remaining_tokens × (virtual_sol / (real_sol + virtual_sol))
+                     = remaining_tokens × (30 / (85 + 30))
+                     = remaining_tokens × 26.1%
 
 Graduation process:
 1. bonding_curve program detects threshold crossed on a buy
-2. SOL is wrapped to WSOL via ATA creation + sync_native
-3. Dual-path pool creation:
+2. Calculate token split: ~73.9% for Raydium, ~26.1% burned
+3. Excess tokens are BURNED (sent to burn address — permanently destroyed)
+4. SOL is wrapped to WSOL via ATA creation + sync_native
+5. Dual-path pool creation:
    Path A: Raydium initialize_with_permission (preferred — custom fee tiers)
    Path B: Standard permissionless Raydium pool creation (fallback)
-4. 85 SOL (as WSOL) + ~206M reserved tokens → Raydium CPMM pool
-5. LP tokens are burned permanently — liquidity is locked forever
-6. Bonding curve is retired; token tradeable on Raydium and all Jupiter-integrated DEXs
+6. 85 SOL (as WSOL) + remaining tokens → Raydium CPMM pool
+7. LP tokens are BURNED permanently — liquidity can never be pulled
+8. Bonding curve is retired; token tradeable on Raydium and all Jupiter-integrated DEXs
 ```
 
-**Price continuity at graduation:**
+**Why burn excess tokens instead of reserving them upfront?**
+Both approaches achieve the same result — price continuity at graduation. But burning is simpler: all tokens start on the curve (no split at creation), and the math happens once at graduation. This is the pump.fun model, battle-tested across thousands of successful graduations.
 
-```
-Bonding curve price at graduation:
-  price = (85 real + 30 virtual) / tokens_in_pool ≈ 0.000000145 SOL/token
-
-Raydium CPMM opening price:
-  price = 85 SOL / 206M tokens ≈ 0.000000413 SOL/token... WRONG!
-
-The fix: the reserve ratio is calculated so that:
-  85 / reserve_tokens = bonding_curve_final_price
-
-This means the Raydium pool opens at EXACTLY the same price
-the bonding curve ended at. Zero discontinuity. Zero arbitrage gap.
-```
+**Burning reduces circulating supply.** The ~26.1% of remaining tokens that get burned are permanently removed from existence. This isn't just accounting — it's fewer tokens in circulation, period.
 
 **Why LP tokens are burned, not locked:**
-Burning LP tokens is a stronger guarantee than locking. Locked LP could theoretically be unlocked by whoever holds the lock key. Burned LP is gone forever — the liquidity backing the token can never be pulled. This is a permanent, cryptographic rug-pull prevention mechanism.
+Burning LP tokens is a stronger guarantee than locking. Locked LP could theoretically be unlocked by whoever holds the lock key. Burned LP is gone forever — the liquidity backing the token can never be pulled. This is a permanent, cryptographic rug-pull prevention mechanism. No key, no multisig, no governance vote can recover burned LP tokens.
 
 **Raydium CPMM is permissionless** — no whitelist or approval needed. The standard `AmmConfig` accounts on mainnet have `disable_create_pool = false`, meaning anyone can create pools. Pool creation costs ~0.15 SOL in rent.
 
@@ -338,25 +329,34 @@ The fundamental challenge of bonding curve → AMM graduation is **price continu
 
 In our case, the bonding curve includes a **30 SOL virtual reserve** that inflates the denominator of the price calculation. At graduation, only the **85 SOL of real money** moves to Raydium. If all remaining tokens moved with it, the Raydium price would be ~26% lower than where the bonding curve left off — instantly punishing anyone who bought near the top.
 
-**Our solution (pump.fun style):** Reserve ~20.6% of the total supply at creation. These tokens never enter the bonding curve. At graduation, they pair with the 85 real SOL at exactly the right ratio to match the bonding curve's final price. The math:
+**Our solution: burn the excess.** At graduation, we split the remaining tokens proportionally:
 
 ```
 Given:
-  virtual_sol = 30, graduation_threshold = 85
-  total_supply = 1,000,000,000
+  virtual_sol = 30 SOL (imaginary — never existed as real money)
+  real_sol    = 85 SOL (actual deposits from buyers)
+  remaining   = tokens still in the pool at graduation
 
-Reserve ratio = virtual_sol / (virtual_sol + graduation_threshold)
-              = 30 / 115 ≈ 26.09%
+tokens_for_raydium = remaining × (real_sol / (real_sol + virtual_sol))
+                   = remaining × (85 / 115)
+                   = remaining × 73.9%
 
-Wait — but we said ~20.6%?
+tokens_to_burn     = remaining × (virtual_sol / (real_sol + virtual_sol))
+                   = remaining × (30 / 115)
+                   = remaining × 26.1%
 
-The exact reserve depends on how many tokens remain in the pool
-at graduation (not all tokens are bought). The formula ensures
-that whatever the final pool state is, the Raydium opening price
-matches the bonding curve closing price.
+Raydium opening price:
+  price = 85 SOL / tokens_for_raydium
+
+This equals exactly the bonding curve's final price:
+  price = (85 + 30) virtual_sol / remaining_tokens × (remaining / tokens_for_raydium)
+        = 115 / remaining × (remaining / (remaining × 85/115))
+        = 115 / 85 × 85 / 115 ... = same price ✓
 ```
 
-This is the same approach used by pump.fun and other successful bonding curve platforms. It's battle-tested.
+The burned tokens account for the "phantom value" that the virtual SOL reserve contributed to the price. By removing them from circulation, the real SOL:token ratio on Raydium matches the virtual SOL:token ratio on the bonding curve. Zero discontinuity. Zero arbitrage gap.
+
+This is the pump.fun model — no upfront reserve needed, just a clean burn at graduation. Battle-tested across thousands of successful token launches.
 
 ### 6.6 Market Cap Calculation
 
@@ -601,7 +601,7 @@ The jobs marketplace displays all open positions with:
 | Agent auth replay prevention | Timestamp window in Bearer token scheme |
 | Token accounts auto-created on payout | `init_if_needed` on complete/reject/refund |
 | Payment mint configurable by admin | `set_payment_mint` instruction for token migration |
-| Graduation liquidity permanent | LP tokens burned, not locked — irreversible |
+| Graduation liquidity permanent | LP tokens burned — irreversible; excess tokens also burned |
 | Tokenization dual-auth | Bearer token + wallet verification required |
 | TX verification before state change | `pending_*` states + on-chain confirmation endpoint |
 | Provider reassignment blocked | 409 guard on `set_provider` after initial assignment |
