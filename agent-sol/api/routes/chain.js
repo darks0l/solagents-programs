@@ -134,13 +134,13 @@ export default async function chainRoutes(fastify) {
         total_trades: pool.totalTrades?.toNumber() || 0,
         total_buys: pool.totalBuys?.toNumber() || 0,
         total_sells: pool.totalSells?.toNumber() || 0,
-        status: pool.graduated ? 'graduated' : 'active',
+        status: (pool.status?.graduated !== undefined) ? 'graduated' : 'active',
         graduated_at: pool.graduatedAt?.toNumber() || 0,
         market_cap_sol: (vTokenBig > 0n
           ? (Number(BigInt(pool.realSolBalance.toString())) / LAMPORTS_PER_SOL + 30) * (Number(BigInt(pool.totalSupply.toString()) / BigInt(1e9)) / (vToken / 1e9))
           : 0).toFixed(4),
         graduation_progress: pool.realSolBalance
-          ? ((Number(BigInt(pool.realSolBalance.toString())) / 85_000_000_000) * 100).toFixed(2) + '%'
+          ? ((Number(BigInt(pool.realSolBalance.toString())) / Number(config?.graduationThreshold || 85_000_000_000n)) * 100).toFixed(2) + '%'
           : '0%',
       };
     } catch (err) {
@@ -236,7 +236,7 @@ export default async function chainRoutes(fastify) {
             price_sol: priceSol.toFixed(12),
             real_sol: (pool.realSolBalance.toNumber() / LAMPORTS_PER_SOL).toFixed(9),
             total_trades: pool.totalTrades?.toNumber() || 0,
-            status: pool.graduated ? 'graduated' : 'active',
+            status: (pool.status?.graduated !== undefined) ? 'graduated' : 'active',
           };
         }),
         count: pools.length,
@@ -626,8 +626,8 @@ export default async function chainRoutes(fastify) {
           const realSol = BigInt(pool.realSolBalance.toString());
           const threshold = BigInt(config.graduationThreshold.toString());
 
-          // pool.status: 0 = Active, 1 = Graduated (on-chain enum)
-          const poolStatus = typeof pool.status === 'number' ? pool.status : (pool.graduated ? 1 : 0);
+          // pool.status: Anchor enum { active: {} } or { graduated: {} }
+          const poolStatus = (pool.status?.graduated !== undefined) ? 1 : 0;
           const dbTokenStatus = dbToken?.status;
 
           if (realSol >= threshold && poolStatus === 0 && dbTokenStatus !== 'graduating' && dbTokenStatus !== 'graduated') {
