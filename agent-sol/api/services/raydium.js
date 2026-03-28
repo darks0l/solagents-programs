@@ -56,8 +56,8 @@ export const RAYDIUM_CPMM_PROGRAM_ID = new PublicKey(
 export const RAYDIUM_AMM_CONFIG = new PublicKey(
   process.env.RAYDIUM_AMM_CONFIG ||
     (CLUSTER === 'mainnet'
-      ? 'D4FPEruKEHrG5TenZ2mpDGEfu1iUvTiqBxvpU8HLBvC2'
-      : 'CQYbhr6amxUER4p5SC44C63R4eLGPecf3jhMCBifeTNU') // devnet default
+      ? 'D4FPEruKEHrG5TenZ2mpDGEfu1iUvTiqBxvpU8HLBvC2'   // mainnet 0.01%
+      : '5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy')  // devnet index=0, 0.0003%
 );
 
 /**
@@ -66,7 +66,9 @@ export const RAYDIUM_AMM_CONFIG = new PublicKey(
  */
 export const RAYDIUM_CREATE_POOL_FEE = process.env.RAYDIUM_CREATE_POOL_FEE
   ? new PublicKey(process.env.RAYDIUM_CREATE_POOL_FEE)
-  : null; // set at runtime for mainnet
+  : CLUSTER === 'mainnet'
+    ? new PublicKey('DNXgeM9EiiaAbaWvwjHj9fQQLAX5ZsfHyvmYUNRAdNC8')  // mainnet fee receiver
+    : new PublicKey('3oE58BKVt8KuYkGxx8zBojugnymWmBiyafWgMrnb6eYy'); // devnet fee receiver
 
 // ── Discriminators ────────────────────────────────────────────
 

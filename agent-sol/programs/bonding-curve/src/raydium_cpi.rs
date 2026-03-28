@@ -12,10 +12,16 @@ use anchor_lang::solana_program::{
     program::invoke_signed,
 };
 
-/// Raydium CPMM mainnet program ID
+/// Raydium CPMM program ID
+#[cfg(feature = "devnet")]
+pub const RAYDIUM_CPMM_PROGRAM: Pubkey = pubkey!("DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb");
+#[cfg(not(feature = "devnet"))]
 pub const RAYDIUM_CPMM_PROGRAM: Pubkey = pubkey!("CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C");
 
-/// Raydium create_pool_fee receiver (mainnet)
+/// Raydium create_pool_fee receiver
+#[cfg(feature = "devnet")]
+pub const CREATE_POOL_FEE_RECEIVER: Pubkey = pubkey!("3oE58BKVt8KuYkGxx8zBojugnymWmBiyafWgMrnb6eYy");
+#[cfg(not(feature = "devnet"))]
 pub const CREATE_POOL_FEE_RECEIVER: Pubkey = pubkey!("DNXgeM9EiiaAbaWvwjHj9fQQLAX5ZsfHyvmYUNRAdNC8");
 
 /// Raydium pool seed constants
