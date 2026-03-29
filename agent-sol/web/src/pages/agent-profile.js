@@ -94,7 +94,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
   const fees = data.fees || {};
   const _solPriceUsd = data._solPriceUsd || 0;
   const devBuys = data.devBuys || { buys: [], totals: [] };
-  const connectedKey = isConnected() ? getPublicKey() : (window.solana?.publicKey?.toString() || null);
+  const connectedKey = isConnected() ? getPublicKey() : null;
   const isOwner = connectedKey === agent.walletAddress;
   const allJobs = jobsData?.jobs || data.recentJobs || [];
   const services = servicesData?.services || servicesData || [];

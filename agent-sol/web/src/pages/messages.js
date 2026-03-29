@@ -103,10 +103,10 @@ export function renderMessages(container, state) {
   }
 }
 
-// Default channels — always shown even without API
+// Default channels - always shown even without API
 const DEFAULT_CHANNELS = [
   { id: 'ch-general', name: 'General', slug: 'general', description: 'General discussion about SolAgents, AI agents, and the platform', icon: '<img class="icon" src="/icons/white/chat.png" alt="Chat">', threadCount: 0 },
-  { id: 'ch-showcase', name: 'Agent Showcase', slug: 'showcase', description: 'Show off your agents — share what they can do and their results', icon: '<img class="icon" src="/icons/white/gear.png" alt="Agent">', threadCount: 0 },
+  { id: 'ch-showcase', name: 'Agent Showcase', slug: 'showcase', description: 'Show off your agents - share what they can do and their results', icon: '<img class="icon" src="/icons/white/gear.png" alt="Agent">', threadCount: 0 },
   { id: 'ch-help', name: 'Help & Support', slug: 'help', description: 'Get help with the platform, agent registration, tokenization, or jobs', icon: '<img class="icon" src="/icons/white/chat.png" alt="Help">', threadCount: 0 },
   { id: 'ch-ideas', name: 'Feature Requests', slug: 'ideas', description: 'Suggest new features and improvements for SolAgents', icon: '<img class="icon" src="/icons/white/lightbulb.png" alt="Ideas">', threadCount: 0 },
   { id: 'ch-trading', name: 'Token Trading', slug: 'trading', description: 'Discuss agent tokens, trading strategies, and market analysis', icon: '<img class="icon" src="/icons/white/chart.png" alt="Chart">', threadCount: 0 },
@@ -121,7 +121,7 @@ async function loadForumChannels() {
     const data = await api.get('/forum/channels');
     if (data?.channels?.length) channels = data.channels;
   } catch (err) {
-    // API not available — use defaults, totally fine for browsing
+    // API not available - use defaults, totally fine for browsing
   }
 
   content.innerHTML = `
@@ -165,7 +165,7 @@ async function loadChannel(slug) {
     threads = data?.threads || [];
     apiUp = true;
   } catch (err) {
-    // API not available — show empty channel, still browseable
+    // API not available - show empty channel, still browseable
   }
 
   content.innerHTML = `
@@ -264,7 +264,7 @@ async function openThread(threadId) {
     document.getElementById('btn-reply')?.addEventListener('click', async () => {
       const content = document.getElementById('reply-content')?.value.trim();
       if (!content || content.length < 1) return toast('Reply cannot be empty', 'error');
-      toast('Posting requires wallet connection — coming with Phantom integration', 'info');
+      toast('Connect your wallet to post messages', 'info');
     });
 
     modal.classList.remove('hidden');
@@ -333,7 +333,7 @@ function openNewThreadModal(slug, channelName) {
         loadForum(state);
       }
     } catch (err) {
-      toast('Failed to post thread — please try again', 'error');
+      toast('Failed to post thread - please try again', 'error');
     }
   });
 }
@@ -341,7 +341,7 @@ function openNewThreadModal(slug, channelName) {
 async function loadDMs(state) {
   const content = document.getElementById('messages-content');
 
-  // Not connected — show connect prompt
+  // Not connected - show connect prompt
   if (!state.connected || !state.wallet) {
     content.innerHTML = `
       <div class="card glass text-center p-3">
@@ -355,13 +355,13 @@ async function loadDMs(state) {
     return;
   }
 
-  // Connected — show DM inbox
+  // Connected - show DM inbox
   let conversations = [];
   try {
     const data = await api.get(`/messages/conversations?wallet=${state.wallet}`);
     conversations = data?.conversations || [];
   } catch (err) {
-    // API may not have DM endpoints yet — that's fine
+    // API may not have DM endpoints yet - that's fine
   }
 
   content.innerHTML = `
@@ -400,7 +400,7 @@ async function loadDMs(state) {
   `;
 
   document.getElementById('btn-new-dm')?.addEventListener('click', () => {
-    toast('Direct messages coming in v2 — encrypted E2E messaging between wallets', 'info');
+    toast('Direct messages coming in v2 - encrypted E2E messaging between wallets', 'info');
   });
 }
 

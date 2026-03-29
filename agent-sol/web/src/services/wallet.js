@@ -1,99 +1,44 @@
 /**
- * Wallet Service — Phantom + Solana wallet integration
+ * Wallet Service — Solana Wallet Adapter (multi-wallet support)
  *
- * Supports: Phantom, Backpack, Solflare (all use window.solana or window.solana-like APIs)
- * Handles: connect, disconnect, sign, sendTransaction, getBalance
+ * Supports: Phantom, Solflare, Backpack, Coinbase, Ledger + any injected wallet
+ * Provides: connect (with modal), disconnect, sign, send, auto-reconnect
  */
 
+import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
+import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
+import { CoinbaseWalletAdapter } from '@solana/wallet-adapter-coinbase';
+import { LedgerWalletAdapter } from '@solana/wallet-adapter-ledger';
+import { Connection, Transaction } from '@solana/web3.js';
+
+// ── Config ───────────────────────────────────────────────────
+const RPC_ENDPOINT = 'https://api.devnet.solana.com';
+
+// ── Adapters ─────────────────────────────────────────────────
+const WALLETS = [
+  new PhantomWalletAdapter(),
+  new SolflareWalletAdapter(),
+  new CoinbaseWalletAdapter(),
+  new LedgerWalletAdapter(),
+];
+
 // ── State ────────────────────────────────────────────────────
-let _wallet = null;
-let _publicKey = null;
+let _adapter = null;
 let _onConnectCallbacks = [];
 let _onDisconnectCallbacks = [];
 
-// ── Detection ────────────────────────────────────────────────
-
-export function getPhantom() {
-  if ('phantom' in window) return window.phantom?.solana;
-  if ('solana' in window && window.solana?.isPhantom) return window.solana;
-  return null;
-}
-
-export function getSolflare() {
-  return window.solflare?.isSolflare ? window.solflare : null;
-}
-
-export function getBackpack() {
-  return window.xnft?.solana || window.backpack;
-}
-
-export function getAnyWallet() {
-  return getPhantom() || getSolflare() || getBackpack();
-}
-
-export function isWalletAvailable() {
-  return !!getAnyWallet();
-}
-
-// ── Connection ───────────────────────────────────────────────
-
-export async function connectWallet() {
-  const provider = getAnyWallet();
-  if (!provider) {
-    // No wallet detected — try to open Phantom install
-    window.open('https://phantom.app/', '_blank');
-    throw new Error('No Solana wallet detected. Please install Phantom.');
-  }
-
-  try {
-    const resp = await provider.connect();
-    _wallet = provider;
-    _publicKey = resp.publicKey;
-
-    // Set up disconnect listener
-    provider.on('disconnect', () => {
-      _wallet = null;
-      _publicKey = null;
-      _onDisconnectCallbacks.forEach(cb => cb());
-      localStorage.removeItem('walletConnected');
-    });
-
-    // Set up account change listener
-    provider.on('accountChanged', (newPublicKey) => {
-      if (newPublicKey) {
-        _publicKey = newPublicKey;
-        _onConnectCallbacks.forEach(cb => cb(newPublicKey.toBase58()));
-      } else {
-        disconnectWallet();
-      }
-    });
-
-    localStorage.setItem('walletConnected', 'true');
-    _onConnectCallbacks.forEach(cb => cb(_publicKey.toBase58()));
-
-    return _publicKey.toBase58();
-  } catch (err) {
-    if (err.code === 4001) throw new Error('Wallet connection rejected by user');
-    throw err;
-  }
-}
-
-export async function disconnectWallet() {
-  if (_wallet) {
-    try { await _wallet.disconnect(); } catch {}
-  }
-  _wallet = null;
-  _publicKey = null;
-  localStorage.removeItem('walletConnected');
-  _onDisconnectCallbacks.forEach(cb => cb());
-}
+// ── Public API ───────────────────────────────────────────────
 
 export function getPublicKey() {
-  return _publicKey?.toBase58() ?? null;
+  return _adapter?.publicKey?.toBase58() ?? null;
 }
 
 export function isConnected() {
-  return !!_publicKey;
+  return !!_adapter?.connected;
+}
+
+export function getWalletName() {
+  return _adapter?.name ?? null;
 }
 
 export function onConnect(cb) {
@@ -104,68 +49,88 @@ export function onDisconnect(cb) {
   _onDisconnectCallbacks.push(cb);
 }
 
-// ── Auto-reconnect (if user was connected before) ───────────
+// ── Connect (shows modal) ────────────────────────────────────
+
+export async function connectWallet() {
+  // Check which adapters are available (installed)
+  const detected = WALLETS.filter(w => w.readyState === 'Installed');
+  const allWallets = [...detected, ...WALLETS.filter(w => !detected.includes(w))];
+
+  if (allWallets.length === 0) {
+    window.open('https://phantom.app/', '_blank');
+    throw new Error('No Solana wallet detected. Please install one.');
+  }
+
+  // If only one wallet is installed, connect directly
+  if (detected.length === 1) {
+    return _connectAdapter(detected[0]);
+  }
+
+  // Show wallet selection modal
+  return new Promise((resolve, reject) => {
+    _showWalletModal(allWallets, resolve, reject);
+  });
+}
+
+export async function disconnectWallet() {
+  if (_adapter) {
+    try { await _adapter.disconnect(); } catch {}
+  }
+  _adapter = null;
+  localStorage.removeItem('walletConnected');
+  localStorage.removeItem('walletName');
+  _onDisconnectCallbacks.forEach(cb => cb());
+}
+
+// ── Auto-reconnect ───────────────────────────────────────────
 
 export async function tryAutoConnect() {
-  if (localStorage.getItem('walletConnected') !== 'true') return null;
-  const provider = getAnyWallet();
-  if (!provider) return null;
+  const savedName = localStorage.getItem('walletName');
+  if (!savedName || localStorage.getItem('walletConnected') !== 'true') return null;
+
+  const adapter = WALLETS.find(w => w.name === savedName);
+  if (!adapter || adapter.readyState !== 'Installed') return null;
 
   try {
-    const resp = await provider.connect({ onlyIfTrusted: true });
-    _wallet = provider;
-    _publicKey = resp.publicKey;
-
-    provider.on('disconnect', () => {
-      _wallet = null;
-      _publicKey = null;
-      _onDisconnectCallbacks.forEach(cb => cb());
-      localStorage.removeItem('walletConnected');
-    });
-
-    _onConnectCallbacks.forEach(cb => cb(_publicKey.toBase58()));
-    return _publicKey.toBase58();
+    await adapter.connect();
+    _adapter = adapter;
+    _setupListeners(adapter);
+    _onConnectCallbacks.forEach(cb => cb(adapter.publicKey.toBase58()));
+    return adapter.publicKey.toBase58();
   } catch {
     localStorage.removeItem('walletConnected');
+    localStorage.removeItem('walletName');
     return null;
   }
 }
 
-// ── Base64 Helpers ───────────────────────────────────────────
+// ── Signing ──────────────────────────────────────────────────
 
 /**
- * Robust base64 → Uint8Array decoder.
- * Handles padding, whitespace, and works in all browsers/WebViews.
+ * Sign a UTF-8 message string. Returns { signature: Uint8Array }.
+ * Replaces all direct window.solana.signMessage() calls.
  */
-function base64ToBytes(b64) {
-  // Clean up: remove whitespace, ensure padding
-  const cleaned = b64.replace(/\s/g, '');
-  const padded = cleaned + '=='.slice(0, (4 - cleaned.length % 4) % 4);
-  const raw = atob(padded);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  return bytes;
-}
+export async function signMessage(message) {
+  if (!_adapter?.connected) throw new Error('Wallet not connected');
+  if (!_adapter.signMessage) throw new Error(`${_adapter.name} does not support message signing`);
 
-// ── Transaction Signing + Sending ────────────────────────────
+  const encoded = new TextEncoder().encode(message);
+  const signature = await _adapter.signMessage(encoded);
+  return { signature };
+}
 
 /**
  * Sign and send a base64-encoded transaction from the server.
- * The server partially signs the transaction (e.g., mint keypair).
- * User wallet adds their signature.
- *
  * Returns: transaction signature (string)
  */
 export async function signAndSendTransaction(base64Tx, options = {}) {
-  if (!_wallet || !_publicKey) throw new Error('Wallet not connected');
+  if (!_adapter?.connected) throw new Error('Wallet not connected');
 
-  const txBuffer = base64ToBytes(base64Tx);
-  const { Transaction, Connection } = await import('@solana/web3.js');
-
+  const txBuffer = _base64ToBytes(base64Tx);
   const transaction = Transaction.from(txBuffer);
-  const signed = await _wallet.signTransaction(transaction);
+  const signed = await _adapter.signTransaction(transaction);
 
-  const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+  const connection = new Connection(RPC_ENDPOINT, 'confirmed');
   const rawTx = signed.serialize();
   const signature = await connection.sendRawTransaction(rawTx, {
     skipPreflight: options.skipPreflight ?? false,
@@ -173,7 +138,6 @@ export async function signAndSendTransaction(base64Tx, options = {}) {
     preflightCommitment: 'confirmed',
   });
 
-  // Wait for on-chain confirmation (30s timeout)
   if (options.skipConfirm) return signature;
 
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
@@ -190,39 +154,36 @@ export async function signAndSendTransaction(base64Tx, options = {}) {
 }
 
 /**
- * Sign a transaction without sending (for inspection or custom submission)
+ * Sign a transaction without sending (returns base64 serialized)
  */
 export async function signTransaction(base64Tx) {
-  if (!_wallet || !_publicKey) throw new Error('Wallet not connected');
+  if (!_adapter?.connected) throw new Error('Wallet not connected');
 
-  const txBuffer = base64ToBytes(base64Tx);
-  const { Transaction } = await import('@solana/web3.js');
+  const txBuffer = _base64ToBytes(base64Tx);
   const transaction = Transaction.from(txBuffer);
-
-  const signed = await _wallet.signTransaction(transaction);
+  const signed = await _adapter.signTransaction(transaction);
   const bytes = signed.serialize();
   return btoa(String.fromCharCode(...new Uint8Array(bytes)));
 }
 
-// ── Wallet UI Components ──────────────────────────────────────
+// ── Wallet Button UI ─────────────────────────────────────────
 
-/**
- * Render a "Connect Wallet" button or show connected address
- */
-export function renderWalletButton(container, onConnect) {
+export function renderWalletButton(container, onConnectCb) {
   const pubkey = getPublicKey();
+  const name = getWalletName();
 
   if (pubkey) {
+    const icon = _adapter?.icon ? `<img src="${_adapter.icon}" alt="" style="width:18px;height:18px;border-radius:4px;margin-right:6px;vertical-align:middle">` : '';
     container.innerHTML = `
       <button class="btn btn-sm wallet-btn connected" id="wallet-btn">
         <span class="wallet-dot"></span>
-        ${truncateAddress(pubkey)}
+        ${icon}${_truncateAddress(pubkey)}
       </button>
     `;
     container.querySelector('#wallet-btn').addEventListener('click', async () => {
       if (confirm('Disconnect wallet?')) {
         await disconnectWallet();
-        renderWalletButton(container, onConnect);
+        renderWalletButton(container, onConnectCb);
       }
     });
   } else {
@@ -234,8 +195,8 @@ export function renderWalletButton(container, onConnect) {
     container.querySelector('#wallet-btn').addEventListener('click', async () => {
       try {
         const pk = await connectWallet();
-        renderWalletButton(container, onConnect);
-        if (onConnect) onConnect(pk);
+        renderWalletButton(container, onConnectCb);
+        if (onConnectCb) onConnectCb(pk);
       } catch (err) {
         alert(err.message);
       }
@@ -243,7 +204,146 @@ export function renderWalletButton(container, onConnect) {
   }
 }
 
-function truncateAddress(addr) {
+// ── Internal ─────────────────────────────────────────────────
+
+async function _connectAdapter(adapter) {
+  await adapter.connect();
+  _adapter = adapter;
+  _setupListeners(adapter);
+
+  localStorage.setItem('walletConnected', 'true');
+  localStorage.setItem('walletName', adapter.name);
+
+  const pubkey = adapter.publicKey.toBase58();
+  _onConnectCallbacks.forEach(cb => cb(pubkey));
+  return pubkey;
+}
+
+function _setupListeners(adapter) {
+  adapter.on('disconnect', () => {
+    _adapter = null;
+    localStorage.removeItem('walletConnected');
+    localStorage.removeItem('walletName');
+    _onDisconnectCallbacks.forEach(cb => cb());
+  });
+}
+
+function _truncateAddress(addr) {
   if (!addr || addr.length < 12) return addr;
   return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
+}
+
+function _base64ToBytes(b64) {
+  const cleaned = b64.replace(/\s/g, '');
+  const padded = cleaned + '=='.slice(0, (4 - cleaned.length % 4) % 4);
+  const raw = atob(padded);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes;
+}
+
+// ── Wallet Selection Modal ───────────────────────────────────
+
+function _showWalletModal(wallets, resolve, reject) {
+  // Remove any existing modal
+  document.getElementById('wallet-modal-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'wallet-modal-overlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);animation:walletFadeIn 0.2s ease;
+  `;
+
+  const installed = wallets.filter(w => w.readyState === 'Installed');
+  const notInstalled = wallets.filter(w => w.readyState !== 'Installed');
+
+  const walletItems = (list, dim = false) => list.map(w => `
+    <button class="wallet-option" data-wallet="${w.name}" style="
+      display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;
+      background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+      border-radius:12px;color:#fff;cursor:pointer;transition:all 0.2s;
+      ${dim ? 'opacity:0.5;' : ''}
+    ">
+      <img src="${w.icon}" alt="${w.name}" style="width:36px;height:36px;border-radius:8px">
+      <div style="flex:1;text-align:left">
+        <div style="font-weight:600;font-size:0.95rem">${w.name}</div>
+        <div style="font-size:0.75rem;color:rgba(255,255,255,0.5)">
+          ${w.readyState === 'Installed' ? 'Detected' : 'Not installed'}
+        </div>
+      </div>
+      ${w.readyState === 'Installed' ? '<span style="color:#FFD700;font-size:0.8rem">●</span>' : ''}
+    </button>
+  `).join('');
+
+  overlay.innerHTML = `
+    <div style="
+      background:rgba(10,10,15,0.95);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1);
+      border-radius:20px;padding:28px;max-width:400px;width:90%;max-height:80vh;overflow-y:auto;
+      box-shadow:0 24px 48px rgba(0,0,0,0.5);animation:walletSlideUp 0.25s ease;
+    ">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="margin:0;font-size:1.2rem;color:#fff">Connect Wallet</h2>
+        <button id="wallet-modal-close" style="
+          background:none;border:none;color:rgba(255,255,255,0.5);font-size:1.4rem;
+          cursor:pointer;padding:4px 8px;line-height:1;
+        ">✕</button>
+      </div>
+      ${installed.length > 0 ? `
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:${notInstalled.length ? '16px' : '0'}">
+          ${walletItems(installed)}
+        </div>
+      ` : ''}
+      ${notInstalled.length > 0 ? `
+        <div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">
+          Other Wallets
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${walletItems(notInstalled, true)}
+        </div>
+      ` : ''}
+    </div>
+    <style>
+      @keyframes walletFadeIn { from{opacity:0} to{opacity:1} }
+      @keyframes walletSlideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+      .wallet-option:hover { background:rgba(255,215,0,0.1)!important; border-color:rgba(255,215,0,0.3)!important; }
+    </style>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // Close handlers
+  const close = () => {
+    overlay.remove();
+    reject(new Error('Wallet selection cancelled'));
+  };
+
+  overlay.querySelector('#wallet-modal-close').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+
+  // Wallet selection
+  overlay.querySelectorAll('.wallet-option').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.wallet;
+      const adapter = wallets.find(w => w.name === name);
+      if (!adapter) return;
+
+      if (adapter.readyState !== 'Installed') {
+        if (adapter.url) window.open(adapter.url, '_blank');
+        return;
+      }
+
+      btn.querySelector('div > div:first-child').textContent = 'Connecting...';
+      try {
+        const pubkey = await _connectAdapter(adapter);
+        overlay.remove();
+        resolve(pubkey);
+      } catch (err) {
+        btn.querySelector('div > div:first-child').textContent = adapter.name;
+        btn.querySelector('div > div:last-child').textContent = err.message;
+      }
+    });
+  });
 }

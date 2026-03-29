@@ -1,10 +1,11 @@
 /**
  * Admin Dashboard Page
  * Platform administration — stats, admin management, token ops, system info.
- * Requires Phantom wallet auth with admin-level access.
+ * Requires wallet auth with admin-level access.
  */
 
 import { api, toast, truncateAddress } from '../main.js';
+import { connectWallet, signMessage, getPublicKey, isConnected } from '../services/wallet.js';
 
 // === Admin Auth State ===
 let _adminWallet = null;
@@ -19,9 +20,8 @@ async function adminFetch(path, options = {}) {
   if (!wallet) throw new Error('Not authenticated as admin');
 
   const ts = Math.floor(Date.now() / 1000);
-  const message = `SolAgentsAdmin:${wallet}:${ts}`;
-  const encoded = new TextEncoder().encode(message);
-  const { signature } = await window.solana.signMessage(encoded, 'utf8');
+  const msg = `SolAgentsAdmin:${wallet}:${ts}`;
+  const { signature } = await signMessage(msg);
   const sigB64 = btoa(String.fromCharCode(...signature));
 
   const headers = {
@@ -79,25 +79,17 @@ function renderAdminLogin(container) {
 async function handleAdminConnect() {
   const btn = document.getElementById('btn-admin-connect');
 
-  if (!window.solana?.isPhantom) {
-    toast('Phantom wallet not found. Install it at phantom.app', 'error');
-    window.open('https://phantom.app/', '_blank');
-    return;
-  }
-
   try {
     btn.textContent = 'Connecting...';
     btn.disabled = true;
 
-    const resp = await window.solana.connect();
-    const walletAddress = resp.publicKey.toString();
+    const walletAddress = isConnected() ? getPublicKey() : await connectWallet();
 
     btn.textContent = 'Signing message...';
 
     const ts = Math.floor(Date.now() / 1000);
-    const message = `SolAgentsAdmin:${walletAddress}:${ts}`;
-    const encoded = new TextEncoder().encode(message);
-    const { signature } = await window.solana.signMessage(encoded, 'utf8');
+    const msg = `SolAgentsAdmin:${walletAddress}:${ts}`;
+    const { signature } = await signMessage(msg);
     const sigB64 = btoa(String.fromCharCode(...signature));
 
     btn.textContent = 'Verifying...';

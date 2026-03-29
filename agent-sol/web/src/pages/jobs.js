@@ -1,4 +1,5 @@
 import { api, toast, truncateAddress, timeAgo } from '../main.js';
+import { getPublicKey } from '../services/wallet.js';
 
 const STATUS_BADGES = {
   open: '<span class="badge badge-pending">Open</span>',
@@ -560,7 +561,7 @@ function renderJobActions(job) {
 
   switch (job.status) {
     case 'open': {
-      const wallet = window.solana?.publicKey?.toString();
+      const wallet = getPublicKey();
       const isOwner = wallet && wallet === job.client;
       const isProvider = wallet && wallet === job.provider;
 
@@ -650,7 +651,7 @@ function wireJobActions(jobId) {
             result = await api.post(`/jobs/${jobId}/refund`, {});
             break;
           case 'apply': {
-            const wallet = window.solana?.publicKey?.toString();
+            const wallet = getPublicKey();
             if (!wallet) { toast('Connect wallet first', 'error'); return; }
             const proposal = prompt('Describe your proposal — why you\'re the right fit:');
             if (!proposal) return;

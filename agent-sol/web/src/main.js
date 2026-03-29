@@ -15,6 +15,15 @@ import { renderTracker } from './pages/tracker.js';
 import { renderMarketplace } from './pages/marketplace.js';
 import { renderAgentProfile } from './pages/agent-profile.js';
 import { renderAdmin } from './pages/admin.js';
+import {
+  connectWallet as walletConnect,
+  disconnectWallet,
+  getPublicKey,
+  isConnected as walletIsConnected,
+  signMessage,
+  tryAutoConnect,
+  getWalletName,
+} from './services/wallet.js';
 
 // === State ===
 const state = {
@@ -32,7 +41,7 @@ const state = {
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 
 /**
- * Get a cached auth token, re-signing with Phantom only when expired.
+ * Get a cached auth token, re-signing with wallet only when expired.
  * Token format: agentId:base64Signature:timestamp
  * Cached for 4 minutes (server allows 5 min TTL).
  */
@@ -41,15 +50,14 @@ async function getAuthToken() {
   if (state.authToken && state.authTokenExpiry > now) {
     return state.authToken;
   }
-  if (!state.agent?.id || !window.solana?.isConnected) return null;
+  if (!state.agent?.id || !walletIsConnected()) return null;
 
   const ts = now.toString();
-  const message = `AgentSol:${state.agent.id}:${ts}`;
-  const encoded = new TextEncoder().encode(message);
-  const { signature } = await window.solana.signMessage(encoded, 'utf8');
+  const msg = `AgentSol:${state.agent.id}:${ts}`;
+  const { signature } = await signMessage(msg);
   const sigB64 = btoa(String.fromCharCode(...signature));
   state.authToken = `${state.agent.id}:${sigB64}:${ts}`;
-  state.authTokenExpiry = now + 240; // refresh 1 min before server's 5 min expiry
+  state.authTokenExpiry = now + 240;
   return state.authToken;
 }
 
@@ -195,11 +203,12 @@ window.addEventListener('popstate', (e) => {
   }
 });
 
-// === Wallet Connect (Phantom) ===
-async function connectWallet() {
+// === Wallet Connect (multi-wallet via adapter) ===
+async function handleConnect() {
   const btn = document.getElementById('btn-connect');
 
   if (state.connected) {
+    await disconnectWallet();
     state.connected = false;
     state.wallet = null;
     state.agent = null;
@@ -212,17 +221,9 @@ async function connectWallet() {
     return;
   }
 
-  // Check for Phantom
-  if (!window.solana?.isPhantom) {
-    toast('Phantom wallet not found. Install it at phantom.app', 'error');
-    window.open('https://phantom.app/', '_blank');
-    return;
-  }
-
   try {
     btn.textContent = 'Connecting...';
-    const resp = await window.solana.connect();
-    const walletAddress = resp.publicKey.toString();
+    const walletAddress = await walletConnect();
 
     state.wallet = walletAddress;
     state.connected = true;
@@ -235,7 +236,6 @@ async function connectWallet() {
         toast(`Welcome back, ${agentData.name}!`, 'success');
       }
     } catch {
-      // Not registered yet — that's fine
       toast('Wallet connected! Register as an agent to get started.', 'info');
     }
 
@@ -245,7 +245,9 @@ async function connectWallet() {
 
   } catch (err) {
     btn.textContent = 'Connect Wallet';
-    toast(`Connection failed: ${err.message}`, 'error');
+    if (err.message !== 'Wallet selection cancelled') {
+      toast(`Connection failed: ${err.message}`, 'error');
+    }
   }
 }
 
@@ -291,11 +293,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Connect wallet button
-  document.getElementById('btn-connect')?.addEventListener('click', connectWallet);
+  document.getElementById('btn-connect')?.addEventListener('click', handleConnect);
 
-  // Auto-connect if Phantom is available and was previously connected
-  if (window.solana?.isPhantom && window.solana?.isConnected) {
-    await connectWallet();
+  // Auto-reconnect to last used wallet
+  const autoKey = await tryAutoConnect();
+  if (autoKey) {
+    state.wallet = autoKey;
+    state.connected = true;
+    try {
+      const agentData = await api.get(`/agents/wallet/${autoKey}`);
+      if (agentData.id) state.agent = agentData;
+    } catch {}
+    const btn = document.getElementById('btn-connect');
+    if (btn) {
+      btn.textContent = truncateAddress(autoKey);
+      btn.className = 'btn btn-ghost';
+    }
   }
 
   // Custom navigate events from pages

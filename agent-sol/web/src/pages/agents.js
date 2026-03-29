@@ -1,4 +1,5 @@
 import { api, toast, truncateAddress } from '../main.js';
+import { getPublicKey, isConnected } from '../services/wallet.js';
 
 export function renderAgents(container, state) {
   container.innerHTML = `
@@ -412,12 +413,12 @@ async function openAgentDetail(agentId, state = {}) {
       <!-- Token Section -->
       ${data.tokenized
         ? renderTokenSection(data.token, data)
-        : (window.solana?.publicKey?.toString() === data.agent.walletAddress
+        : (getPublicKey() === data.agent.walletAddress
           ? renderTokenizePrompt(agentId)
           : '')}
 
       <!-- Fee Earnings + Claim (owner only) -->
-      ${data.tokenized && window.solana?.publicKey?.toString() === data.agent.walletAddress ? `
+      ${data.tokenized && getPublicKey() === data.agent.walletAddress ? `
         <div class="card glass mt-2">
           <div class="card-header"><h3 class="font-semibold text-sm"><img class="icon" src="/icons/white/coin-tilt.png" alt="Money"> Creator Fee Earnings</h3></div>
           <div class="card-body">
@@ -477,13 +478,13 @@ async function openAgentDetail(agentId, state = {}) {
       btn.disabled = true;
       btn.textContent = 'Claiming...';
       try {
-        if (!window.solana?.isConnected) {
+        if (!isConnected()) {
           toast('Connect your wallet first', 'error');
           btn.disabled = false;
           btn.textContent = `<img class="icon" src="/icons/white/coin-tilt.png" alt="Money"> Claim fees`;
           return;
         }
-        const wallet = window.solana.publicKey.toString();
+        const wallet = getPublicKey();
         const result = await api.post(`/agents/${aid}/fees/claim`, { callerWallet: wallet });
         if (result.error) {
           toast(result.error, 'error');

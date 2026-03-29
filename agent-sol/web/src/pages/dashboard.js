@@ -1,4 +1,5 @@
 import { api, toast, truncateAddress } from '../main.js';
+import { signAndSendTransaction as walletSignAndSend } from '../services/wallet.js';
 
 export function renderDashboard(container, state) {
   if (!state.connected) {
@@ -246,7 +247,7 @@ function renderLanding(container) {
 
     <div class="card mt-3 text-center" style="padding: 56px 24px; border-color: rgba(34, 211, 238, 0.15); background: linear-gradient(135deg, rgba(139,92,246,0.04) 0%, rgba(34,211,238,0.04) 50%, rgba(52,211,153,0.04) 100%);">
       <h2 style="font-size: 1.6rem; margin-bottom: 8px; letter-spacing: -0.3px;">Ready to hire your first agent?</h2>
-      <p class="text-secondary mb-2">Connect your Phantom wallet. Post a task. Pay only when you're satisfied.</p>
+      <p class="text-secondary mb-2">Connect your wallet. Post a task. Pay only when you're satisfied.</p>
       <button class="btn btn-primary btn-lg btn-glow" onclick="document.getElementById('btn-connect')?.click()">
         Get Started — It's Free
       </button>
@@ -514,7 +515,7 @@ function renderConnectedDashboard(container, state) {
       const info = await infoRes.json();
       if (!info.treasury) throw new Error('Could not load treasury info');
 
-      // 2. Build + send SOL transfer via Phantom
+      // 2. Build + send SOL transfer via wallet adapter
       const { Connection, Transaction, SystemProgram, PublicKey, clusterApiUrl } =
         await import('@solana/web3.js');
 
@@ -533,8 +534,10 @@ function renderConnectedDashboard(container, state) {
       tx.recentBlockhash = blockhash;
       tx.feePayer = walletPubkey;
 
-      btn.textContent = 'Approve in Phantom...';
-      const { signature } = await window.solana.signAndSendTransaction(tx);
+      btn.textContent = 'Approve in wallet...';
+      // Serialize, sign via wallet adapter, and send
+      const txBase64 = btoa(String.fromCharCode(...tx.serialize({ requireAllSignatures: false })));
+      const signature = await walletSignAndSend(txBase64, { skipConfirm: true });
 
       // 3. Wait for confirmation
       btn.textContent = 'Confirming transaction...';

@@ -1,4 +1,5 @@
 import { api, toast, truncateAddress } from '../main.js';
+import { getPublicKey } from '../services/wallet.js';
 
 const CATEGORIES = [
   { id: 'all', label: 'All', icon: '<img class="icon" src="/icons/white/search.png" alt="Search">' },
@@ -339,7 +340,7 @@ function openPurchaseConfirm(serviceId) {
   const service = cachedServices.find(s => String(s.id) === String(serviceId));
   if (!service) return;
 
-  const wallet = window.solana?.publicKey?.toString();
+  const wallet = getPublicKey();
   if (!wallet) {
     toast('Connect your wallet first to purchase', 'error');
     return;
@@ -456,7 +457,7 @@ function wireMarketplaceEvents(container, state) {
 
   // Submit new service
   container.querySelector('#mp-submit-service')?.addEventListener('click', async () => {
-    const wallet = window.solana?.publicKey?.toString();
+    const wallet = getPublicKey();
     if (!wallet) return toast('Connect wallet first', 'error');
 
     const title = document.getElementById('mp-svc-name')?.value.trim();
