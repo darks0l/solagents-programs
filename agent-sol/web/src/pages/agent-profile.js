@@ -231,7 +231,24 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
     <div class="grid gap-2 mt-2" style="grid-template-columns:${data.tokenized ? '1fr 1fr' : '1fr'};align-items:start">
 
       <!-- Token Info -->
-      ${data.tokenized && token ? `
+      ${data.tokenized && token && token.status === 'pending' && !token.mint_address ? `
+        <div class="card glass" style="border-color:rgba(255,165,0,0.3)">
+          <div class="card-header">
+            <div class="flex items-center gap-1">
+              <h2 class="font-semibold"><img class="icon" src="/icons/white/coin-flat.png" alt="Token"> $${token.token_symbol} Token</h2>
+              <span class="badge" style="background:rgba(255,165,0,0.2);color:#FFA500">Pending</span>
+            </div>
+          </div>
+          <div class="card-body" style="text-align:center;padding:32px 24px">
+            <p style="font-size:2rem;margin-bottom:8px"><img class="icon icon-xl" src="/icons/white/clock.png" alt="Pending"></p>
+            <h3 class="font-semibold" style="margin-bottom:8px">Token creation incomplete</h3>
+            <p class="text-secondary text-sm" style="margin-bottom:16px">The on-chain token was never created or the activation step didn't complete. You can retry tokenization to start fresh.</p>
+            <button class="btn btn-primary btn-glow" id="btn-retry-tokenize" data-agent-id="${agentId}">
+              <img class="icon" src="/icons/white/fire.png" alt="Retry"> Retry Tokenization
+            </button>
+          </div>
+        </div>
+      ` : data.tokenized && token ? `
         <div class="card glass" style="border-color:rgba(153,69,255,0.15)">
           <div class="card-header">
             <div class="flex items-center gap-1">
@@ -438,7 +455,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
           </div>
 
           <!-- Tokenize Prompt (if not tokenized and is owner) -->
-          ${!data.tokenized && isOwner ? `
+          ${(!data.tokenized || data.tokenPending) && isOwner ? `
             <div class="card glass mt-2" style="border-color:rgba(153,69,255,0.15);background:rgba(153,69,255,0.04)">
               <div class="card-body text-center p-3">
                 <div style="font-size:2.5rem;margin-bottom:8px"><img class="icon" src="/icons/white/fire.png" alt="Launch"></div>
@@ -640,6 +657,18 @@ function wireProfileEvents(content, data, agentId, state) {
   // Tokenize
   content.querySelector('#btn-open-tokenize')?.addEventListener('click', () => {
     document.dispatchEvent(new CustomEvent('navigate', { detail: 'tokenize' }));
+  });
+
+  // Retry tokenization for stuck pending tokens — scroll to the tokenize section
+  content.querySelector('#btn-retry-tokenize')?.addEventListener('click', () => {
+    const tokenizeCard = content.querySelector('#btn-open-tokenize');
+    if (tokenizeCard) {
+      tokenizeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      tokenizeCard.classList.add('btn-glow');
+      toast('Click "Launch Token" below to start fresh — the old pending entry will be cleared automatically.', 'info');
+    } else {
+      document.dispatchEvent(new CustomEvent('navigate', { detail: 'tokenize' }));
+    }
   });
 }
 

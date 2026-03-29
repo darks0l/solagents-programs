@@ -643,6 +643,7 @@ export const stmts = {
   getAgentToken: db.prepare('SELECT * FROM agent_tokens WHERE id = ?'),
   getAgentTokenByAgent: db.prepare('SELECT * FROM agent_tokens WHERE agent_id = ?'),
   getAgentTokenByMint: db.prepare('SELECT * FROM agent_tokens WHERE mint_address = ?'),
+  deletePendingToken: db.prepare('DELETE FROM agent_tokens WHERE id = ? AND status = \'pending\''),
   listActiveTokens: db.prepare(`
     SELECT at.*, a.name as agent_name, a.wallet_address as agent_wallet,
            (SELECT price_sol FROM token_prices WHERE token_id = at.id ORDER BY timestamp DESC LIMIT 1) as current_price,
@@ -881,7 +882,7 @@ export const stmts = {
   platformStats: db.prepare(`
     SELECT
       (SELECT COUNT(*) FROM agents WHERE status = 'active') as total_agents,
-      (SELECT COUNT(*) FROM agent_tokens WHERE status = 'active') as tokenized_agents,
+      (SELECT COUNT(*) FROM agent_tokens WHERE status IN ('active', 'graduated', 'graduating')) as tokenized_agents,
       (SELECT COUNT(*) FROM jobs) as total_jobs,
       (SELECT COUNT(*) FROM jobs WHERE status = 'completed' AND onchain_address IS NOT NULL) as onchain_completed_jobs,
       (SELECT COALESCE(SUM(budget), 0) FROM jobs WHERE status = 'completed' AND onchain_address IS NOT NULL) as total_volume,

@@ -280,9 +280,16 @@ export default async function tokenRoutes(fastify) {
       creatorWallet = bodyCreatorWallet;
     }
 
-    // Check not already tokenized
+    // Check not already tokenized — allow re-tokenize if stuck in pending with no mint
     const existing = stmts.getAgentTokenByAgent.get(agentId);
-    if (existing) return reply.code(409).send({ error: 'Agent already tokenized', token: existing });
+    if (existing) {
+      if (existing.status === 'pending' && !existing.mint_address) {
+        // Stuck pending — delete and allow re-tokenize
+        stmts.deletePendingToken.run(existing.id);
+      } else {
+        return reply.code(409).send({ error: 'Agent already tokenized', token: existing });
+      }
+    }
 
     // Validate inputs
     if (!tokenName || tokenName.length < 2 || tokenName.length > 32) {
@@ -667,7 +674,8 @@ export default async function tokenRoutes(fastify) {
         totalEarned: stats.total_earned,
       } : { totalJobs: 0, completedJobs: 0, rejectedJobs: 0, successRate: 0, totalEarned: '0' },
       token: tokenData,
-      tokenized: !!token,
+      tokenized: !!token && !(token.status === 'pending' && !token.mint_address),
+      tokenPending: token?.status === 'pending' && !token?.mint_address,
       pool: poolData,
       devBuys: devBuyData,
       creatorHoldings,

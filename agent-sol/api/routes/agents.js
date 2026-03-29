@@ -22,13 +22,15 @@ export default async function agentRoutes(fastify) {
       const token = stmts.getAgentTokenByAgent.get(a.id);
       let tokenData = null;
 
-      if (token && token.status === 'active') {
+      const isTokenLive = token && ['active', 'graduated', 'graduating'].includes(token.status);
+      if (isTokenLive) {
         const price = stmts.getLatestTokenPrice.get(token.id);
         tokenData = {
           id: token.id,
           symbol: token.token_symbol,
           name: token.token_name,
           mintAddress: token.mint_address,
+          status: token.status,
           currentPrice: price?.price_sol || '0',
           marketCap: price?.market_cap || '0',
           volume24h: price?.volume_24h || '0',
@@ -46,7 +48,7 @@ export default async function agentRoutes(fastify) {
         github: meta.github || null,
         twitter: meta.twitter || null,
         registeredAt: a.registered_at,
-        tokenized: !!token && token.status === 'active',
+        tokenized: isTokenLive,
         token: tokenData,
         stats: stats ? {
           totalJobs: stats.total_jobs,
