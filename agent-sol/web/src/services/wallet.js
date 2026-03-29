@@ -159,18 +159,12 @@ function base64ToBytes(b64) {
 export async function signAndSendTransaction(base64Tx, options = {}) {
   if (!_wallet || !_publicKey) throw new Error('Wallet not connected');
 
-  // Deserialize the transaction
   const txBuffer = base64ToBytes(base64Tx);
-
   const { Transaction, Connection } = await import('@solana/web3.js');
 
-  // Deserialize as legacy Transaction
   const transaction = Transaction.from(txBuffer);
-
-  // Sign with user wallet (Phantom signs but does NOT send)
   const signed = await _wallet.signTransaction(transaction);
 
-  // Send via our own RPC connection (devnet)
   const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
   const rawTx = signed.serialize();
   const signature = await connection.sendRawTransaction(rawTx, {
@@ -178,6 +172,19 @@ export async function signAndSendTransaction(base64Tx, options = {}) {
     maxRetries: options.maxRetries ?? 3,
     preflightCommitment: 'confirmed',
   });
+
+  // Wait for on-chain confirmation (30s timeout)
+  if (options.skipConfirm) return signature;
+
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+  const confirmation = await connection.confirmTransaction(
+    { signature, blockhash, lastValidBlockHeight },
+    'confirmed'
+  );
+
+  if (confirmation.value?.err) {
+    throw new Error(`Transaction failed on-chain: ${JSON.stringify(confirmation.value.err)}`);
+  }
 
   return signature;
 }

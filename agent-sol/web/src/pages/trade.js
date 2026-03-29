@@ -1042,13 +1042,13 @@ async function executeBuy(mintAddress) {
     if (result.error) throw new Error(result.error);
     if (!result.transaction) throw new Error('No transaction returned from server');
 
-    btn.textContent = 'Waiting for wallet approval...';
+    btn.textContent = 'Confirming on-chain...';
 
-    // Sign + send via Phantom
+    // Sign + send via Phantom, waits for on-chain confirmation (~5-15s)
     const signature = await signAndSendTransaction(result.transaction);
 
-    btn.textContent = 'Confirming...';
-    toast(`Transaction submitted! <a href="https://explorer.solana.com/tx/${signature}?cluster=devnet" target="_blank">View on Explorer ↗</a>`, 'info');
+    btn.textContent = 'Syncing...';
+    toast(`<img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Confirmed on-chain! <a href="https://explorer.solana.com/tx/${signature}?cluster=devnet" target="_blank">View ↗</a>`, 'success');
 
     // Sync DB
     const syncBuyEndpoint = _isGraduated ? '/chain/sync/trade/post-grad' : '/chain/sync/trade';
@@ -1058,7 +1058,7 @@ async function executeBuy(mintAddress) {
       traderWallet: getPublicKey(),
     });
 
-    toast(`<img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Bought! Transaction confirmed.`, 'success');
+    toast(`<img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Buy complete!`, 'success');
 
     // Check if this buy triggered graduation
     if (syncResult.graduatedTo) {
@@ -1122,11 +1122,13 @@ async function executeSell(mintAddress) {
     if (result.error) throw new Error(result.error);
     if (!result.transaction) throw new Error('No transaction returned from server');
 
-    btn.textContent = 'Waiting for wallet approval...';
+    btn.textContent = 'Confirming on-chain...';
+
+    // Sign + send via Phantom, waits for on-chain confirmation (~5-15s)
     const signature = await signAndSendTransaction(result.transaction);
 
-    btn.textContent = 'Confirming...';
-    toast(`Transaction submitted!`, 'info');
+    btn.textContent = 'Syncing...';
+    toast(`<img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Confirmed on-chain! <a href="https://explorer.solana.com/tx/${signature}?cluster=devnet" target="_blank">View ↗</a>`, 'success');
 
     const syncSellEndpoint = _isGraduated ? '/chain/sync/trade/post-grad' : '/chain/sync/trade';
     const syncSellResult = await api.post(syncSellEndpoint, {
