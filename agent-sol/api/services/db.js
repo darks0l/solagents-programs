@@ -437,8 +437,13 @@ for (const sql of socialIpfsMigrations) {
 try {
   const hasOldConstraint = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='jobs'`).get();
   if (hasOldConstraint && hasOldConstraint.sql && !hasOldConstraint.sql.includes('pending_open')) {
+    // Clean up any leftover from failed migration
+    try { db.exec('DROP TABLE IF EXISTS jobs_v5'); } catch (_) {}
+    // Get actual column list from existing table
+    const cols = db.prepare('PRAGMA table_info(jobs)').all().map(c => c.name);
+    const colList = cols.join(', ');
     db.exec(`
-      CREATE TABLE IF NOT EXISTS jobs_new (
+      CREATE TABLE jobs_v5 (
         id TEXT PRIMARY KEY,
         client TEXT NOT NULL,
         provider TEXT,
@@ -460,15 +465,16 @@ try {
         submitted_at INTEGER DEFAULT NULL,
         dispute_status TEXT DEFAULT NULL
       );
-      INSERT INTO jobs_new SELECT id, client, provider, evaluator, description, budget, expired_at, status, deliverable, reason, hook, onchain_address, onchain_job_id, created_at, completed_at, auto_release_at, settled_at, funded_at, submitted_at, dispute_status FROM jobs;
+      INSERT INTO jobs_v5 (${colList}) SELECT ${colList} FROM jobs;
       DROP TABLE jobs;
-      ALTER TABLE jobs_new RENAME TO jobs;
+      ALTER TABLE jobs_v5 RENAME TO jobs;
       CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
       CREATE INDEX IF NOT EXISTS idx_jobs_client ON jobs(client);
       CREATE INDEX IF NOT EXISTS idx_jobs_provider ON jobs(provider);
     `);
+    console.log('v5 jobs migration: success — pending_* states enabled');
   }
-} catch (e) { console.warn('jobs migration:', e.message); }
+} catch (e) { console.error('v5 jobs migration FAILED:', e.message); }
 
 // v3: Job lifecycle columns
 try { db.exec('ALTER TABLE jobs ADD COLUMN auto_release_at INTEGER DEFAULT NULL'); } catch (_) { /* already exists */ }
