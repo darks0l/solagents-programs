@@ -147,7 +147,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
             <div class="flex items-center gap-1" style="flex-wrap:wrap">
               <h1 class="text-2xl font-bold" style="margin:0">${agent.name || 'Unnamed Agent'}</h1>
               ${data.tokenized ? (pool?.status === 'graduated'
-                ? '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"><img class="icon" src="/icons/white/crown.png" alt="Graduated"> Graduated</span>'
+                ? '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"><img class="icon" src="/icons/white/rocket.png" alt="Graduated"> Graduated</span>'
                 : '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"><img class="icon" src="/icons/white/coin-flat.png" alt="Token"> Tokenized</span>') : ''}
               ${isOwner ? '<span style="background:rgba(153,69,255,0.15);color:#9945FF;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"><img class="icon" src="/icons/white/person.png" alt="User"> You</span>' : ''}
             </div>
@@ -159,7 +159,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
           <div style="text-align:right">
             ${data.tokenized && token?.token_symbol ? (pool?.status === 'graduated' ? `
               <button class="btn btn-primary btn-glow" id="btn-trade-token" style="background:linear-gradient(135deg,rgba(20,241,149,0.2),rgba(153,69,255,0.2));border-color:rgba(20,241,149,0.4)">
-                <img class="icon" src="/icons/white/crown.png" alt="Graduated"> Trade on Raydium →
+                <img class="icon" src="/icons/white/rocket.png" alt="Graduated"> Trade on Raydium →
               </button>
             ` : `
               <button class="btn btn-primary btn-glow" id="btn-trade-token">
@@ -167,7 +167,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
               </button>
             `) : token?.mint_address && pool?.status === 'graduated' ? `
               <button class="btn btn-primary btn-glow" id="btn-trade-token" style="background:linear-gradient(135deg,rgba(20,241,149,0.2),rgba(153,69,255,0.2));border-color:rgba(20,241,149,0.4)">
-                <img class="icon" src="/icons/white/crown.png" alt="Graduated"> Trade on Raydium →
+                <img class="icon" src="/icons/white/rocket.png" alt="Graduated"> Trade on Raydium →
               </button>
             ` : `
               <button class="btn" id="btn-trade-token" disabled style="opacity:0.35;cursor:not-allowed;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.08)">
@@ -309,7 +309,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
                 <div style="margin-top:8px">
                   <div class="flex items-center text-xs" style="justify-content:space-between;margin-bottom:4px">
                     <span class="text-muted">Status</span>
-                    <span class="font-mono" style="color:#14F195;font-weight:600"><img class="icon" src="/icons/white/crown.png" alt="Graduated"> Graduated to Raydium</span>
+                    <span class="font-mono" style="color:#14F195;font-weight:600"><img class="icon" src="/icons/white/rocket.png" alt="Graduated"> Graduated to Raydium</span>
                   </div>
                   <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
                     <div style="height:100%;width:100%;background:linear-gradient(90deg,#9945FF,#14F195);border-radius:3px"></div>

@@ -168,7 +168,7 @@ function _openWs(mintAddress) {
         if (msg.type === 'graduation') {
           _isGraduated = true;
           hideGraduatingOverlay();
-          toast('<img class="icon" src="/icons/white/crown.png" alt="Graduated"> Token graduated to Raydium CPMM!', 'success');
+          toast('<img class="icon" src="/icons/white/rocket.png" alt="Graduated"> Token graduated to Raydium CPMM!', 'success');
           loadTradePageData(mintAddress);
         }
       } catch { /* ignore malformed */ }
@@ -669,7 +669,7 @@ async function loadTradePageData(mintAddress) {
       <div class="flex items-center gap-2">
         ${poolData.symbol ? `<div class="font-bold text-2xl gradient-text">$${poolData.symbol}</div>` : ''}
         <div class="text-secondary">${poolData.name || ''}</div>
-        ${poolData.status === 'graduated' ? `<span class="badge" style="background:rgba(20,241,149,0.2);color:#14F195"><img class="icon" src="/icons/white/crown.png" alt="Graduated"> Graduated to Raydium</span>` : ''}
+        ${poolData.status === 'graduated' ? `<span class="badge" style="background:rgba(20,241,149,0.2);color:#14F195"><img class="icon" src="/icons/white/rocket.png" alt="Graduated"> Graduated to Raydium</span>` : ''}
       </div>
     `;
 
@@ -743,7 +743,7 @@ async function loadTradePageData(mintAddress) {
       gradBar.style.display = '';
       gradBar.innerHTML = `
         <div style="text-align:center;padding:12px;background:rgba(20,241,149,0.08);border:1px solid rgba(20,241,149,0.2);border-radius:8px;margin-top:12px">
-          <span style="font-size:1.5rem"><img class="icon" src="/icons/white/crown.png" alt="Graduated"></span>
+          <span style="font-size:1.5rem"><img class="icon" src="/icons/white/rocket.png" alt="Graduated"></span>
           <div style="color:#14F195;font-weight:600;margin-top:4px">Graduated to Raydium</div>
           <div style="color:rgba(255,255,255,0.5);font-size:0.75rem;margin-top:2px">Trading via Raydium CPMM</div>
           <a href="https://raydium.io/swap/?inputMint=So11111111111111111111111111111111111111112&outputMint=${mintAddress}" target="_blank" style="color:#9945FF;font-size:0.75rem;margin-top:4px;display:inline-block">Trade on Raydium ↗</a>
@@ -808,7 +808,7 @@ async function loadTradePageData(mintAddress) {
           const badge = document.createElement('div');
           badge.className = 'raydium-badge';
           badge.style.cssText = 'text-align:center;padding:6px 12px;margin-bottom:8px;background:rgba(20,241,149,0.08);border:1px solid rgba(20,241,149,0.2);border-radius:8px';
-          badge.innerHTML = '<span style="color:#14F195;font-size:0.8rem;font-weight:600"><img class="icon" src="/icons/white/crown.png" alt="Graduated"> Trading on Raydium CPMM</span>'
+          badge.innerHTML = '<span style="color:#14F195;font-size:0.8rem;font-weight:600"><img class="icon" src="/icons/white/rocket.png" alt="Graduated"> Trading on Raydium CPMM</span>'
             + ' <span class="text-muted text-xs">• 0.25% swap fee</span>';
           header.insertBefore(badge, header.firstChild);
         }
@@ -1179,7 +1179,7 @@ function showGraduatingOverlay(mintAddress, txSig) {
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;';
   overlay.innerHTML = `
     <div style="text-align:center;max-width:400px;padding:40px;">
-      <div style="font-size:4rem;margin-bottom:20px;animation:pulse 1.5s ease-in-out infinite"><img class="icon" src="/icons/white/crown.png" alt="Graduated"></div>
+      <div style="font-size:4rem;margin-bottom:20px;animation:pulse 1.5s ease-in-out infinite"><img class="icon" src="/icons/white/rocket.png" alt="Graduated"></div>
       <h2 style="color:#14F195;font-size:1.5rem;margin-bottom:12px">Graduating to Raydium</h2>
       <p style="color:rgba(255,255,255,0.7);font-size:0.95rem;line-height:1.5">
         This token has reached the graduation threshold!<br>
@@ -1216,7 +1216,7 @@ function showGraduatingOverlay(mintAddress, txSig) {
         _graduationPollTimer = null;
         _isGraduated = true;
         hideGraduatingOverlay();
-        toast('<img class="icon" src="/icons/white/crown.png" alt="Graduated"> Token graduated to Raydium CPMM!', 'success');
+        toast('<img class="icon" src="/icons/white/rocket.png" alt="Graduated"> Token graduated to Raydium CPMM!', 'success');
         loadTradePageData(mintAddress);
       }
     } catch {}
