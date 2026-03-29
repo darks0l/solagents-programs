@@ -542,7 +542,7 @@ function renderTokenSection(token, dashData) {
             <div class="text-muted text-xs">Circulating</div>
           </div>
           <div class="text-center">
-            <div class="font-bold">${pool.pool_sol || '0'} SOL</div>
+            <div class="font-bold">${token.status === 'graduated' ? 'Raydium' : `${pool.pool_sol || '0'} SOL`}</div>
             <div class="text-muted text-xs">Pool Liquidity</div>
           </div>
           <div class="text-center">
@@ -554,6 +554,16 @@ function renderTokenSection(token, dashData) {
         <!-- Pool info -->
         <div class="card glass mt-1" style="background:rgba(0,0,0,0.3);border-color:rgba(255,255,255,0.05);">
           <div class="card-body" style="padding:12px;">
+          ${token.status === 'graduated' ? `
+            <div class="flex items-center" style="justify-content:space-between;">
+              <span class="text-muted text-xs">Raydium CPMM</span>
+              <span class="text-xs" style="color:#14F195;">🎓 Graduated</span>
+            </div>
+            <div class="flex items-center mt-05" style="justify-content:space-between;">
+              <span class="text-muted text-xs">Fee</span>
+              <span class="text-xs">0.25% Raydium CPMM fee</span>
+            </div>
+          ` : `
             <div class="flex items-center" style="justify-content:space-between;">
               <span class="text-muted text-xs">Bonding Curve</span>
               <span class="text-xs" style="color:#14F195;">🔒 Liquidity Locked</span>
@@ -566,6 +576,7 @@ function renderTokenSection(token, dashData) {
               <span class="text-muted text-xs">Fee</span>
               <span class="text-xs">2% — <span style="color:#14F195">1.4%</span> creator / <span style="color:#9945FF">0.6%</span> platform</span>
             </div>
+          `}
           </div>
         </div>
 
