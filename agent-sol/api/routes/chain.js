@@ -142,6 +142,8 @@ export default async function chainRoutes(fastify) {
         graduation_progress: pool.realSolBalance
           ? ((Number(BigInt(pool.realSolBalance.toString())) / Number(config?.graduationThreshold || 85_000_000_000n)) * 100).toFixed(2) + '%'
           : '0%',
+        graduation_threshold: Number(config?.graduationThreshold || 85_000_000_000n) / LAMPORTS_PER_SOL,
+        raydium_pool_address: dbToken?.raydium_pool_address || null,
       };
     } catch (err) {
       return reply.code(500).send({ error: err.message });

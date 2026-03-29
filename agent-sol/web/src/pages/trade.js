@@ -657,6 +657,13 @@ async function loadTradePageData(mintAddress) {
       poolData = await api.get(`/pool/${mintAddress}`);
     }
 
+    // Set graduated flag EARLY — before any UI updates or user interaction
+    if (poolData.status === 'graduated') {
+      _isGraduated = true;
+    } else {
+      _isGraduated = false;
+    }
+
     // Update header
     document.getElementById('token-header').innerHTML = `
       <div class="flex items-center gap-2">
@@ -675,15 +682,55 @@ async function loadTradePageData(mintAddress) {
       if (solPriceUsd > 0) _cachedSolPriceUsd = solPriceUsd;
     } catch {}
 
-    // Update stats
-    const price = parseFloat(poolData.price_sol || poolData.current_price || '0');
+    // Update stats — for graduated tokens, fetch real price from Raydium quote
+    let price = parseFloat(poolData.price_sol || poolData.current_price || '0');
+    if (_isGraduated) {
+      // Bonding curve reserves are empty — get real price from post-grad quote
+      try {
+        const quoteRes = await api.get(`/chain/quote/post-grad?mint=${mintAddress}&side=buy&amount=100000000`);
+        // quoteRes gives us tokens out for 0.1 SOL input — derive price
+        const inputSol = parseFloat(quoteRes.input_sol || '0.1');
+        const outputTokens = parseFloat(quoteRes.output_human || '0');
+        if (outputTokens > 0) {
+          price = inputSol / outputTokens;
+        }
+      } catch {
+        // Fall back to chart data price
+        try {
+          const chartRes = await api.get(`/tokens/by-mint/${mintAddress}/chart?limit=1`);
+          const lastPrice = chartRes.prices?.[0]?.price_sol;
+          if (lastPrice && parseFloat(lastPrice) > 0) price = parseFloat(lastPrice);
+        } catch {}
+      }
+    }
     document.getElementById('stat-price').textContent = price < 0.001 ? price.toFixed(10) : price.toFixed(6);
-    _updateMcapDisplay(poolData.market_cap_sol, solPriceUsd);
-    document.getElementById('stat-vol').textContent = poolData.total_volume_sol ? `${parseFloat(poolData.total_volume_sol).toFixed(4)} SOL` : '0 SOL';
 
-    // Graduation progress bar
+    // Market cap — for graduated tokens, compute from real Raydium price
+    if (_isGraduated && price > 0) {
+      const totalSupply = parseFloat(poolData.total_supply || '0') / 1e9;
+      const mcapSol = price * totalSupply;
+      _updateMcapDisplay(mcapSol.toFixed(4), solPriceUsd);
+    } else {
+      _updateMcapDisplay(poolData.market_cap_sol, solPriceUsd);
+    }
+
+    // Volume — for graduated tokens, show DB historical volume (on-chain counters may be stale)
+    if (_isGraduated) {
+      // Try to get post-graduation volume from DB
+      try {
+        const dbPool = await api.get(`/pool/${mintAddress}`);
+        const vol = parseFloat(dbPool.total_volume_sol || poolData.total_volume_sol || '0');
+        document.getElementById('stat-vol').textContent = vol > 0 ? `${vol.toFixed(4)} SOL` : '—';
+      } catch {
+        document.getElementById('stat-vol').textContent = poolData.total_volume_sol ? `${parseFloat(poolData.total_volume_sol).toFixed(4)} SOL` : '—';
+      }
+    } else {
+      document.getElementById('stat-vol').textContent = poolData.total_volume_sol ? `${parseFloat(poolData.total_volume_sol).toFixed(4)} SOL` : '0 SOL';
+    }
+
+    // Graduation progress bar / graduated badge
     const gradBar = document.getElementById('graduation-bar');
-    if (gradBar && poolData.status !== 'graduated') {
+    if (gradBar && !_isGraduated) {
       const realSolVal = parseFloat(poolData.real_sol_balance || poolData.pool_sol || 0);
       const gradThreshold = parseFloat(poolData.graduation_threshold || 85);
       const pct = Math.min((realSolVal / gradThreshold) * 100, 100);
@@ -691,15 +738,24 @@ async function loadTradePageData(mintAddress) {
       document.getElementById('graduation-pct').textContent = pct.toFixed(1) + '%';
       document.getElementById('graduation-fill').style.width = pct + '%';
       document.getElementById('graduation-sol').textContent = `${realSolVal.toFixed(2)} / ${gradThreshold} SOL`;
-    } else if (gradBar && poolData.status === 'graduated') {
+    } else if (gradBar && _isGraduated) {
+      // Replace entire graduation bar with clean graduated badge
       gradBar.style.display = '';
-      document.getElementById('graduation-pct').textContent = '🎓 Graduated — Now on Raydium';
-      document.getElementById('graduation-pct').style.color = '#14F195';
-      document.getElementById('graduation-fill').style.width = '100%';
-      document.getElementById('graduation-sol').textContent = 'Trades routed through Raydium CPMM • 2% fee';
-      // Update label from "Bonding Curve" to "Raydium CPMM"
-      const bcLabel = gradBar.querySelector('.text-muted');
-      if (bcLabel && bcLabel.textContent.trim() === 'Bonding Curve') bcLabel.textContent = 'Raydium CPMM';
+      gradBar.innerHTML = `
+        <div style="text-align:center;padding:12px;background:rgba(20,241,149,0.08);border:1px solid rgba(20,241,149,0.2);border-radius:8px;margin-top:12px">
+          <span style="font-size:1.5rem">🎓</span>
+          <div style="color:#14F195;font-weight:600;margin-top:4px">Graduated to Raydium</div>
+          <div style="color:rgba(255,255,255,0.5);font-size:0.75rem;margin-top:2px">Trading via Raydium CPMM</div>
+          <a href="https://raydium.io/swap/?inputMint=So11111111111111111111111111111111111111112&outputMint=${mintAddress}" target="_blank" style="color:#9945FF;font-size:0.75rem;margin-top:4px;display:inline-block">Trade on Raydium ↗</a>
+        </div>
+      `;
+    }
+
+    // Fee labels — update for graduated tokens (0.25% Raydium vs 2% bonding curve)
+    if (_isGraduated) {
+      document.querySelectorAll('.text-muted.text-xs').forEach(el => {
+        if (el.textContent.trim() === 'Fee (2%)') el.textContent = 'Fee (0.25%)';
+      });
     }
 
     // stat-ath is populated by loadPriceChart
@@ -742,10 +798,8 @@ async function loadTradePageData(mintAddress) {
       `;
     }
 
-    // Route to Raydium for graduated tokens — trading stays fully enabled
-    if (poolData.status === 'graduated') {
-      _isGraduated = true;
-
+    // Raydium UI enhancements for graduated tokens
+    if (_isGraduated) {
       // Show "Trading on Raydium CPMM" badge above the trade tabs
       const tradeBox = document.getElementById('trade-box');
       if (tradeBox) {
@@ -755,7 +809,7 @@ async function loadTradePageData(mintAddress) {
           badge.className = 'raydium-badge';
           badge.style.cssText = 'text-align:center;padding:6px 12px;margin-bottom:8px;background:rgba(20,241,149,0.08);border:1px solid rgba(20,241,149,0.2);border-radius:8px';
           badge.innerHTML = '<span style="color:#14F195;font-size:0.8rem;font-weight:600">🎓 Trading on Raydium CPMM</span>'
-            + ' <span class="text-muted text-xs">• Trades routed through Raydium CPMM • 2% fee</span>';
+            + ' <span class="text-muted text-xs">• 0.25% swap fee</span>';
           header.insertBefore(badge, header.firstChild);
         }
       }
@@ -776,8 +830,6 @@ async function loadTradePageData(mintAddress) {
           mintInfoCard.appendChild(row);
         }
       }
-    } else {
-      _isGraduated = false;
     }
 
     // Draw simple price chart from history
