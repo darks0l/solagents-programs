@@ -53,12 +53,22 @@ async function getAuthToken() {
   return state.authToken;
 }
 
+// Routes that require agent auth — everything else is public
+const AUTH_ROUTES = [
+  '/agents/', '/messages', '/cards', '/trade/', '/transfer/',
+  '/admin', '/jobs/', '/register',
+];
+
+function _needsAuth(path) {
+  return AUTH_ROUTES.some(r => path.includes(r));
+}
+
 export const api = {
   base: API_BASE,
 
-  async get(path) {
+  async get(path, { auth = false } = {}) {
     const headers = {};
-    if (state.agent) {
+    if ((auth || _needsAuth(path)) && state.agent) {
       const token = await getAuthToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
     }
@@ -66,9 +76,9 @@ export const api = {
     return res.json();
   },
 
-  async post(path, body) {
+  async post(path, body, { auth = false } = {}) {
     const headers = { 'Content-Type': 'application/json' };
-    if (state.agent) {
+    if ((auth || _needsAuth(path)) && state.agent) {
       const token = await getAuthToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
     }
