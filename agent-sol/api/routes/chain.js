@@ -96,6 +96,7 @@ export default async function chainRoutes(fastify) {
 
       // Get token info from DB if available
       const dbToken = stmts.getAgentTokenByMint?.get(mintAddress);
+      const dbPool = dbToken ? stmts.getPool?.get(dbToken.id) : null;
 
       // Fetch creator's current on-chain token balance
       let creatorCurrentBalance = '0';
@@ -137,7 +138,12 @@ export default async function chainRoutes(fastify) {
         total_trades: pool.totalTrades?.toNumber() || 0,
         total_buys: pool.totalBuys?.toNumber() || 0,
         total_sells: pool.totalSells?.toNumber() || 0,
-        status: (pool.status?.graduated !== undefined) ? 'graduated' : 'active',
+        // Status: check on-chain enum OR graduated_at > 0 OR DB status as fallback
+        status: (
+          pool.status?.graduated !== undefined ||
+          (pool.graduatedAt?.toNumber() || 0) > 0 ||
+          dbToken?.status === 'graduated'
+        ) ? 'graduated' : 'active',
         graduated_at: pool.graduatedAt?.toNumber() || 0,
         market_cap_sol: (vTokenBig > 0n
           ? (Number(BigInt(pool.realSolBalance.toString())) / LAMPORTS_PER_SOL + 30) * (Number(BigInt(pool.totalSupply.toString()) / BigInt(1e9)) / (vToken / 1e9))
@@ -146,7 +152,7 @@ export default async function chainRoutes(fastify) {
           ? ((Number(BigInt(pool.realSolBalance.toString())) / Number(config?.graduationThreshold || 85_000_000_000n)) * 100).toFixed(2) + '%'
           : '0%',
         graduation_threshold: Number(config?.graduationThreshold || 85_000_000_000n) / LAMPORTS_PER_SOL,
-        raydium_pool_address: dbToken?.raydium_pool_address || null,
+        raydium_pool_address: dbPool?.raydium_pool_address || null,
       };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
