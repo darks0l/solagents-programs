@@ -5,22 +5,38 @@
  * Provides: connect (with modal), disconnect, sign, send, auto-reconnect
  */
 
-import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
-import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
-import { CoinbaseWalletAdapter } from '@solana/wallet-adapter-coinbase';
-import { LedgerWalletAdapter } from '@solana/wallet-adapter-ledger';
 import { Connection, Transaction } from '@solana/web3.js';
 
 // ── Config ───────────────────────────────────────────────────
 const RPC_ENDPOINT = 'https://api.devnet.solana.com';
 
-// ── Adapters ─────────────────────────────────────────────────
-const WALLETS = [
-  new PhantomWalletAdapter(),
-  new SolflareWalletAdapter(),
-  new CoinbaseWalletAdapter(),
-  new LedgerWalletAdapter(),
-];
+// ── Adapters (lazy-initialized to avoid crashes on mobile) ──
+let _wallets = null;
+
+async function getWallets() {
+  if (_wallets) return _wallets;
+  _wallets = [];
+  try {
+    const { PhantomWalletAdapter } = await import('@solana/wallet-adapter-phantom');
+    _wallets.push(new PhantomWalletAdapter());
+  } catch {}
+  try {
+    const { SolflareWalletAdapter } = await import('@solana/wallet-adapter-solflare');
+    _wallets.push(new SolflareWalletAdapter());
+  } catch {}
+  try {
+    const { CoinbaseWalletAdapter } = await import('@solana/wallet-adapter-coinbase');
+    _wallets.push(new CoinbaseWalletAdapter());
+  } catch {}
+  // Ledger requires WebHID — skip on mobile/browsers that don't support it
+  if (typeof navigator !== 'undefined' && navigator.hid) {
+    try {
+      const { LedgerWalletAdapter } = await import('@solana/wallet-adapter-ledger');
+      _wallets.push(new LedgerWalletAdapter());
+    } catch {}
+  }
+  return _wallets;
+}
 
 // ── State ────────────────────────────────────────────────────
 let _adapter = null;
@@ -52,9 +68,10 @@ export function onDisconnect(cb) {
 // ── Connect (shows modal) ────────────────────────────────────
 
 export async function connectWallet() {
+  const wallets = await getWallets();
   // Check which adapters are available (installed)
-  const detected = WALLETS.filter(w => w.readyState === 'Installed');
-  const allWallets = [...detected, ...WALLETS.filter(w => !detected.includes(w))];
+  const detected = wallets.filter(w => w.readyState === 'Installed');
+  const allWallets = [...detected, ...wallets.filter(w => !detected.includes(w))];
 
   if (allWallets.length === 0) {
     window.open('https://phantom.app/', '_blank');
@@ -88,7 +105,8 @@ export async function tryAutoConnect() {
   const savedName = localStorage.getItem('walletName');
   if (!savedName || localStorage.getItem('walletConnected') !== 'true') return null;
 
-  const adapter = WALLETS.find(w => w.name === savedName);
+  const wallets = await getWallets();
+  const adapter = wallets.find(w => w.name === savedName);
   if (!adapter || adapter.readyState !== 'Installed') return null;
 
   try {
