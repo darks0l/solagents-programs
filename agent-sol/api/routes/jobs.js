@@ -12,10 +12,10 @@ import { connection } from '../services/commerce.js';
  * 
  * TX Verification Pattern:
  * State-advancing routes (fund, submit, complete, reject, refund) return an Anchor
- * instruction for the client to sign. On success they mark the DB record as
- * `pending_<nextState>`. The client submits the tx and then calls:
- *   POST /api/jobs/:jobId/confirm  { txSignature }
- * which verifies the tx on-chain and advances the DB to the final state.
+ * instruction for the client to sign. The DB stays in the CURRENT state until confirmed.
+ * After submitting the tx, the client calls:
+ *   POST /api/jobs/:jobId/confirm  { txSignature, action: 'fund'|'submit'|'complete'|'reject'|'expire'|'create' }
+ * which verifies the tx on-chain and advances the DB to the final state for that action.
  * 
  * Lifecycle enforcement:
  * - Budget > 0 required at creation
@@ -141,9 +141,6 @@ export default async function jobRoutes(fastify) {
       jobPDA, // on-chain address from PDA derivation
     );
 
-    // Mark as pending until tx is confirmed on-chain via /confirm
-    stmts.updateJobStatus.run('pending_open', id);
-
     return {
       jobId: id,
       transaction,
@@ -212,12 +209,10 @@ export default async function jobRoutes(fastify) {
       optParams,
     });
 
-    stmts.updateJobStatus.run('pending_funded', jobId);
-
     return {
       jobId,
       instruction,
-      message: 'Sign and submit this transaction, then call POST /api/jobs/:jobId/confirm with txSignature',
+      message: 'Sign and submit this transaction, then call POST /api/jobs/:jobId/confirm with { txSignature, action: "fund" }',
     };
   });
 
@@ -247,13 +242,12 @@ export default async function jobRoutes(fastify) {
 
     const instruction = commerce.buildInstruction('submit', { deliverable, optParams });
 
-    stmts.updateJobStatus.run('pending_submitted', jobId);
     stmts.updateJobSubmit.run(deliverable, jobId);
 
     return {
       jobId,
       instruction,
-      message: 'Sign and submit this transaction, then call POST /api/jobs/:jobId/confirm with txSignature',
+      message: 'Sign and submit this transaction, then call POST /api/jobs/:jobId/confirm with { txSignature, action: "submit" }',
     };
   });
 
@@ -284,12 +278,10 @@ export default async function jobRoutes(fastify) {
 
     const instruction = commerce.buildInstruction('complete', { reason, optParams });
 
-    stmts.updateJobStatus.run('pending_completed', jobId);
-
     return {
       jobId,
       instruction,
-      message: 'Sign and submit this transaction, then call POST /api/jobs/:jobId/confirm with txSignature',
+      message: 'Sign and submit this transaction, then call POST /api/jobs/:jobId/confirm with { txSignature, action: "complete" }',
     };
   });
 
@@ -305,12 +297,11 @@ export default async function jobRoutes(fastify) {
     }
 
     const instruction = commerce.buildInstruction('reject', { reason, optParams });
-    stmts.updateJobStatus.run('pending_rejected', jobId);
 
     return {
       jobId,
       instruction,
-      message: 'Sign and submit this transaction, then call POST /api/jobs/:jobId/confirm with txSignature',
+      message: 'Sign and submit this transaction, then call POST /api/jobs/:jobId/confirm with { txSignature, action: "reject" }',
     };
   });
 
@@ -328,12 +319,11 @@ export default async function jobRoutes(fastify) {
     }
 
     const instruction = commerce.buildInstruction('claim_refund', {});
-    stmts.updateJobStatus.run('pending_expired', jobId);
 
     return {
       jobId,
       instruction,
-      message: 'Sign and submit this transaction, then call POST /api/jobs/:jobId/confirm with txSignature',
+      message: 'Sign and submit this transaction, then call POST /api/jobs/:jobId/confirm with { txSignature, action: "expire" }',
     };
   });
 
@@ -365,13 +355,11 @@ export default async function jobRoutes(fastify) {
       reason: 'Auto-released: evaluator did not respond within 72 hours',
     });
 
-    stmts.updateJobStatus.run('pending_completed', jobId);
-
     return {
       jobId,
       instruction,
       auto_released: true,
-      message: 'Auto-release window passed. Sign to complete the job and release payment to provider.',
+      message: 'Auto-release window passed. Sign to complete the job and release payment to provider. Then call /confirm with { txSignature, action: "complete" }',
     };
   });
 
@@ -429,31 +417,31 @@ export default async function jobRoutes(fastify) {
   // === Confirm Transaction ===
   fastify.post('/api/jobs/:jobId/confirm', async (request, reply) => {
     const { jobId } = request.params;
-    const { txSignature, onchainAddress } = request.body;
+    const { txSignature, action, onchainAddress } = request.body;
 
     if (!txSignature) {
       return reply.code(400).send({ error: 'txSignature required' });
     }
+    if (!action) {
+      return reply.code(400).send({ error: 'action required: create|fund|submit|complete|reject|expire' });
+    }
+
+    const actionToFinal = {
+      create: 'open',
+      fund: 'funded',
+      submit: 'submitted',
+      complete: 'completed',
+      reject: 'rejected',
+      expire: 'expired',
+    };
+
+    const finalState = actionToFinal[action];
+    if (!finalState) {
+      return reply.code(400).send({ error: `Unknown action "${action}". Must be one of: create, fund, submit, complete, reject, expire` });
+    }
 
     const job = stmts.getJob.get(jobId);
     if (!job) return reply.code(404).send({ error: 'Job not found' });
-
-    // Map pending_* → final state
-    const pendingToFinal = {
-      pending_open: 'open',
-      pending_funded: 'funded',
-      pending_submitted: 'submitted',
-      pending_completed: 'completed',
-      pending_rejected: 'rejected',
-      pending_expired: 'expired',
-    };
-
-    const finalState = pendingToFinal[job.status];
-    if (!finalState) {
-      return reply.code(409).send({
-        error: `Job is not in a pending state (current: ${job.status}). Only call /confirm after a state-advancing action.`,
-      });
-    }
 
     // Verify the transaction was confirmed on-chain
     const confirmed = await verifyTx(txSignature);
