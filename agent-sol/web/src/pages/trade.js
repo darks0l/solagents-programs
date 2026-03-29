@@ -168,7 +168,7 @@ function _openWs(mintAddress) {
         if (msg.type === 'graduation') {
           _isGraduated = true;
           hideGraduatingOverlay();
-          toast('🎓 Token graduated to Raydium CPMM!', 'success');
+          toast('<img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Token graduated to Raydium CPMM!', 'success');
           loadTradePageData(mintAddress);
         }
       } catch { /* ignore malformed */ }
@@ -412,7 +412,7 @@ export async function renderTrade(container, state, mintAddress) {
               </div>
             </div>
             <div class="flex items-center gap-1 mt-1" style="justify-content:center">
-              <span class="text-xs" style="color:#14F195">🔥 LP Burned at Graduation</span>
+              <span class="text-xs" style="color:#14F195"><img class="icon" src="/icons/white/fire.png" alt="Fire"> LP Burned at Graduation</span>
               <span class="text-muted text-xs">•</span>
               <span class="text-xs" style="color:#9945FF">Authorities Revoked</span>
             </div>
@@ -505,7 +505,7 @@ export async function renderTrade(container, state, mintAddress) {
                     <span class="wallet-dot"></span>
                     <span class="text-xs font-mono">${truncateAddress(getPublicKey())}</span>
                   </div>`
-                : `<button class="btn btn-sm btn-primary w-full" id="btn-connect-wallet">🔌 Connect Wallet to Trade</button>`
+                : `<button class="btn btn-sm btn-primary w-full" id="btn-connect-wallet"><img class="icon" src="/icons/white/chain.png" alt="Connect"> Connect Wallet to Trade</button>`
               }
             </div>
             <div id="wallet-balances" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,0.3);border-radius:8px;border:1px solid rgba(255,255,255,0.06)"></div>
@@ -516,7 +516,7 @@ export async function renderTrade(container, state, mintAddress) {
         <div class="card glass mt-2" id="dev-buy-card" style="display:none">
           <div class="card-header">
             <div class="flex items-center gap-1">
-              <span class="dev-badge">🔍 DEV BUY</span>
+              <span class="dev-badge"><img class="icon" src="/icons/white/target.png" alt="Search"> DEV BUY</span>
               <span class="text-muted text-xs">Fully transparent</span>
             </div>
           </div>
@@ -536,15 +536,15 @@ export async function renderTrade(container, state, mintAddress) {
             </div>
             <div class="stat-row mt-05">
               <span class="text-muted text-xs">Mint Authority</span>
-              <span class="text-xs" style="color:#14F195">✅ Revoked</span>
+              <span class="text-xs" style="color:#14F195"><img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Revoked</span>
             </div>
             <div class="stat-row mt-05">
               <span class="text-muted text-xs">Freeze Authority</span>
-              <span class="text-xs" style="color:#14F195">✅ Revoked</span>
+              <span class="text-xs" style="color:#14F195"><img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Revoked</span>
             </div>
             <div class="stat-row mt-05">
               <span class="text-muted text-xs">Metadata</span>
-              <span class="text-xs" style="color:#14F195">✅ Immutable</span>
+              <span class="text-xs" style="color:#14F195"><img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Immutable</span>
             </div>
           </div>
         </div>
@@ -669,7 +669,7 @@ async function loadTradePageData(mintAddress) {
       <div class="flex items-center gap-2">
         ${poolData.symbol ? `<div class="font-bold text-2xl gradient-text">$${poolData.symbol}</div>` : ''}
         <div class="text-secondary">${poolData.name || ''}</div>
-        ${poolData.status === 'graduated' ? `<span class="badge" style="background:rgba(20,241,149,0.2);color:#14F195">🎓 Graduated to Raydium</span>` : ''}
+        ${poolData.status === 'graduated' ? `<span class="badge" style="background:rgba(20,241,149,0.2);color:#14F195"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Graduated to Raydium</span>` : ''}
       </div>
     `;
 
@@ -743,7 +743,7 @@ async function loadTradePageData(mintAddress) {
       gradBar.style.display = '';
       gradBar.innerHTML = `
         <div style="text-align:center;padding:12px;background:rgba(20,241,149,0.08);border:1px solid rgba(20,241,149,0.2);border-radius:8px;margin-top:12px">
-          <span style="font-size:1.5rem">🎓</span>
+          <span style="font-size:1.5rem"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"></span>
           <div style="color:#14F195;font-weight:600;margin-top:4px">Graduated to Raydium</div>
           <div style="color:rgba(255,255,255,0.5);font-size:0.75rem;margin-top:2px">Trading via Raydium CPMM</div>
           <a href="https://raydium.io/swap/?inputMint=So11111111111111111111111111111111111111112&outputMint=${mintAddress}" target="_blank" style="color:#9945FF;font-size:0.75rem;margin-top:4px;display:inline-block">Trade on Raydium ↗</a>
@@ -808,7 +808,7 @@ async function loadTradePageData(mintAddress) {
           const badge = document.createElement('div');
           badge.className = 'raydium-badge';
           badge.style.cssText = 'text-align:center;padding:6px 12px;margin-bottom:8px;background:rgba(20,241,149,0.08);border:1px solid rgba(20,241,149,0.2);border-radius:8px';
-          badge.innerHTML = '<span style="color:#14F195;font-size:0.8rem;font-weight:600">🎓 Trading on Raydium CPMM</span>'
+          badge.innerHTML = '<span style="color:#14F195;font-size:0.8rem;font-weight:600"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Trading on Raydium CPMM</span>'
             + ' <span class="text-muted text-xs">• 0.25% swap fee</span>';
           header.insertBefore(badge, header.firstChild);
         }
@@ -1058,7 +1058,7 @@ async function executeBuy(mintAddress) {
       traderWallet: getPublicKey(),
     });
 
-    toast(`✅ Bought! Transaction confirmed.`, 'success');
+    toast(`<img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Bought! Transaction confirmed.`, 'success');
 
     // Check if this buy triggered graduation
     if (syncResult.graduatedTo) {
@@ -1135,7 +1135,7 @@ async function executeSell(mintAddress) {
       traderWallet: getPublicKey(),
     });
 
-    toast(`✅ Sold! SOL returned to your wallet.`, 'success');
+    toast(`<img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Sold! SOL returned to your wallet.`, 'success');
 
     // Check if this sell triggered graduation
     if (syncSellResult.graduatedTo) {
@@ -1179,7 +1179,7 @@ function showGraduatingOverlay(mintAddress, txSig) {
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;';
   overlay.innerHTML = `
     <div style="text-align:center;max-width:400px;padding:40px;">
-      <div style="font-size:4rem;margin-bottom:20px;animation:pulse 1.5s ease-in-out infinite">🎓</div>
+      <div style="font-size:4rem;margin-bottom:20px;animation:pulse 1.5s ease-in-out infinite"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"></div>
       <h2 style="color:#14F195;font-size:1.5rem;margin-bottom:12px">Graduating to Raydium</h2>
       <p style="color:rgba(255,255,255,0.7);font-size:0.95rem;line-height:1.5">
         This token has reached the graduation threshold!<br>
@@ -1216,7 +1216,7 @@ function showGraduatingOverlay(mintAddress, txSig) {
         _graduationPollTimer = null;
         _isGraduated = true;
         hideGraduatingOverlay();
-        toast('🎓 Token graduated to Raydium CPMM!', 'success');
+        toast('<img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Token graduated to Raydium CPMM!', 'success');
         loadTradePageData(mintAddress);
       }
     } catch {}

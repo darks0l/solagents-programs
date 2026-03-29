@@ -78,7 +78,7 @@ export async function renderAgentProfile(container, state, agentId) {
   } catch (err) {
     document.getElementById('profile-loading').innerHTML = `
       <div class="text-center">
-        <div style="font-size:3rem;margin-bottom:12px">⚠️</div>
+        <div style="font-size:3rem;margin-bottom:12px"><img class="icon" src="/icons/white/shield.png" alt="Warning"></div>
         <h3 class="font-semibold">Agent Not Found</h3>
         <p class="text-secondary mt-1">${err.message}</p>
       </div>
@@ -140,16 +140,16 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
       <div class="card-body" style="padding:24px">
         <div class="flex items-center gap-2" style="flex-wrap:wrap">
           ${token?.logo_url
-            ? `<img src="${token.logo_url}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(153,69,255,0.3)" onerror="this.outerHTML='<div style=\\'width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:2.5rem\\'>🤖</div>'" />`
-            : `<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:2.5rem">🤖</div>`
+            ? `<img src="${token.logo_url}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(153,69,255,0.3)" onerror="this.outerHTML='<div style=\\'width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:2.5rem\\'><img class="icon" src="/icons/white/gear.png" alt="Agent"></div>'" />`
+            : `<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:2.5rem"><img class="icon" src="/icons/white/gear.png" alt="Agent"></div>`
           }
           <div style="flex:1;min-width:200px">
             <div class="flex items-center gap-1" style="flex-wrap:wrap">
               <h1 class="text-2xl font-bold" style="margin:0">${agent.name || 'Unnamed Agent'}</h1>
               ${data.tokenized ? (pool?.status === 'graduated'
-                ? '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600">🎓 Graduated</span>'
-                : '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600">🪙 Tokenized</span>') : ''}
-              ${isOwner ? '<span style="background:rgba(153,69,255,0.15);color:#9945FF;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600">👤 You</span>' : ''}
+                ? '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Graduated</span>'
+                : '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"><img class="icon" src="/icons/white/coin-flat.png" alt="Token"> Tokenized</span>') : ''}
+              ${isOwner ? '<span style="background:rgba(153,69,255,0.15);color:#9945FF;padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"><img class="icon" src="/icons/white/person.png" alt="User"> You</span>' : ''}
             </div>
             <p class="text-muted text-sm mt-05" style="font-family:var(--font-mono)">
               <a href="https://explorer.solana.com/address/${agent.walletAddress}?cluster=devnet" target="_blank" style="color:inherit;text-decoration:none;opacity:0.7">${agent.walletAddress}</a>
@@ -159,7 +159,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
           <div style="text-align:right">
             ${data.tokenized && token?.token_symbol ? (pool?.status === 'graduated' ? `
               <button class="btn btn-primary btn-glow" id="btn-trade-token" style="background:linear-gradient(135deg,rgba(20,241,149,0.2),rgba(153,69,255,0.2));border-color:rgba(20,241,149,0.4)">
-                🎓 Trade on Raydium →
+                <img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Trade on Raydium →
               </button>
             ` : `
               <button class="btn btn-primary btn-glow" id="btn-trade-token">
@@ -167,7 +167,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
               </button>
             `) : token?.mint_address && pool?.status === 'graduated' ? `
               <button class="btn btn-primary btn-glow" id="btn-trade-token" style="background:linear-gradient(135deg,rgba(20,241,149,0.2),rgba(153,69,255,0.2));border-color:rgba(20,241,149,0.4)">
-                🎓 Trade on Raydium →
+                <img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Trade on Raydium →
               </button>
             ` : `
               <button class="btn" id="btn-trade-token" disabled style="opacity:0.35;cursor:not-allowed;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.08)">
@@ -231,7 +231,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
         <div class="card glass" style="border-color:rgba(153,69,255,0.15)">
           <div class="card-header">
             <div class="flex items-center gap-1">
-              <h2 class="font-semibold">🪙 $${token.token_symbol} Token</h2>
+              <h2 class="font-semibold"><img class="icon" src="/icons/white/coin-flat.png" alt="Token"> $${token.token_symbol} Token</h2>
               <span class="badge" style="background:rgba(20,241,149,0.15);color:#14F195">${token.status || 'active'}</span>
             </div>
           </div>
@@ -300,7 +300,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
               ${pool?.status === 'graduated' ? `
                 <div class="flex items-center" style="justify-content:space-between">
                   <span class="text-muted text-xs">Raydium CPMM</span>
-                  <span class="text-xs" style="color:#14F195">🔥 LP Burned</span>
+                  <span class="text-xs" style="color:#14F195"><img class="icon" src="/icons/white/fire.png" alt="Fire"> LP Burned</span>
                 </div>
                 <div class="flex items-center mt-05" style="justify-content:space-between">
                   <span class="text-muted text-xs">Fees</span>
@@ -309,20 +309,20 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
                 <div style="margin-top:8px">
                   <div class="flex items-center text-xs" style="justify-content:space-between;margin-bottom:4px">
                     <span class="text-muted">Status</span>
-                    <span class="font-mono" style="color:#14F195;font-weight:600">🎓 Graduated to Raydium</span>
+                    <span class="font-mono" style="color:#14F195;font-weight:600"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Graduated to Raydium</span>
                   </div>
                   <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
                     <div style="height:100%;width:100%;background:linear-gradient(90deg,#9945FF,#14F195);border-radius:3px"></div>
                   </div>
                   <div class="flex items-center text-xs" style="justify-content:space-between;margin-top:3px">
-                    <span style="color:#14F195">🔥 LP tokens burned — liquidity permanent</span>
+                    <span style="color:#14F195"><img class="icon" src="/icons/white/fire.png" alt="Fire"> LP tokens burned — liquidity permanent</span>
                     <span class="text-muted">Raydium CPMM</span>
                   </div>
                 </div>
               ` : `
                 <div class="flex items-center" style="justify-content:space-between">
                   <span class="text-muted text-xs">Bonding Curve</span>
-                  <span class="text-xs" style="color:#14F195">🔥 LP Burned at Graduation</span>
+                  <span class="text-xs" style="color:#14F195"><img class="icon" src="/icons/white/fire.png" alt="Fire"> LP Burned at Graduation</span>
                 </div>
                 <div class="flex items-center mt-05" style="justify-content:space-between">
                   <span class="text-muted text-xs">Fees</span>
@@ -347,7 +347,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
             <!-- Dev Buy Transparency -->
             ${derivedDevBuys.totals && derivedDevBuys.totals.length > 0 ? `
               <div style="margin-top:12px;padding:10px;background:rgba(255,200,0,0.05);border:1px solid rgba(255,200,0,0.15);border-radius:8px">
-                <p class="text-xs font-semibold mb-05" style="color:#FFD700">🔍 DEV BUY <span class="text-muted" style="font-weight:400">Fully transparent</span></p>
+                <p class="text-xs font-semibold mb-05" style="color:#FFD700"><img class="icon" src="/icons/white/target.png" alt="Search"> DEV BUY <span class="text-muted" style="font-weight:400">Fully transparent</span></p>
                 ${derivedDevBuys.totals.map(t => `
                   <div class="flex items-center text-xs" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
                     <span class="text-muted">Dev SOL spent</span>
@@ -368,7 +368,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
               </div>
             ` : `
               <div style="margin-top:12px;padding:10px;background:rgba(20,241,149,0.03);border:1px solid rgba(20,241,149,0.1);border-radius:8px;text-align:center">
-                <span class="text-xs" style="color:#14F195">✅ No dev buys — 100% community-owned</span>
+                <span class="text-xs" style="color:#14F195"><img class="icon" src="/icons/white/checkmark.png" alt="Yes"> No dev buys — 100% community-owned</span>
               </div>
             `}
           </div>
@@ -380,7 +380,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
         <div>
           <div class="card glass" style="border-color:rgba(20,241,149,0.15)">
             <div class="card-header">
-              <h2 class="font-semibold">💰 Trading Fee Revenue</h2>
+              <h2 class="font-semibold"><img class="icon" src="/icons/white/coin-tilt.png" alt="Money"> Trading Fee Revenue</h2>
             </div>
             <div class="card-body">
               ${(() => {
@@ -405,12 +405,12 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
                       <div class="text-muted text-xs">Total Earned${earnedUsd}</div>
                     </div>
                   </div>
-                  ${ocp ? '<p class="text-muted text-xs mt-1" style="text-align:center;opacity:0.5">📡 On-chain verified</p>' : ''}
+                  ${ocp ? '<p class="text-muted text-xs mt-1" style="text-align:center;opacity:0.5"><img class="icon" src="/icons/white/target.png" alt="Verified"> On-chain verified</p>' : ''}
                   ${unclaimed > 0.000001 ? `
                     <button class="btn btn-primary btn-glow mt-2" style="width:100%" id="btn-claim-fees"
                       data-agent-id="${agentId}" data-mint="${token?.mint_address || ''}"
                       data-unclaimed="${unclaimed.toFixed(9)}">
-                      💰 Claim ${unclaimed.toFixed(6)} SOL${unclaimedUsd}
+                      <img class="icon" src="/icons/white/coin-tilt.png" alt="Money"> Claim ${unclaimed.toFixed(6)} SOL${unclaimedUsd}
                     </button>
                     <p class="text-muted text-xs mt-1" style="text-align:center">Signs an on-chain transaction with your wallet</p>
                   ` : isOwner ? '<p class="text-muted text-xs mt-2" style="text-align:center">No unclaimed fees. Keep trading!</p>' : ''}
@@ -423,7 +423,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
                   <p class="text-muted text-xs font-semibold mb-1">Fee History</p>
                   ${unclaimedFees.slice(0, 10).map(f => `
                     <div class="flex items-center text-xs" style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);justify-content:space-between">
-                      <span class="text-muted">${f.source === 'token_trade' ? '🔄 Trade' : f.source}</span>
+                      <span class="text-muted">${f.source === 'token_trade' ? '<img class="icon" src="/icons/white/gear.png" alt="Refresh"> Trade' : f.source}</span>
                       <span class="font-bold" style="color:#14F195;font-family:var(--font-mono)">+${f.amount_sol} SOL</span>
                       <span class="text-muted">${timeAgo(f.created_at)}</span>
                     </div>
@@ -437,7 +437,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
           ${!data.tokenized && isOwner ? `
             <div class="card glass mt-2" style="border-color:rgba(153,69,255,0.15);background:rgba(153,69,255,0.04)">
               <div class="card-body text-center p-3">
-                <div style="font-size:2.5rem;margin-bottom:8px">🚀</div>
+                <div style="font-size:2.5rem;margin-bottom:8px"><img class="icon" src="/icons/white/fire.png" alt="Launch"></div>
                 <h3 class="font-semibold">Tokenize This Agent</h3>
                 <p class="text-secondary text-sm mt-1">Launch a token, earn 1.4% of every trade. Free except gas.</p>
                 <button class="btn btn-primary btn-glow mt-2" id="btn-open-tokenize">Launch Token →</button>
@@ -452,7 +452,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
     ${token?.recent_trades?.length > 0 ? `
       <div class="card glass mt-2">
         <div class="card-header flex items-center" style="justify-content:space-between">
-          <h2 class="font-semibold">📊 Recent Trades</h2>
+          <h2 class="font-semibold"><img class="icon" src="/icons/white/chart.png" alt="Chart"> Recent Trades</h2>
           ${token.mint_address ? `<button class="btn btn-sm btn-ghost" id="btn-view-chart">View Chart →</button>` : ''}
         </div>
         <div class="card-body">
@@ -493,13 +493,13 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
     <!-- Job History -->
     <div class="card glass mt-2">
       <div class="card-header flex items-center" style="justify-content:space-between">
-        <h2 class="font-semibold">📋 Job History</h2>
+        <h2 class="font-semibold"><img class="icon" src="/icons/white/folder.png" alt="List"> Job History</h2>
         <span class="text-muted text-xs">${allJobs.length} job${allJobs.length !== 1 ? 's' : ''}</span>
       </div>
       <div class="card-body">
         ${allJobs.length > 0 ? allJobs.map(j => {
           const role = j.provider === agent.walletAddress ? 'provider' : j.client === agent.walletAddress ? 'client' : 'evaluator';
-          const roleLabel = role === 'provider' ? '🔧 Provider' : role === 'client' ? '📋 Client' : '⚖️ Evaluator';
+          const roleLabel = role === 'provider' ? '<img class="icon" src="/icons/white/tools.png" alt="Tools"> Provider' : role === 'client' ? '<img class="icon" src="/icons/white/folder.png" alt="List"> Client' : '⚖️ Evaluator';
           const roleBg = role === 'provider' ? 'rgba(20,241,149,0.1)' : role === 'client' ? 'rgba(59,130,246,0.1)' : 'rgba(153,69,255,0.1)';
           const roleFg = role === 'provider' ? '#14F195' : role === 'client' ? '#3B82F6' : '#9945FF';
           const budgetDisplay = j.budget >= 1e6 ? (j.budget / 1e6).toFixed(2) : j.budget;
@@ -535,7 +535,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
     ${services.length > 0 ? `
       <div class="card glass mt-2">
         <div class="card-header">
-          <h2 class="font-semibold">🛠️ Services Offered</h2>
+          <h2 class="font-semibold"><img class="icon" src="/icons/white/tools.png" alt="Tools"> Services Offered</h2>
         </div>
         <div class="card-body">
           <div class="grid grid-2 gap-1">
@@ -581,12 +581,12 @@ function wireProfileEvents(content, data, agentId, state) {
     const mintAddress = btn.dataset.mint;
     const unclaimed = btn.dataset.unclaimed;
     btn.disabled = true;
-    btn.textContent = '⏳ Building transaction...';
+    btn.textContent = '<img class="icon" src="/icons/white/clock.png" alt="Loading"> Building transaction...';
     try {
       if (!isConnected()) {
         toast('Connect your wallet first', 'error');
         btn.disabled = false;
-        btn.textContent = `💰 Claim ${parseFloat(unclaimed).toFixed(6)} SOL`;
+        btn.textContent = `<img class="icon" src="/icons/white/coin-tilt.png" alt="Money"> Claim ${parseFloat(unclaimed).toFixed(6)} SOL`;
         return;
       }
       const creatorWallet = getPublicKey();
@@ -599,12 +599,12 @@ function wireProfileEvents(content, data, agentId, state) {
       if (!transaction) throw new Error('Server returned no transaction');
 
       // 2. Sign & send with Phantom
-      btn.textContent = '✍️ Sign in wallet...';
+      btn.textContent = '<img class="icon" src="/icons/white/document.png" alt="Write"> Sign in wallet...';
       const signature = await signAndSendTransaction(transaction);
 
       // 3. Wait for on-chain confirmation then refresh
-      btn.textContent = '⏳ Confirming on-chain...';
-      toast(`✅ Claimed ${parseFloat(unclaimed).toFixed(6)} SOL! TX: ${signature.slice(0, 12)}...`, 'success');
+      btn.textContent = '<img class="icon" src="/icons/white/clock.png" alt="Loading"> Confirming on-chain...';
+      toast(`<img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Claimed ${parseFloat(unclaimed).toFixed(6)} SOL! TX: ${signature.slice(0, 12)}...`, 'success');
 
       // 4. Also sync DB (fire-and-forget)
       api.post(`/agents/${agentId}/fees/claim`, { callerWallet }).catch(() => {});
@@ -623,13 +623,13 @@ function wireProfileEvents(content, data, agentId, state) {
         } catch {}
       }
 
-      btn.textContent = '✅ Claimed!';
+      btn.textContent = '<img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Claimed!';
       const parent = content.closest('.main-content') || content.parentElement;
       if (parent) renderAgentProfile(parent, state, agentId);
     } catch (err) {
       toast(`Claim failed: ${err.message}`, 'error');
       btn.disabled = false;
-      btn.textContent = `💰 Claim ${parseFloat(unclaimed).toFixed(6)} SOL`;
+      btn.textContent = `<img class="icon" src="/icons/white/coin-tilt.png" alt="Money"> Claim ${parseFloat(unclaimed).toFixed(6)} SOL`;
     }
   });
 

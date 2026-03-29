@@ -12,7 +12,7 @@ export function renderCards(container, state) {
     <!-- Info -->
     <div class="card info-banner" style="border-left: 3px solid var(--warning); background: rgba(255,170,44,0.06);">
       <div class="flex gap-2 items-center">
-        <div style="font-size: 1.5rem;">💳</div>
+        <div style="font-size: 1.5rem;"><img class="icon" src="/icons/white/credit-card.png" alt="Card"></div>
         <div>
           <p class="text-sm"><strong>How it works:</strong> Choose a card type and amount. Pay with SOL, USDC, or other SPL tokens. Card details are delivered securely to your encrypted inbox.</p>
         </div>
@@ -22,7 +22,7 @@ export function renderCards(container, state) {
     <!-- Card Options -->
     <div class="grid-3 mt-2">
       <div class="card card-option" data-type="visa-virtual" data-amount="25">
-        <div style="font-size: 2.5rem; margin-bottom: 12px;">💳</div>
+        <div style="font-size: 2.5rem; margin-bottom: 12px;"><img class="icon" src="/icons/white/credit-card.png" alt="Card"></div>
         <h3>Virtual Visa</h3>
         <p class="text-secondary text-sm mb-2">Instant delivery. Use online anywhere Visa is accepted.</p>
         <div class="flex justify-between items-center">
@@ -31,7 +31,7 @@ export function renderCards(container, state) {
         </div>
       </div>
       <div class="card card-option" data-type="visa-virtual" data-amount="50">
-        <div style="font-size: 2.5rem; margin-bottom: 12px;">💳</div>
+        <div style="font-size: 2.5rem; margin-bottom: 12px;"><img class="icon" src="/icons/white/credit-card.png" alt="Card"></div>
         <h3>Virtual Visa</h3>
         <p class="text-secondary text-sm mb-2">Instant delivery. Higher limit for bigger purchases.</p>
         <div class="flex justify-between items-center">
@@ -40,7 +40,7 @@ export function renderCards(container, state) {
         </div>
       </div>
       <div class="card card-option" data-type="visa-virtual" data-amount="100">
-        <div style="font-size: 2.5rem; margin-bottom: 12px;">💳</div>
+        <div style="font-size: 2.5rem; margin-bottom: 12px;"><img class="icon" src="/icons/white/credit-card.png" alt="Card"></div>
         <h3>Virtual Visa</h3>
         <p class="text-secondary text-sm mb-2">Premium tier. Maximum flexibility for any online purchase.</p>
         <div class="flex justify-between items-center">
@@ -49,7 +49,7 @@ export function renderCards(container, state) {
         </div>
       </div>
       <div class="card card-option" data-type="mastercard-virtual" data-amount="25">
-        <div style="font-size: 2.5rem; margin-bottom: 12px;">🏦</div>
+        <div style="font-size: 2.5rem; margin-bottom: 12px;"><img class="icon" src="/icons/white/safe.png" alt="Bank"></div>
         <h3>Virtual Mastercard</h3>
         <p class="text-secondary text-sm mb-2">Instant delivery. Accepted at millions of merchants worldwide.</p>
         <div class="flex justify-between items-center">
@@ -58,7 +58,7 @@ export function renderCards(container, state) {
         </div>
       </div>
       <div class="card card-option" data-type="mastercard-virtual" data-amount="50">
-        <div style="font-size: 2.5rem; margin-bottom: 12px;">🏦</div>
+        <div style="font-size: 2.5rem; margin-bottom: 12px;"><img class="icon" src="/icons/white/safe.png" alt="Bank"></div>
         <h3>Virtual Mastercard</h3>
         <p class="text-secondary text-sm mb-2">Mid-tier balance for everyday online spending.</p>
         <div class="flex justify-between items-center">
@@ -67,7 +67,7 @@ export function renderCards(container, state) {
         </div>
       </div>
       <div class="card card-option" data-type="custom" data-amount="custom">
-        <div style="font-size: 2.5rem; margin-bottom: 12px;">✨</div>
+        <div style="font-size: 2.5rem; margin-bottom: 12px;"><img class="icon" src="/icons/white/star.png" alt="Special"></div>
         <h3>Custom Amount</h3>
         <p class="text-secondary text-sm mb-2">Choose your own amount. Visa or Mastercard. $10-$500.</p>
         <div class="flex justify-between items-center">
@@ -116,7 +116,7 @@ export function renderCards(container, state) {
         </div>
       </div>
       <button class="btn btn-primary btn-glow w-full mt-2" id="btn-place-order" ${!state.connected ? 'disabled' : ''}>
-        ${state.connected ? '💳 Place Order' : 'Connect Wallet'}
+        ${state.connected ? '<img class="icon" src="/icons/white/credit-card.png" alt="Card"> Place Order' : 'Connect Wallet'}
       </button>
     </div>
 
@@ -127,7 +127,7 @@ export function renderCards(container, state) {
       </div>
       <div id="card-history">
         <div class="empty-state" style="padding: 30px;">
-          <div class="empty-state-icon">📦</div>
+          <div class="empty-state-icon"><img class="icon" src="/icons/white/folder.png" alt="Package"></div>
           <p class="text-sm text-muted">No orders yet</p>
         </div>
       </div>
@@ -205,14 +205,14 @@ export function renderCards(container, state) {
       if (result.error) {
         toast(result.error, 'error');
       } else {
-        toast(`✅ Card order submitted! Order ID: ${result.orderId}`, 'success');
+        toast(`<img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Card order submitted! Order ID: ${result.orderId}`, 'success');
         loadCardHistory(state);
       }
     } catch (err) {
       toast(`Order failed: ${err.message}`, 'error');
     } finally {
       btn.disabled = false;
-      btn.textContent = '💳 Place Order';
+      btn.textContent = '<img class="icon" src="/icons/white/credit-card.png" alt="Card"> Place Order';
     }
   });
 }
@@ -228,7 +228,7 @@ async function loadCardHistory(state) {
     if (orders.length === 0) {
       historyEl.innerHTML = `
         <div class="empty-state" style="padding: 30px;">
-          <div class="empty-state-icon">📦</div>
+          <div class="empty-state-icon"><img class="icon" src="/icons/white/folder.png" alt="Package"></div>
           <p class="text-sm text-muted">No orders yet</p>
         </div>
       `;

@@ -58,7 +58,7 @@ function renderAdminLogin(container) {
   container.innerHTML = `
     <div style="max-width:480px;margin:80px auto;text-align:center">
       <div class="card glass" style="padding:40px">
-        <div style="font-size:3rem;margin-bottom:16px">🔐</div>
+        <div style="font-size:3rem;margin-bottom:16px"><img class="icon" src="/icons/white/lock.png" alt="Lock"></div>
         <h1 class="font-bold text-2xl" style="margin-bottom:8px">Admin Access</h1>
         <p class="text-secondary text-sm" style="margin-bottom:32px">
           Connect your wallet and sign a message to prove admin ownership.
@@ -153,7 +153,7 @@ function renderAdminDashboard(container) {
   container.innerHTML = `
     <div class="page-header flex items-center" style="justify-content:space-between">
       <div>
-        <h1 class="text-2xl font-bold">⚙️ Admin Dashboard</h1>
+        <h1 class="text-2xl font-bold"><img class="icon" src="/icons/white/gear.png" alt="Settings"> Admin Dashboard</h1>
         <p class="text-secondary mt-1">
           <span class="font-mono text-xs" style="color:#9945FF">${truncateAddress(_adminWallet)}</span>
           <span class="badge" style="margin-left:8px;background:rgba(153,69,255,0.15);color:#9945FF;font-size:0.7rem">${_adminRole}</span>
@@ -186,7 +186,7 @@ function renderAdminDashboard(container) {
     ${isSuperAdmin ? `
     <div class="card glass mt-2" id="admin-mgmt-section">
       <div class="card-header flex items-center" style="justify-content:space-between">
-        <h2 class="font-semibold">👥 Admin Management</h2>
+        <h2 class="font-semibold"><img class="icon" src="/icons/white/person.png" alt="Users"> Admin Management</h2>
         <button class="btn btn-sm btn-primary" id="btn-toggle-add-admin">+ Add Admin</button>
       </div>
       <div class="card-body">
@@ -222,7 +222,7 @@ function renderAdminDashboard(container) {
     <!-- Token Operations -->
     <div class="card glass mt-2">
       <div class="card-header">
-        <h2 class="font-semibold">🪙 Token Operations</h2>
+        <h2 class="font-semibold"><img class="icon" src="/icons/white/coin-flat.png" alt="Token"> Token Operations</h2>
       </div>
       <div class="card-body">
         <div class="grid grid-3 gap-1">
@@ -234,7 +234,7 @@ function renderAdminDashboard(container) {
               <input type="text" class="form-input" id="reset-token-id" placeholder="Token ID" style="font-size:0.85rem">
             </div>
             <button class="btn btn-sm btn-ghost mt-1" id="btn-reset-token" style="width:100%;border-color:rgba(255,68,68,0.3);color:#FF4444">
-              🔄 Reset Token
+              <img class="icon" src="/icons/white/gear.png" alt="Refresh"> Reset Token
             </button>
           </div>
 
@@ -250,7 +250,7 @@ function renderAdminDashboard(container) {
               <input type="text" class="form-input" id="update-mint-address" placeholder="Mint address" style="font-family:var(--font-mono);font-size:0.85rem">
             </div>
             <button class="btn btn-sm btn-ghost mt-1" id="btn-update-mint" style="width:100%;border-color:rgba(153,69,255,0.3);color:#9945FF">
-              ✏️ Update Mint
+              <img class="icon" src="/icons/white/document.png" alt="Edit"> Update Mint
             </button>
           </div>
 
@@ -262,7 +262,7 @@ function renderAdminDashboard(container) {
               <input type="text" class="form-input" id="grad-mint-address" placeholder="Mint address" style="font-family:var(--font-mono);font-size:0.85rem">
             </div>
             <button class="btn btn-sm btn-ghost mt-1" id="btn-trigger-grad" style="width:100%;border-color:rgba(20,241,149,0.3);color:#14F195">
-              🎓 Graduate Token
+              <img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Graduate Token
             </button>
           </div>
         </div>
@@ -272,7 +272,7 @@ function renderAdminDashboard(container) {
     <!-- System Info -->
     <div class="card glass mt-2">
       <div class="card-header">
-        <h2 class="font-semibold">🖥️ System Info</h2>
+        <h2 class="font-semibold"><img class="icon" src="/icons/white/monitor.png" alt="System"> System Info</h2>
       </div>
       <div class="card-body" id="system-info">
         <p class="text-muted text-sm">Loading system info...</p>
@@ -414,7 +414,7 @@ async function loadSystemInfo() {
     infoEl.innerHTML = `
       <div class="grid grid-2 gap-1">
         <div class="card glass p-2" style="background:rgba(0,0,0,0.3)">
-          <h3 class="font-semibold text-sm" style="margin-bottom:12px;color:#9945FF">💳 Deployer Wallet</h3>
+          <h3 class="font-semibold text-sm" style="margin-bottom:12px;color:#9945FF"><img class="icon" src="/icons/white/credit-card.png" alt="Card"> Deployer Wallet</h3>
           <div class="stat-row" style="padding:4px 0">
             <span class="text-muted text-xs">Address</span>
             <span class="font-mono text-xs" style="word-break:break-all">${deployerWallet}</span>
@@ -430,7 +430,7 @@ async function loadSystemInfo() {
         </div>
 
         <div class="card glass p-2" style="background:rgba(0,0,0,0.3)">
-          <h3 class="font-semibold text-sm" style="margin-bottom:12px;color:#14F195">🏥 Platform Health</h3>
+          <h3 class="font-semibold text-sm" style="margin-bottom:12px;color:#14F195"><img class="icon" src="/icons/white/shield.png" alt="Health"> Platform Health</h3>
           <div class="stat-row" style="padding:4px 0">
             <span class="text-muted text-xs">Status</span>
             <span class="text-xs" style="color:#14F195">● Online</span>
@@ -546,7 +546,7 @@ async function handleResetToken() {
     toast(`Reset failed: ${err.message}`, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = '🔄 Reset Token';
+    btn.textContent = '<img class="icon" src="/icons/white/gear.png" alt="Refresh"> Reset Token';
   }
 }
 
@@ -580,7 +580,7 @@ async function handleUpdateMint() {
     toast(`Update failed: ${err.message}`, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = '✏️ Update Mint';
+    btn.textContent = '<img class="icon" src="/icons/white/document.png" alt="Edit"> Update Mint';
   }
 }
 
@@ -604,14 +604,14 @@ async function handleTriggerGraduation() {
     if (result.error) {
       toast(result.error, 'error');
     } else {
-      toast(`🎓 Token ${truncateAddress(mintAddress)} graduated!`, 'success');
+      toast(`<img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Token ${truncateAddress(mintAddress)} graduated!`, 'success');
       document.getElementById('grad-mint-address').value = '';
     }
   } catch (err) {
     toast(`Graduation failed: ${err.message}`, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = '🎓 Graduate Token';
+    btn.textContent = '<img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Graduate Token';
   }
 }
 

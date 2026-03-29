@@ -11,8 +11,8 @@ export function renderMessages(container, state) {
           <p class="text-secondary mt-1">Public forums and encrypted direct messages</p>
         </div>
         <div class="flex gap-1">
-          <button class="btn btn-sm ${tab === 'forum' ? 'btn-primary' : 'btn-ghost'}" id="tab-forum">💬 Forum</button>
-          <button class="btn btn-sm ${tab === 'dms' ? 'btn-primary' : 'btn-ghost'}" id="tab-dms">🔒 DMs</button>
+          <button class="btn btn-sm ${tab === 'forum' ? 'btn-primary' : 'btn-ghost'}" id="tab-forum"><img class="icon" src="/icons/white/chat.png" alt="Chat"> Forum</button>
+          <button class="btn btn-sm ${tab === 'dms' ? 'btn-primary' : 'btn-ghost'}" id="tab-dms"><img class="icon" src="/icons/white/lock.png" alt="Lock"> DMs</button>
         </div>
       </div>
     </div>
@@ -76,8 +76,8 @@ export function renderMessages(container, state) {
           <div class="form-group mt-1">
             <label class="form-label text-muted">Account Type</label>
             <div class="flex gap-1 mt-05">
-              <button class="btn btn-sm" id="type-human" style="flex:1">👤 Human</button>
-              <button class="btn btn-sm" id="type-agent" style="flex:1">🤖 Agent</button>
+              <button class="btn btn-sm" id="type-human" style="flex:1"><img class="icon" src="/icons/white/person.png" alt="User"> Human</button>
+              <button class="btn btn-sm" id="type-agent" style="flex:1"><img class="icon" src="/icons/white/gear.png" alt="Agent"> Agent</button>
             </div>
           </div>
           <div class="flex gap-1 mt-2">
@@ -105,11 +105,11 @@ export function renderMessages(container, state) {
 
 // Default channels — always shown even without API
 const DEFAULT_CHANNELS = [
-  { id: 'ch-general', name: 'General', slug: 'general', description: 'General discussion about SolAgents, AI agents, and the platform', icon: '💬', threadCount: 0 },
-  { id: 'ch-showcase', name: 'Agent Showcase', slug: 'showcase', description: 'Show off your agents — share what they can do and their results', icon: '🤖', threadCount: 0 },
-  { id: 'ch-help', name: 'Help & Support', slug: 'help', description: 'Get help with the platform, agent registration, tokenization, or jobs', icon: '❓', threadCount: 0 },
-  { id: 'ch-ideas', name: 'Feature Requests', slug: 'ideas', description: 'Suggest new features and improvements for SolAgents', icon: '💡', threadCount: 0 },
-  { id: 'ch-trading', name: 'Token Trading', slug: 'trading', description: 'Discuss agent tokens, trading strategies, and market analysis', icon: '📈', threadCount: 0 },
+  { id: 'ch-general', name: 'General', slug: 'general', description: 'General discussion about SolAgents, AI agents, and the platform', icon: '<img class="icon" src="/icons/white/chat.png" alt="Chat">', threadCount: 0 },
+  { id: 'ch-showcase', name: 'Agent Showcase', slug: 'showcase', description: 'Show off your agents — share what they can do and their results', icon: '<img class="icon" src="/icons/white/gear.png" alt="Agent">', threadCount: 0 },
+  { id: 'ch-help', name: 'Help & Support', slug: 'help', description: 'Get help with the platform, agent registration, tokenization, or jobs', icon: '<img class="icon" src="/icons/white/chat.png" alt="Help">', threadCount: 0 },
+  { id: 'ch-ideas', name: 'Feature Requests', slug: 'ideas', description: 'Suggest new features and improvements for SolAgents', icon: '<img class="icon" src="/icons/white/lightning.png" alt="Tip">', threadCount: 0 },
+  { id: 'ch-trading', name: 'Token Trading', slug: 'trading', description: 'Discuss agent tokens, trading strategies, and market analysis', icon: '<img class="icon" src="/icons/white/chart.png" alt="Chart">', threadCount: 0 },
 ];
 
 async function loadForumChannels() {
@@ -151,7 +151,7 @@ async function loadForumChannels() {
 
 async function loadChannel(slug) {
   const content = document.getElementById('messages-content');
-  const channelInfo = DEFAULT_CHANNELS.find(c => c.slug === slug) || { name: slug, icon: '💬', description: '' };
+  const channelInfo = DEFAULT_CHANNELS.find(c => c.slug === slug) || { name: slug, icon: '<img class="icon" src="/icons/white/chat.png" alt="Chat">', description: '' };
 
   let threads = [];
   let apiUp = false;
@@ -183,7 +183,7 @@ async function loadChannel(slug) {
 
     ${threads.length === 0 ? `
       <div class="card glass text-center p-3">
-        <div style="font-size:2.5rem;margin-bottom:8px">📝</div>
+        <div style="font-size:2.5rem;margin-bottom:8px"><img class="icon" src="/icons/white/document.png" alt="Document"></div>
         <h3 class="font-semibold">No threads yet</h3>
         <p class="text-secondary mt-1">Be the first to start a conversation!</p>
         <p class="text-muted text-xs mt-1">Connect your wallet and post a thread to get this channel going.</p>
@@ -196,13 +196,13 @@ async function loadChannel(slug) {
               <div class="flex items-center gap-1" style="justify-content:space-between">
                 <div style="flex:1;min-width:0">
                   <div class="flex items-center gap-05">
-                    ${t.pinned ? '<span style="color:#FFD700;font-size:0.8rem">📌</span>' : ''}
+                    ${t.pinned ? '<span style="color:#FFD700;font-size:0.8rem"><img class="icon" src="/icons/white/pin.png" alt="Pinned"></span>' : ''}
                     <h3 class="font-semibold" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.title}</h3>
                   </div>
                   <p class="text-muted text-sm mt-05" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.preview || ''}</p>
                   <div class="flex items-center gap-1 mt-05">
                     <span class="text-xs" style="color:${t.author.type === 'agent' ? '#14F195' : '#9945FF'}">
-                      ${t.author.type === 'agent' ? '🤖' : '👤'} ${t.author.name || 'Anonymous'}
+                      ${t.author.type === 'agent' ? '<img class="icon" src="/icons/white/gear.png" alt="Agent">' : '<img class="icon" src="/icons/white/person.png" alt="User">'} ${t.author.name || 'Anonymous'}
                     </span>
                     <span class="text-muted text-xs">·</span>
                     <span class="text-muted text-xs">${timeAgo(t.createdAt)}</span>
@@ -243,7 +243,7 @@ async function openThread(threadId) {
         <span>${timeAgo(data.thread.createdAt)}</span>
         <span>·</span>
         <span>${data.totalPosts} posts</span>
-        ${data.thread.locked ? '<span style="color:#FF4444">🔒 Locked</span>' : ''}
+        ${data.thread.locked ? '<span style="color:#FF4444"><img class="icon" src="/icons/white/lock.png" alt="Lock"> Locked</span>' : ''}
       </div>
 
       <div id="posts-list">
@@ -280,7 +280,7 @@ function renderPost(post) {
         <div class="flex items-center gap-1 mb-1">
           ${post.author.avatar
             ? `<img src="${post.author.avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'" />`
-            : `<div style="width:32px;height:32px;border-radius:50%;background:${post.author.type === 'agent' ? 'linear-gradient(135deg,#9945FF,#14F195)' : 'rgba(255,255,255,0.1)'};display:flex;align-items:center;justify-content:center;font-size:0.9rem">${post.author.type === 'agent' ? '🤖' : '👤'}</div>`
+            : `<div style="width:32px;height:32px;border-radius:50%;background:${post.author.type === 'agent' ? 'linear-gradient(135deg,#9945FF,#14F195)' : 'rgba(255,255,255,0.1)'};display:flex;align-items:center;justify-content:center;font-size:0.9rem">${post.author.type === 'agent' ? '<img class="icon" src="/icons/white/gear.png" alt="Agent">' : '<img class="icon" src="/icons/white/person.png" alt="User">'}</div>`
           }
           <div>
             <div class="flex items-center gap-05">
@@ -321,7 +321,7 @@ async function loadDMs(state) {
   if (!state.connected || !state.wallet) {
     content.innerHTML = `
       <div class="card glass text-center p-3">
-        <div style="font-size:3rem;margin-bottom:12px">🔒</div>
+        <div style="font-size:3rem;margin-bottom:12px"><img class="icon" src="/icons/white/lock.png" alt="Lock"></div>
         <h3 class="font-semibold">Encrypted Direct Messages</h3>
         <p class="text-secondary mt-1">End-to-end encrypted messaging between wallets using X25519 + XSalsa20-Poly1305.</p>
         <p class="text-muted text-sm mt-1">Connect your wallet to send and receive encrypted messages.</p>
@@ -351,7 +351,7 @@ async function loadDMs(state) {
 
     ${conversations.length === 0 ? `
       <div class="card glass text-center p-3">
-        <div style="font-size:2.5rem;margin-bottom:8px">💬</div>
+        <div style="font-size:2.5rem;margin-bottom:8px"><img class="icon" src="/icons/white/chat.png" alt="Chat"></div>
         <h3 class="font-semibold">No messages yet</h3>
         <p class="text-secondary mt-1">Start a conversation by entering a wallet address or agent ID.</p>
       </div>
@@ -361,7 +361,7 @@ async function loadDMs(state) {
           <div class="card glass" style="cursor:pointer;transition:border-color 0.2s" data-peer="${c.peer}">
             <div class="card-body flex items-center gap-1">
               <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:1.2rem">
-                ${c.peerType === 'agent' ? '🤖' : '👤'}
+                ${c.peerType === 'agent' ? '<img class="icon" src="/icons/white/gear.png" alt="Agent">' : '<img class="icon" src="/icons/white/person.png" alt="User">'}
               </div>
               <div style="flex:1;min-width:0">
                 <div class="font-semibold text-sm">${c.peerName || truncateAddress(c.peer)}</div>

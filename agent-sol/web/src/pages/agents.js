@@ -8,7 +8,7 @@ export function renderAgents(container, state) {
         <p class="text-secondary mt-1">Discover agents, view performance, and explore tokenized agents</p>
       </div>
       <div class="flex gap-1">
-        <button class="btn btn-sm ${state._agentFilter === 'tokenized' ? 'btn-primary' : 'btn-ghost'}" id="filter-tokenized">🪙 Tokenized</button>
+        <button class="btn btn-sm ${state._agentFilter === 'tokenized' ? 'btn-primary' : 'btn-ghost'}" id="filter-tokenized"><img class="icon" src="/icons/white/coin-flat.png" alt="Token"> Tokenized</button>
         <button class="btn btn-sm ${!state._agentFilter || state._agentFilter === 'all' ? 'btn-primary' : 'btn-ghost'}" id="filter-all">All Agents</button>
       </div>
     </div>
@@ -36,7 +36,7 @@ export function renderAgents(container, state) {
     <!-- Token Leaderboard -->
     <div class="card glass mt-2" id="token-section" style="display:none">
       <div class="card-header">
-        <h2 class="font-semibold">🪙 Agent Tokens</h2>
+        <h2 class="font-semibold"><img class="icon" src="/icons/white/coin-flat.png" alt="Token"> Agent Tokens</h2>
       </div>
       <div class="card-body" id="token-list">
         <p class="text-muted">Loading tokens...</p>
@@ -63,7 +63,7 @@ export function renderAgents(container, state) {
     <div class="modal-overlay hidden" id="tokenize-modal">
       <div class="card glass" style="max-width:520px;width:95%;margin:10vh auto;">
         <div class="card-header">
-          <h2 class="font-semibold">🚀 Tokenize Your Agent</h2>
+          <h2 class="font-semibold"><img class="icon" src="/icons/white/fire.png" alt="Launch"> Tokenize Your Agent</h2>
           <p class="text-muted text-sm mt-1">Launch a token backed by a virtual liquidity pool. Free except gas.</p>
         </div>
         <div class="card-body" id="tokenize-form">
@@ -81,13 +81,13 @@ export function renderAgents(container, state) {
               onclick="document.getElementById('tok-logo-file').click()">
               <input type="file" id="tok-logo-file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" style="display:none">
               <div id="logo-upload-placeholder">
-                <div style="font-size:2rem;margin-bottom:8px">🖼️</div>
+                <div style="font-size:2rem;margin-bottom:8px"><img class="icon" src="/icons/white/image.png" alt="Image"></div>
                 <p class="text-secondary text-sm">Click or drag to upload logo</p>
                 <p class="text-muted text-xs">PNG, JPG, GIF, WebP, SVG — max 5MB</p>
               </div>
               <div id="logo-upload-preview" style="display:none">
                 <img id="logo-preview-img" style="width:80px;height:80px;border-radius:12px;object-fit:cover;border:2px solid rgba(153,69,255,0.3)" />
-                <p id="logo-upload-status" class="text-sm mt-1" style="color:#14F195">✓ Uploaded to IPFS</p>
+                <p id="logo-upload-status" class="text-sm mt-1" style="color:#14F195"><img class="icon" src="/icons/white/checkmark.png" alt="Done"> Uploaded to IPFS</p>
                 <p id="logo-ipfs-cid" class="text-muted text-xs"></p>
               </div>
             </div>
@@ -145,7 +145,7 @@ export function renderAgents(container, state) {
             <p class="text-sm text-secondary">6. Your agent profile becomes your token page</p>
           </div>
           <div class="flex gap-1 mt-2">
-            <button class="btn btn-primary btn-glow flex-1" id="btn-launch-token">🚀 Launch Token</button>
+            <button class="btn btn-primary btn-glow flex-1" id="btn-launch-token"><img class="icon" src="/icons/white/fire.png" alt="Launch"> Launch Token</button>
             <button class="btn btn-ghost" id="btn-cancel-tokenize">Cancel</button>
           </div>
         </div>
@@ -263,7 +263,7 @@ async function loadTokens() {
           <tbody>
             ${tokens.map(t => `
               <tr style="border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer" class="token-row" data-token-id="${t.id}">
-                <td style="padding:10px"><strong>${t.agent_name || 'Unknown'}</strong>${t.status === 'graduated' ? ' <span style="font-size:12px;color:#14F195" title="Graduated to Raydium">🎓</span>' : ''}</td>
+                <td style="padding:10px"><strong>${t.agent_name || 'Unknown'}</strong>${t.status === 'graduated' ? ' <span style="font-size:12px;color:#14F195" title="Graduated to Raydium"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"></span>' : ''}</td>
                 <td style="padding:10px"><span style="color:#14F195;font-family:var(--font-mono)">$${t.token_symbol}</span></td>
                 <td style="padding:10px;text-align:right;font-family:var(--font-mono)">${formatPrice(t.current_price)}</td>
                 <td style="padding:10px;text-align:right">${formatSolAsUsd(t.market_cap)}</td>
@@ -292,7 +292,7 @@ async function loadAgents(filter) {
     if (!agents || agents.length === 0) {
       grid.innerHTML = `
         <div class="card glass text-center p-3 mt-2">
-          <div style="font-size:3rem;margin-bottom:12px;">🤖</div>
+          <div style="font-size:3rem;margin-bottom:12px;"><img class="icon" src="/icons/white/gear.png" alt="Agent"></div>
           <h3 class="font-semibold">No agents registered yet</h3>
           <p class="text-secondary mt-1">Be the first to register an AI agent on the platform.</p>
           <p class="text-muted text-sm mt-1">Agents can register via the API with a 0.01 SOL payment.</p>
@@ -332,20 +332,20 @@ function renderAgentCard(agent) {
       <div class="card-body">
         <div class="flex items-center gap-1" style="margin-bottom:12px">
           ${logoUrl
-            ? `<img src="${logoUrl}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(153,69,255,0.3)" onerror="this.outerHTML='<div style=\\'width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:1.2rem\\'>🤖</div>'" />`
-            : `<div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">🤖</div>`
+            ? `<img src="${logoUrl}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid rgba(153,69,255,0.3)" onerror="this.outerHTML='<div style=\\'width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:1.2rem\\'><img class="icon" src="/icons/white/gear.png" alt="Agent"></div>'" />`
+            : `<div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:1.2rem;"><img class="icon" src="/icons/white/gear.png" alt="Agent"></div>`
           }
           <div style="flex:1;min-width:0">
             <h3 class="font-semibold" style="margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${agent.name || 'Unnamed Agent'}</h3>
             <p class="text-muted text-xs" style="font-family:var(--font-mono)">${truncateAddress(agent.walletAddress || '')}</p>
           </div>
-          ${agent.tokenized ? '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:2px 8px;border-radius:12px;font-size:0.75rem;font-weight:600">🪙 Tokenized</span>' : ''}
+          ${agent.tokenized ? '<span style="background:rgba(20,241,149,0.15);color:#14F195;padding:2px 8px;border-radius:12px;font-size:0.75rem;font-weight:600"><img class="icon" src="/icons/white/coin-flat.png" alt="Token"> Tokenized</span>' : ''}
         </div>
         ${capsStr ? `<p class="text-muted text-sm" style="margin-bottom:8px">${capsStr}</p>` : ''}
         <div class="flex gap-1" style="flex-wrap:wrap">
           ${agent.stats ? `
             <span class="text-xs" style="background:rgba(255,255,255,0.05);padding:3px 8px;border-radius:6px">
-              ✅ ${agent.stats.completedJobs || 0} jobs
+              <img class="icon" src="/icons/white/checkmark.png" alt="Yes"> ${agent.stats.completedJobs || 0} jobs
             </span>
             <span class="text-xs" style="background:rgba(255,255,255,0.05);padding:3px 8px;border-radius:6px">
               ${successRate}% success
@@ -373,7 +373,7 @@ async function openAgentDetail(agentId, state = {}) {
       <!-- Agent Profile -->
       <div class="flex items-center gap-1 mb-2">
         <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:1.8rem;">
-          🤖
+          <img class="icon" src="/icons/white/gear.png" alt="Agent">
         </div>
         <div>
           <h2 class="font-bold text-xl">${data.agent.name || 'Unnamed'}</h2>
@@ -419,7 +419,7 @@ async function openAgentDetail(agentId, state = {}) {
       <!-- Fee Earnings + Claim (owner only) -->
       ${data.tokenized && window.solana?.publicKey?.toString() === data.agent.walletAddress ? `
         <div class="card glass mt-2">
-          <div class="card-header"><h3 class="font-semibold text-sm">💰 Creator Fee Earnings</h3></div>
+          <div class="card-header"><h3 class="font-semibold text-sm"><img class="icon" src="/icons/white/coin-tilt.png" alt="Money"> Creator Fee Earnings</h3></div>
           <div class="card-body">
             <div class="grid grid-3 gap-1">
               <div class="text-center">
@@ -440,7 +440,7 @@ async function openAgentDetail(agentId, state = {}) {
             </p>
             ${parseFloat(data.fees.unclaimed_sol) > 0 ? `
               <button class="claim-btn mt-1" style="width:100%;" id="btn-claim-fees" data-agent-id="${agentId}">
-                💰 Claim ${data.fees.unclaimed_sol} SOL
+                <img class="icon" src="/icons/white/coin-tilt.png" alt="Money"> Claim ${data.fees.unclaimed_sol} SOL
               </button>
             ` : `
               <button class="claim-btn mt-1" style="width:100%;" disabled>
@@ -454,7 +454,7 @@ async function openAgentDetail(agentId, state = {}) {
       <!-- Recent Jobs -->
       ${data.recentJobs && data.recentJobs.length > 0 ? `
         <div class="card glass mt-2">
-          <div class="card-header"><h3 class="font-semibold text-sm">📋 Recent Jobs</h3></div>
+          <div class="card-header"><h3 class="font-semibold text-sm"><img class="icon" src="/icons/white/folder.png" alt="List"> Recent Jobs</h3></div>
           <div class="card-body">
             ${data.recentJobs.map(j => `
               <div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
@@ -480,7 +480,7 @@ async function openAgentDetail(agentId, state = {}) {
         if (!window.solana?.isConnected) {
           toast('Connect your wallet first', 'error');
           btn.disabled = false;
-          btn.textContent = `💰 Claim fees`;
+          btn.textContent = `<img class="icon" src="/icons/white/coin-tilt.png" alt="Money"> Claim fees`;
           return;
         }
         const wallet = window.solana.publicKey.toString();
@@ -488,16 +488,16 @@ async function openAgentDetail(agentId, state = {}) {
         if (result.error) {
           toast(result.error, 'error');
           btn.disabled = false;
-          btn.textContent = `💰 Claim fees`;
+          btn.textContent = `<img class="icon" src="/icons/white/coin-tilt.png" alt="Money"> Claim fees`;
           return;
         }
-        toast(`✅ Claimed ${result.creator_payout} SOL! Payout queued to your wallet.`, 'success');
+        toast(`<img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Claimed ${result.creator_payout} SOL! Payout queued to your wallet.`, 'success');
         // Refresh the agent detail
         setTimeout(() => openAgentDetail(aid), 1500);
       } catch (err) {
         toast(`Claim failed: ${err.message}`, 'error');
         btn.disabled = false;
-        btn.textContent = `💰 Claim fees`;
+        btn.textContent = `<img class="icon" src="/icons/white/coin-tilt.png" alt="Money"> Claim fees`;
       }
     });
 
@@ -557,7 +557,7 @@ function renderTokenSection(token, dashData) {
           ${token.status === 'graduated' ? `
             <div class="flex items-center" style="justify-content:space-between;">
               <span class="text-muted text-xs">Raydium CPMM</span>
-              <span class="text-xs" style="color:#14F195;">🎓 Graduated</span>
+              <span class="text-xs" style="color:#14F195;"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Graduated</span>
             </div>
             <div class="flex items-center mt-05" style="justify-content:space-between;">
               <span class="text-muted text-xs">Fee</span>
@@ -566,7 +566,7 @@ function renderTokenSection(token, dashData) {
           ` : `
             <div class="flex items-center" style="justify-content:space-between;">
               <span class="text-muted text-xs">Bonding Curve</span>
-              <span class="text-xs" style="color:#14F195;">🔒 Liquidity Locked</span>
+              <span class="text-xs" style="color:#14F195;"><img class="icon" src="/icons/white/lock.png" alt="Lock"> Liquidity Locked</span>
             </div>
             <div class="flex items-center mt-05" style="justify-content:space-between;">
               <span class="text-muted text-xs">Supply</span>
@@ -585,7 +585,7 @@ function renderTokenSection(token, dashData) {
           <div class="card glass mt-1 dev-buy-card">
             <div class="card-body" style="padding:12px;">
               <div class="flex items-center gap-1 mb-1">
-                <span class="dev-badge">🔍 DEV BUY</span>
+                <span class="dev-badge"><img class="icon" src="/icons/white/target.png" alt="Search"> DEV BUY</span>
                 <span class="text-muted text-xs">Publicly tracked</span>
               </div>
               ${devBuys.totals.map(t => `
@@ -611,7 +611,7 @@ function renderTokenSection(token, dashData) {
         ` : `
           <div class="card glass mt-1" style="background:rgba(20,241,149,0.03);border-color:rgba(20,241,149,0.1);">
             <div class="card-body" style="padding:12px;text-align:center;">
-              <span class="text-xs" style="color:#14F195;">✅ No dev buy — 100% community-owned</span>
+              <span class="text-xs" style="color:#14F195;"><img class="icon" src="/icons/white/checkmark.png" alt="Yes"> No dev buy — 100% community-owned</span>
             </div>
           </div>
         `}
@@ -637,9 +637,9 @@ function renderTokenSection(token, dashData) {
         ${(token.social_twitter || token.social_telegram || token.social_discord || token.social_website) ? `
           <div class="flex gap-1 mt-1" style="flex-wrap:wrap">
             ${token.social_twitter ? `<a href="${token.social_twitter.startsWith('http') ? token.social_twitter : 'https://x.com/' + token.social_twitter.replace('@', '')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);font-size:0.75rem;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(29,155,240,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">𝕏 Twitter</a>` : ''}
-            ${token.social_telegram ? `<a href="${token.social_telegram.startsWith('http') ? token.social_telegram : 'https://t.me/' + token.social_telegram.replace('@', '')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);font-size:0.75rem;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(0,136,204,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">✈️ Telegram</a>` : ''}
-            ${token.social_discord ? `<a href="${token.social_discord.startsWith('http') ? token.social_discord : 'https://discord.gg/' + token.social_discord}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);font-size:0.75rem;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(88,101,242,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">💬 Discord</a>` : ''}
-            ${token.social_website ? `<a href="${token.social_website.startsWith('http') ? token.social_website : 'https://' + token.social_website}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);font-size:0.75rem;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(153,69,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">🌐 Website</a>` : ''}
+            ${token.social_telegram ? `<a href="${token.social_telegram.startsWith('http') ? token.social_telegram : 'https://t.me/' + token.social_telegram.replace('@', '')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);font-size:0.75rem;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(0,136,204,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'"><img class="icon" src="/icons/white/target.png" alt="Telegram">️ Telegram</a>` : ''}
+            ${token.social_discord ? `<a href="${token.social_discord.startsWith('http') ? token.social_discord : 'https://discord.gg/' + token.social_discord}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);font-size:0.75rem;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(88,101,242,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'"><img class="icon" src="/icons/white/chat.png" alt="Chat"> Discord</a>` : ''}
+            ${token.social_website ? `<a href="${token.social_website.startsWith('http') ? token.social_website : 'https://' + token.social_website}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-secondary);font-size:0.75rem;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(153,69,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'"><img class="icon" src="/icons/white/chain.png" alt="Web"> Website</a>` : ''}
           </div>
         ` : ''}
       </div>
@@ -651,7 +651,7 @@ function renderTokenizePrompt(agentId) {
   return `
     <div class="card glass mt-2" style="border-color:rgba(153,69,255,0.15);background:rgba(153,69,255,0.04)">
       <div class="card-body text-center">
-        <div style="font-size:2.5rem;margin-bottom:8px">🚀</div>
+        <div style="font-size:2.5rem;margin-bottom:8px"><img class="icon" src="/icons/white/fire.png" alt="Launch"></div>
         <h3 class="font-semibold">Tokenize This Agent</h3>
         <p class="text-secondary text-sm mt-1">Launch a token backed by a virtual liquidity pool. Earn 1.4% of every trade (70% of 2% fee). Free except gas (~0.05 SOL). Your agent profile becomes your token page.</p>
         <button class="btn btn-primary btn-glow mt-2" id="btn-open-tokenize" data-agent-id="${agentId}">
@@ -685,7 +685,7 @@ function openTokenizeWizard(agentId, state = {}, agentWallet = null) {
       placeholder.style.display = 'none';
       preview.style.display = 'block';
       previewImg.src = URL.createObjectURL(file);
-      statusEl.textContent = '⏳ Uploading to IPFS...';
+      statusEl.textContent = '<img class="icon" src="/icons/white/clock.png" alt="Loading"> Uploading to IPFS...';
       statusEl.style.color = '#FFD700';
       uploadArea.style.borderColor = 'rgba(153,69,255,0.5)';
 
@@ -701,7 +701,7 @@ function openTokenizeWizard(agentId, state = {}, agentWallet = null) {
         document.getElementById('tok-logo-cid').value = result.cid;
         document.getElementById('tok-logo-gateway').value = result.gatewayUrl;
         previewImg.src = result.gatewayUrl;
-        statusEl.textContent = '✓ Pinned to IPFS';
+        statusEl.textContent = '<img class="icon" src="/icons/white/checkmark.png" alt="Done"> Pinned to IPFS';
         statusEl.style.color = '#14F195';
         cidEl.textContent = result.cid.substring(0, 16) + '...';
         uploadArea.style.borderColor = 'rgba(20,241,149,0.3)';
@@ -743,7 +743,7 @@ function openTokenizeWizard(agentId, state = {}, agentWallet = null) {
 
       if (result.error) return toast(result.error, 'error');
 
-      toast(`🚀 Token $${tokenSymbol.toUpperCase()} created! Next: submit on-chain transaction to activate.`, 'success');
+      toast(`<img class="icon" src="/icons/white/fire.png" alt="Launch"> Token $${tokenSymbol.toUpperCase()} created! Next: submit on-chain transaction to activate.`, 'success');
       modal.classList.add('hidden');
 
       // Refresh agent detail

@@ -4,9 +4,9 @@ const STATUS_BADGES = {
   open: '<span class="badge badge-pending">Open</span>',
   funded: '<span class="badge badge-active">Funded</span>',
   submitted: '<span class="badge badge-encrypted">Submitted</span>',
-  completed: '<span class="badge badge-active">✓ Completed</span>',
+  completed: '<span class="badge badge-active"><img class="icon" src="/icons/white/checkmark.png" alt="Done"> Completed</span>',
   rejected: '<span class="badge badge-failed">✗ Rejected</span>',
-  expired: '<span class="badge badge-failed">⏰ Expired</span>',
+  expired: '<span class="badge badge-failed"><img class="icon" src="/icons/white/clock.png" alt="Clock"> Expired</span>',
 };
 
 export function renderJobs(container, state) {
@@ -24,7 +24,7 @@ export function renderJobs(container, state) {
     <!-- Info Banner -->
     <div class="card info-banner mt-1" style="border-left: 3px solid var(--success); background: rgba(0,232,143,0.04);">
       <div class="flex gap-2 items-center">
-        <div style="font-size: 1.5rem;">🔒</div>
+        <div style="font-size: 1.5rem;"><img class="icon" src="/icons/white/lock.png" alt="Lock"></div>
         <div>
           <p class="text-sm"><strong>Your funds are protected:</strong> When you fund a job, your USDC is locked in an on-chain escrow vault. Payment only releases when you approve the work. If the deadline passes, you get a full refund — guaranteed by code, not promises.</p>
         </div>
@@ -99,11 +99,11 @@ export function renderJobs(container, state) {
           <div class="mb-2">
             <span class="text-muted text-sm">Quick templates:</span>
             <div class="flex gap-1 mt-1" style="flex-wrap: wrap;">
-              <button class="btn btn-sm btn-ghost template-btn" data-template="Translate the following document from [language] to [language]. Maintain original formatting and technical accuracy.">📝 Translation</button>
-              <button class="btn btn-sm btn-ghost template-btn" data-template="Review the following code for bugs, security issues, and performance improvements. Provide a detailed report with line references.">💻 Code Review</button>
-              <button class="btn btn-sm btn-ghost template-btn" data-template="Research [topic] and produce a structured report with sources. Include key findings, trends, and actionable insights.">🔍 Research</button>
-              <button class="btn btn-sm btn-ghost template-btn" data-template="Write [type of content] about [topic]. Tone: [professional/casual]. Length: approximately [X] words.">✍️ Content</button>
-              <button class="btn btn-sm btn-ghost template-btn" data-template="Analyze the provided data and produce a summary with charts/tables. Highlight trends, anomalies, and key metrics.">📊 Data Analysis</button>
+              <button class="btn btn-sm btn-ghost template-btn" data-template="Translate the following document from [language] to [language]. Maintain original formatting and technical accuracy."><img class="icon" src="/icons/white/document.png" alt="Document"> Translation</button>
+              <button class="btn btn-sm btn-ghost template-btn" data-template="Review the following code for bugs, security issues, and performance improvements. Provide a detailed report with line references."><img class="icon" src="/icons/white/monitor.png" alt="Code"> Code Review</button>
+              <button class="btn btn-sm btn-ghost template-btn" data-template="Research [topic] and produce a structured report with sources. Include key findings, trends, and actionable insights."><img class="icon" src="/icons/white/target.png" alt="Search"> Research</button>
+              <button class="btn btn-sm btn-ghost template-btn" data-template="Write [type of content] about [topic]. Tone: [professional/casual]. Length: approximately [X] words."><img class="icon" src="/icons/white/document.png" alt="Write"> Content</button>
+              <button class="btn btn-sm btn-ghost template-btn" data-template="Analyze the provided data and produce a summary with charts/tables. Highlight trends, anomalies, and key metrics."><img class="icon" src="/icons/white/chart.png" alt="Chart"> Data Analysis</button>
             </div>
           </div>
 
@@ -137,7 +137,7 @@ export function renderJobs(container, state) {
           <div class="input-group">
             <label>Assign to a Specific Agent <span class="text-muted">(optional)</span></label>
             <input class="input input-mono" id="job-provider" placeholder="Paste an agent's wallet address, or leave empty for open bidding" />
-            <span class="text-muted text-sm">💡 Leave blank to let any agent bid on your task. <a href="#" data-page="agents" class="text-accent">Browse agents →</a></span>
+            <span class="text-muted text-sm"><img class="icon" src="/icons/white/lightning.png" alt="Tip"> Leave blank to let any agent bid on your task. <a href="#" data-page="agents" class="text-accent">Browse agents →</a></span>
           </div>
 
           <div class="input-group">
@@ -153,7 +153,7 @@ export function renderJobs(container, state) {
 
           <!-- Advanced (collapsed) -->
           <details class="mt-2" style="cursor: pointer;">
-            <summary class="text-muted text-sm">⚙️ Advanced Options</summary>
+            <summary class="text-muted text-sm"><img class="icon" src="/icons/white/gear.png" alt="Settings"> Advanced Options</summary>
             <div class="mt-1">
               <div class="input-group">
                 <label>Hook Program <span class="text-muted">(for developers)</span></label>
@@ -199,7 +199,7 @@ export function renderJobs(container, state) {
           </div>
 
           <div class="card mt-2" style="background: rgba(0,232,143,0.05); border-color: var(--success); padding: 14px;">
-            <p class="text-sm"><strong class="text-success">🔒 What happens next:</strong></p>
+            <p class="text-sm"><strong class="text-success"><img class="icon" src="/icons/white/lock.png" alt="Lock"> What happens next:</strong></p>
             <p class="text-sm text-secondary mt-1">1. Your task is posted and visible to agents</p>
             <p class="text-sm text-secondary">2. An agent picks it up (or you assign one)</p>
             <p class="text-sm text-secondary">3. You fund the escrow when ready (budget must be set first)</p>
@@ -209,7 +209,7 @@ export function renderJobs(container, state) {
 
           <div class="flex gap-1 mt-2">
             <button class="btn btn-ghost" id="btn-back-2">← Back</button>
-            <button class="btn btn-primary btn-glow w-full" id="btn-submit-job">🚀 Post Task</button>
+            <button class="btn btn-primary btn-glow w-full" id="btn-submit-job"><img class="icon" src="/icons/white/fire.png" alt="Launch"> Post Task</button>
           </div>
         </div>
       </div>
@@ -350,7 +350,7 @@ function wireJobsEvents(container, state) {
       });
 
       if (result.jobId) {
-        toast('✅ Task posted! Agents can now see it and bid.', 'success');
+        toast('<img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Task posted! Agents can now see it and bid.', 'success');
         closeModal();
         loadJobs('open');
         loadJobStats();
@@ -361,7 +361,7 @@ function wireJobsEvents(container, state) {
       toast(`Error: ${err.message}`, 'error');
     } finally {
       btn.disabled = false;
-      btn.textContent = '🚀 Post Task';
+      btn.textContent = '<img class="icon" src="/icons/white/fire.png" alt="Launch"> Post Task';
     }
   });
 
@@ -411,7 +411,7 @@ async function loadJobs(filter, state) {
     if (!jobs.length) {
       listEl.innerHTML = `
         <div class="empty-state">
-          <div class="empty-state-icon">📋</div>
+          <div class="empty-state-icon"><img class="icon" src="/icons/white/folder.png" alt="List"></div>
           <h3>No jobs found</h3>
           <p class="text-muted mt-1">Create the first job to get started</p>
         </div>
@@ -425,8 +425,8 @@ async function loadJobs(filter, state) {
           <div style="flex: 1; min-width: 0;">
             <div class="flex items-center gap-1 mb-1">
               ${STATUS_BADGES[job.status] || ''}
-              ${job.hook ? '<span class="badge badge-encrypted" style="font-size: 0.7rem;">🪝 Hooked</span>' : ''}
-              ${job.can_claim_refund ? '<span class="badge badge-failed" style="font-size: 0.7rem;">⏰ Refundable</span>' : ''}
+              ${job.hook ? '<span class="badge badge-encrypted" style="font-size: 0.7rem;"><img class="icon" src="/icons/white/chain.png" alt="Hook"> Hooked</span>' : ''}
+              ${job.can_claim_refund ? '<span class="badge badge-failed" style="font-size: 0.7rem;"><img class="icon" src="/icons/white/clock.png" alt="Clock"> Refundable</span>' : ''}
             </div>
             <p class="job-description">${escapeHtml(job.description)}</p>
             <div class="flex gap-2 mt-1 text-sm text-muted">
@@ -470,7 +470,7 @@ async function openJobDetail(jobId) {
       <div class="mb-2">
         <div class="flex items-center gap-1 mb-1">
           ${STATUS_BADGES[job.status] || ''}
-          ${job.hook ? '<span class="badge badge-encrypted">🪝 Hook Active</span>' : ''}
+          ${job.hook ? '<span class="badge badge-encrypted"><img class="icon" src="/icons/white/chain.png" alt="Hook"> Hook Active</span>' : ''}
         </div>
         <p style="font-size: 1.05rem; line-height: 1.5;">${escapeHtml(job.description)}</p>
       </div>
@@ -561,7 +561,7 @@ function renderJobActions(job) {
         // Job poster actions
         if (!job.provider || job.provider === '11111111111111111111111111111111') {
           actions.push('<button class="btn btn-sm btn-ghost" data-action="set-provider">Set Provider</button>');
-          actions.push('<button class="btn btn-sm btn-primary" data-action="view-applications">📋 View Applications</button>');
+          actions.push('<button class="btn btn-sm btn-primary" data-action="view-applications"><img class="icon" src="/icons/white/folder.png" alt="List"> View Applications</button>');
         }
         actions.push('<button class="btn btn-sm btn-ghost" data-action="set-budget">Set Budget</button>');
         if (job.budget > 0 && job.provider && job.provider !== '11111111111111111111111111111111') {
@@ -571,7 +571,7 @@ function renderJobActions(job) {
       } else if (!isProvider) {
         // Agent can apply
         if (!job.provider || job.provider === '11111111111111111111111111111111') {
-          actions.push('<button class="btn btn-sm btn-primary btn-glow" data-action="apply">🖊️ Apply for this Job</button>');
+          actions.push('<button class="btn btn-sm btn-primary btn-glow" data-action="apply"><img class="icon" src="/icons/white/document.png" alt="Write"> Apply for this Job</button>');
         }
       }
       break;
@@ -581,15 +581,15 @@ function renderJobActions(job) {
       actions.push('<button class="btn btn-sm btn-primary" data-action="submit">Submit Work</button>');
       actions.push('<button class="btn btn-sm btn-danger" data-action="reject">Reject (Evaluator)</button>');
       if (job.can_claim_refund) {
-        actions.push('<button class="btn btn-sm btn-danger" data-action="refund">⏰ Claim Refund</button>');
+        actions.push('<button class="btn btn-sm btn-danger" data-action="refund"><img class="icon" src="/icons/white/clock.png" alt="Clock"> Claim Refund</button>');
       }
       break;
 
     case 'submitted':
-      actions.push('<button class="btn btn-sm btn-success" data-action="complete">✓ Approve & Pay</button>');
+      actions.push('<button class="btn btn-sm btn-success" data-action="complete"><img class="icon" src="/icons/white/checkmark.png" alt="Done"> Approve & Pay</button>');
       actions.push('<button class="btn btn-sm btn-danger" data-action="reject">✗ Reject</button>');
       if (job.can_claim_refund) {
-        actions.push('<button class="btn btn-sm btn-danger" data-action="refund">⏰ Claim Refund</button>');
+        actions.push('<button class="btn btn-sm btn-danger" data-action="refund"><img class="icon" src="/icons/white/clock.png" alt="Clock"> Claim Refund</button>');
       }
       break;
 
@@ -738,7 +738,7 @@ async function showApplications(jobId) {
     if (apps.length === 0) {
       content.innerHTML = `
         <div class="text-center p-4">
-          <div style="font-size:2.5rem;margin-bottom:8px">📭</div>
+          <div style="font-size:2.5rem;margin-bottom:8px"><img class="icon" src="/icons/white/folder.png" alt="Empty"></div>
           <h3 class="font-semibold">No applications yet</h3>
           <p class="text-secondary mt-1">Agents will apply when they find your job posting</p>
           <button class="btn btn-ghost mt-2" id="btn-back-detail">← Back to Job</button>
@@ -750,7 +750,7 @@ async function showApplications(jobId) {
 
     content.innerHTML = `
       <div class="flex items-center mb-2" style="justify-content:space-between">
-        <h3 class="font-semibold">📋 Applications (${apps.length})</h3>
+        <h3 class="font-semibold"><img class="icon" src="/icons/white/folder.png" alt="List"> Applications (${apps.length})</h3>
         <button class="btn btn-sm btn-ghost" id="btn-back-detail">← Back</button>
       </div>
       ${apps.map(app => `
@@ -758,7 +758,7 @@ async function showApplications(jobId) {
           <div class="card-body">
             <div class="flex items-center gap-1 mb-1" style="justify-content:space-between">
               <div class="flex items-center gap-1">
-                <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:0.8rem">🤖</div>
+                <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:0.8rem"><img class="icon" src="/icons/white/gear.png" alt="Agent"></div>
                 <div>
                   <div class="font-semibold">${app.agent_name || 'Agent'}</div>
                   <div class="text-muted text-xs font-mono">${truncateAddress(app.applicant_wallet)}</div>
@@ -769,19 +769,19 @@ async function showApplications(jobId) {
 
             <p class="text-secondary text-sm">${escapeHtml(app.proposal)}</p>
 
-            ${app.estimated_hours ? `<p class="text-muted text-xs mt-05">⏱ Estimated: ${app.estimated_hours}h</p>` : ''}
+            ${app.estimated_hours ? `<p class="text-muted text-xs mt-05"><img class="icon" src="/icons/white/clock.png" alt="Time"> Estimated: ${app.estimated_hours}h</p>` : ''}
 
             ${app.success_rate != null ? `
               <div class="flex gap-1 mt-1 text-xs text-muted">
-                <span>📊 ${app.total_jobs || 0} jobs</span>
-                <span>✅ ${app.completed_jobs || 0} completed</span>
+                <span><img class="icon" src="/icons/white/chart.png" alt="Chart"> ${app.total_jobs || 0} jobs</span>
+                <span><img class="icon" src="/icons/white/checkmark.png" alt="Yes"> ${app.completed_jobs || 0} completed</span>
                 <span>${(app.success_rate * 100).toFixed(0)}% success</span>
               </div>
             ` : ''}
 
             <div class="flex gap-1 mt-1" style="justify-content:flex-end">
               <button class="btn btn-sm btn-danger" data-reject-app="${app.id}">Reject</button>
-              <button class="btn btn-sm btn-primary btn-glow" data-accept-app="${app.id}">✓ Accept & Hire</button>
+              <button class="btn btn-sm btn-primary btn-glow" data-accept-app="${app.id}"><img class="icon" src="/icons/white/checkmark.png" alt="Done"> Accept & Hire</button>
             </div>
           </div>
         </div>
