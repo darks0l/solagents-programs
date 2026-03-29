@@ -406,8 +406,11 @@ Both `mint` and `mintAddress` are accepted (aliases). Amount is **lamports** for
 ### build/create-token — both mintPublicKey and mintAddress returned
 Response includes both `mintPublicKey` and `mintAddress` (same value, aliases for compatibility).
 
-### create-token — creator needs ≥ 0.02 SOL
-The creator wallet pays Metaplex metadata rent (~0.015 SOL) + tx fee + initial liquidity. Fresh agents off registration (~0.01 SOL) will fail. Fund the agent wallet before tokenizing.
+### create-token — supports payerWallet for rent
+Pass `payerWallet` in the request body to use a different wallet as fee payer (covers Metaplex metadata rent ~0.015 SOL + tx fee). If omitted, the creator wallet pays. Fresh agents off registration (~0.01 SOL) should use a funded `payerWallet`.
+```json
+{ "creatorWallet": "agent...", "payerWallet": "funded...", "name": "...", "symbol": "...", "uri": "..." }
+```
 
 ### auth/verify — requires publicKey field
 ```json
