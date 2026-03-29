@@ -404,7 +404,7 @@ async function openAgentDetail(agentId, state = {}) {
           <div class="text-muted text-xs">Success Rate</div>
         </div>
         <div class="card glass text-center p-1">
-          <div class="font-bold text-lg">${data.stats.totalEarned || '0'}</div>
+          <div class="font-bold text-lg">${(() => { const e = parseFloat(data.stats?.totalEarned || 0); return e > 10000 ? (e / 1e6).toFixed(2) : e.toFixed(2); })()}</div>
           <div class="text-muted text-xs">Earned (USDC)</div>
         </div>
       </div>

@@ -266,7 +266,7 @@ export function timeAgo(unixTimestamp) {
 export function getState() { return state; }
 
 // === Init ===
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // Nav links
   document.querySelectorAll('[data-page]').forEach(link => {
     link.addEventListener('click', (e) => {
@@ -295,7 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Auto-connect if Phantom is available and was previously connected
   if (window.solana?.isPhantom && window.solana?.isConnected) {
-    connectWallet();
+    await connectWallet();
   }
 
   // Custom navigate events from pages

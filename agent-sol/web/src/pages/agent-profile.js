@@ -132,15 +132,19 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
   // Compute revenue from jobs
   const jobRevenue = allJobs
     .filter(j => j.status === 'completed')
-    .reduce((sum, j) => sum + parseFloat(j.budget || 0), 0);
+    .reduce((sum, j) => {
+      const b = parseFloat(j.budget || 0);
+      // Budget stored as raw USDC (6 decimals) if > 10000, convert
+      return sum + (b > 10000 ? b / 1e6 : b);
+    }, 0);
 
   return `
     <!-- Hero Section -->
     <div class="card glass" style="border-color:rgba(153,69,255,0.15)">
       <div class="card-body" style="padding:24px">
         <div class="flex items-center gap-2" style="flex-wrap:wrap">
-          ${token?.logo_url
-            ? `<img src="${token.logo_url}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(153,69,255,0.3)" onerror="this.outerHTML='<div style=\\'width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:2.5rem\\'><img class="icon" src="/icons/white/gear.png" alt="Agent"></div>'" />`
+          ${token?.logo_url && token.logo_url !== 'null'
+            ? `<img src="${token.logo_url}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(153,69,255,0.3)" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div style=&quot;width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:2.5rem&quot;><img class=&quot;icon&quot; src=&quot;/icons/white/gear.png&quot; alt=&quot;Agent&quot;></div>')" />`
             : `<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:2.5rem"><img class="icon" src="/icons/white/gear.png" alt="Agent"></div>`
           }
           <div style="flex:1;min-width:200px">
@@ -214,7 +218,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
         <div class="text-muted text-xs">Success Rate</div>
       </div>
       <div class="card glass text-center p-2">
-        <div class="text-2xl font-bold" style="color:#14F195">${jobRevenue > 0 ? jobRevenue.toFixed(2) : stats.totalEarned || '0'}</div>
+        <div class="text-2xl font-bold" style="color:#14F195">${jobRevenue > 0 ? jobRevenue.toFixed(2) : (() => { const e = parseFloat(stats.totalEarned || 0); return e > 10000 ? (e / 1e6).toFixed(2) : e.toFixed(2); })()}</div>
         <div class="text-muted text-xs">Earned (USDC)</div>
       </div>
       <div class="card glass text-center p-2">

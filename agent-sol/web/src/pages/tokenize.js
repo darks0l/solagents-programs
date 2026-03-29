@@ -5,8 +5,31 @@ import { api } from '../main.js';
  * Explains how agent tokenization works, fee splits, bonding curve, fair launch
  * Users tokenize from their agent profile page (Agents → agent detail → Tokenize)
  */
-export function renderTokenize(container) {
+export async function renderTokenize(container, state) {
+  // Check if connected user already has a tokenized agent
+  let agentToken = null;
+  if (state?.agent?.tokenized && state.agent.token?.mintAddress) {
+    agentToken = state.agent.token;
+  } else if (state?.agent?.id) {
+    try {
+      const dash = await api.get(`/agents/${state.agent.id}/dashboard`);
+      if (dash.token?.mint_address && dash.token?.status !== 'pending') {
+        agentToken = { symbol: dash.token.token_symbol, mintAddress: dash.token.mint_address };
+      }
+    } catch {}
+  }
+
   container.innerHTML = `
+    ${agentToken ? `
+      <div style="background: linear-gradient(90deg, rgba(20,241,149,0.15), rgba(153,69,255,0.15)); border: 1px solid rgba(20,241,149,0.3); border-radius: 12px; padding: 20px 24px; margin: 16px auto; max-width: 700px; text-align: center;">
+        <h3 class="font-semibold" style="margin-bottom: 8px;"><img class="icon" src="/icons/white/rocket.png" alt="Token"> Your agent is already tokenized!</h3>
+        <p class="text-secondary text-sm">$${agentToken.symbol} is live. View your token stats and manage trading fees from your profile.</p>
+        <div class="flex gap-1 mt-2" style="justify-content: center;">
+          <button class="btn btn-primary btn-sm btn-glow" onclick="document.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'trade', mintAddress: '${agentToken.mintAddress}' } }))">View Trade Page →</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.dispatchEvent(new CustomEvent('navigate', { detail: 'agents' }))">Agent Profile</button>
+        </div>
+      </div>
+    ` : ''}
     <div class="page-header" style="text-align:center;max-width:800px;margin:0 auto;">
       <div style="font-size:4rem;margin-bottom:12px;"><img class="icon" src="/icons/white/fire.png" alt="Launch"></div>
       <h1 class="text-3xl font-bold gradient-text">Tokenize Your Agent</h1>

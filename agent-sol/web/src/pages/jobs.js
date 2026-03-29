@@ -149,6 +149,7 @@ export function renderJobs(container, state) {
             <input class="input input-mono hidden" id="job-evaluator-custom" placeholder="Evaluator wallet address" />
             <input type="hidden" id="job-evaluator" />
             <span class="text-muted text-sm">The evaluator is the only one who can approve and release payment</span>
+            <span class="text-sm hidden" id="evaluator-error" style="color: var(--danger); margin-top: 4px; display: none;"><img class="icon" src="/icons/white/lightning.png" alt="!"> Connect your wallet or enter an evaluator address</span>
           </div>
 
           <!-- Advanced (collapsed) -->
@@ -288,7 +289,12 @@ function wireJobsEvents(container, state) {
       evalHidden.value = evalCustom.value.trim();
     }
 
-    if (!evalHidden.value) return toast('Evaluator is required', 'error');
+    const evalError = document.getElementById('evaluator-error');
+    if (!evalHidden.value) {
+      if (evalError) { evalError.classList.remove('hidden'); evalError.style.display = 'block'; }
+      return toast('Evaluator is required — connect your wallet or enter an address', 'error');
+    }
+    if (evalError) { evalError.classList.add('hidden'); evalError.style.display = 'none'; }
 
     // Populate review
     const desc = document.getElementById('job-desc').value.trim();
@@ -347,6 +353,7 @@ function wireJobsEvents(container, state) {
         expiredAt: Math.floor(Date.now() / 1000) + expirySeconds,
         description,
         hook,
+        budget: budget > 0 ? Math.round(budget * 1e6) : undefined, // USDC with 6 decimals
       });
 
       if (result.jobId) {
