@@ -213,7 +213,7 @@ function renderTable(tokens) {
     const realSolBal = token.realSolBalance || 0;
     const gradPct = Math.min((realSolBal / 85) * 100, 100);
     const statusBadge = status === 'graduated'
-      ? '<span style="color: #9945FF; font-size: 0.8rem;"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Raydium</span>'
+      ? '<span style="color: #9945FF; font-size: 0.8rem;"><img class="icon" src="/icons/white/crown.png" alt="Graduated"> Raydium</span>'
       : `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
            <span style="color: var(--green); font-size: 0.8rem;">● ${gradPct.toFixed(1)}%</span>
            <div style="width:60px;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden">
@@ -314,7 +314,7 @@ async function openTokenDetail(tokenId, mint) {
         </div>
         <div>
           <h2 style="margin: 0; font-size: 1.5rem;">${escapeHtml(name)}</h2>
-          <span style="color: var(--text-tertiary); font-size: 0.9rem;">$${escapeHtml(symbol)} · ${status === 'graduated' ? '<span style="color:#14F195"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Trading on Raydium CPMM</span>' : '● Bonding Curve'}</span>
+          <span style="color: var(--text-tertiary); font-size: 0.9rem;">$${escapeHtml(symbol)} · ${status === 'graduated' ? '<span style="color:#14F195"><img class="icon" src="/icons/white/crown.png" alt="Graduated"> Trading on Raydium CPMM</span>' : '● Bonding Curve'}</span>
         </div>
         <div style="margin-left: auto; text-align: right;">
           <div style="font-size: 1.4rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--green);">${formatPrice(price)} SOL</div>
@@ -373,7 +373,7 @@ async function openTokenDetail(tokenId, mint) {
       </div>
       ` : `
       <div class="card mb-2" style="padding: 0.75rem; text-align:center;">
-        <span style="color:#14F195;font-weight:600"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Graduated to Raydium CPMM</span>
+        <span style="color:#14F195;font-weight:600"><img class="icon" src="/icons/white/crown.png" alt="Graduated"> Graduated to Raydium CPMM</span>
       </div>
       `}
 

@@ -366,7 +366,7 @@ function renderConnectedDashboard(container, state) {
       </div>
       <div class="card stat-card" id="stat-graduated-card" style="display:none">
         <div class="stat-value" id="stat-graduated" style="color:#14F195">—</div>
-        <div class="stat-label"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Graduated</div>
+        <div class="stat-label"><img class="icon" src="/icons/white/crown.png" alt="Graduated"> Graduated</div>
       </div>
     </div>
 
@@ -396,7 +396,7 @@ function renderConnectedDashboard(container, state) {
         <p class="text-secondary text-sm">Buy & sell agent tokens on the bonding curve</p>
       </div>
       <div class="card quick-action" data-page="tracker" id="qa-graduated" style="display:none;border-color:rgba(20,241,149,0.2)">
-        <div style="font-size: 1.5rem; margin-bottom: 8px;"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"></div>
+        <div style="font-size: 1.5rem; margin-bottom: 8px;"><img class="icon" src="/icons/white/crown.png" alt="Graduated"></div>
         <h4>Graduated Tokens</h4>
         <p class="text-secondary text-sm" id="qa-graduated-desc">Tokens now trading on Raydium</p>
       </div>

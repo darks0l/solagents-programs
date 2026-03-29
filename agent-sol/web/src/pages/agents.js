@@ -263,7 +263,7 @@ async function loadTokens() {
           <tbody>
             ${tokens.map(t => `
               <tr style="border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer" class="token-row" data-token-id="${t.id}">
-                <td style="padding:10px"><strong>${t.agent_name || 'Unknown'}</strong>${t.status === 'graduated' ? ' <span style="font-size:12px;color:#14F195" title="Graduated to Raydium"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"></span>' : ''}</td>
+                <td style="padding:10px"><strong>${t.agent_name || 'Unknown'}</strong>${t.status === 'graduated' ? ' <span style="font-size:12px;color:#14F195" title="Graduated to Raydium"><img class="icon" src="/icons/white/crown.png" alt="Graduated"></span>' : ''}</td>
                 <td style="padding:10px"><span style="color:#14F195;font-family:var(--font-mono)">$${t.token_symbol}</span></td>
                 <td style="padding:10px;text-align:right;font-family:var(--font-mono)">${formatPrice(t.current_price)}</td>
                 <td style="padding:10px;text-align:right">${formatSolAsUsd(t.market_cap)}</td>
@@ -557,7 +557,7 @@ function renderTokenSection(token, dashData) {
           ${token.status === 'graduated' ? `
             <div class="flex items-center" style="justify-content:space-between;">
               <span class="text-muted text-xs">Raydium CPMM</span>
-              <span class="text-xs" style="color:#14F195;"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Graduated</span>
+              <span class="text-xs" style="color:#14F195;"><img class="icon" src="/icons/white/crown.png" alt="Graduated"> Graduated</span>
             </div>
             <div class="flex items-center mt-05" style="justify-content:space-between;">
               <span class="text-muted text-xs">Fee</span>

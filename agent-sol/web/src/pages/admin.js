@@ -262,7 +262,7 @@ function renderAdminDashboard(container) {
               <input type="text" class="form-input" id="grad-mint-address" placeholder="Mint address" style="font-family:var(--font-mono);font-size:0.85rem">
             </div>
             <button class="btn btn-sm btn-ghost mt-1" id="btn-trigger-grad" style="width:100%;border-color:rgba(20,241,149,0.3);color:#14F195">
-              <img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Graduate Token
+              <img class="icon" src="/icons/white/crown.png" alt="Graduated"> Graduate Token
             </button>
           </div>
         </div>
@@ -604,14 +604,14 @@ async function handleTriggerGraduation() {
     if (result.error) {
       toast(result.error, 'error');
     } else {
-      toast(`<img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Token ${truncateAddress(mintAddress)} graduated!`, 'success');
+      toast(`<img class="icon" src="/icons/white/crown.png" alt="Graduated"> Token ${truncateAddress(mintAddress)} graduated!`, 'success');
       document.getElementById('grad-mint-address').value = '';
     }
   } catch (err) {
     toast(`Graduation failed: ${err.message}`, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = '<img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Graduate Token';
+    btn.textContent = '<img class="icon" src="/icons/white/crown.png" alt="Graduated"> Graduate Token';
   }
 }
 

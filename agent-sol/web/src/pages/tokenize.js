@@ -208,7 +208,7 @@ export function renderTokenize(container) {
     <!-- Graduation to Raydium -->
     <div class="card glass mt-2" style="max-width:800px;margin-left:auto;margin-right:auto;border-color:rgba(20,241,149,0.2);">
       <div class="card-header">
-        <h2 class="font-semibold" style="color:#14F195;"><img class="icon" src="/icons/white/trophy.png" alt="Graduated"> Graduation to Raydium</h2>
+        <h2 class="font-semibold" style="color:#14F195;"><img class="icon" src="/icons/white/crown.png" alt="Graduated"> Graduation to Raydium</h2>
       </div>
       <div class="card-body">
         <p class="text-secondary text-sm mb-2">
