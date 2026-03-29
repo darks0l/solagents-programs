@@ -5,6 +5,7 @@ import { stmts } from '../services/db.js';
 import { optionalAuth, authHook } from '../middleware/auth.js';
 import { createPool, POOL_CONFIG, lamportsToSol, rawToTokens } from '../services/pool.js';
 import { connection } from '../services/commerce.js';
+import { readPool } from '../services/solana.js';
 
 /**
  * Verify a Solana transaction was confirmed on-chain.
@@ -378,7 +379,6 @@ export default async function tokenRoutes(fastify) {
 
     const { mintAddress, poolAddress, launchTx, authoritiesRevoked } = request.body || {};
     if (!mintAddress) return reply.code(400).send({ error: 'mintAddress required' });
-    if (!launchTx) return reply.code(400).send({ error: 'launchTx required' });
 
     // Enforce authority revocation — all three must be confirmed
     if (!authoritiesRevoked || !authoritiesRevoked.freeze || !authoritiesRevoked.mint || !authoritiesRevoked.metadata) {
@@ -393,15 +393,24 @@ export default async function tokenRoutes(fastify) {
       });
     }
 
-    // Verify the on-chain create_token tx landed before marking active.
-    // This prevents off-chain state from diverging from on-chain state.
-    const confirmed = await verifyTx(launchTx);
-    if (!confirmed) {
-      return reply.code(400).send({
-        error: 'launchTx not confirmed on-chain. Ensure the token creation transaction has landed before calling /activate.',
-        launchTx,
-        hint: 'Wait for the tx to reach "confirmed" commitment, then retry.',
-      });
+    // Verify on-chain state: check pool account exists for this mint.
+    // This replaces the old getTransaction(launchTx) check which fails on devnet
+    // because devnet doesn't keep full tx history. Pool state is the source of truth.
+    const poolState = await readPool(mintAddress);
+    if (!poolState) {
+      // Fallback: try verifying the tx signature if provided (works for fresh txs)
+      let txConfirmed = false;
+      if (launchTx) {
+        txConfirmed = await verifyTx(launchTx);
+      }
+      if (!txConfirmed) {
+        return reply.code(400).send({
+          error: 'Token not found on-chain. No pool account exists for this mint and launchTx could not be confirmed.',
+          mintAddress,
+          launchTx: launchTx || null,
+          hint: 'Ensure the create_token transaction has landed and a bonding curve pool exists.',
+        });
+      }
     }
 
     stmts.updateAgentTokenStatus.run('active', mintAddress, poolAddress || null, launchTx, token.id);
@@ -415,7 +424,7 @@ export default async function tokenRoutes(fastify) {
   // Record a token trade (called by indexer or API)
   fastify.post('/api/tokens/:id/trade', async (request, reply) => {
     const token = stmts.getAgentToken.get(request.params.id);
-    if (!token || token.status !== 'active') {
+    if (!token || !['active', 'graduated', 'graduating'].includes(token.status)) {
       return reply.code(404).send({ error: 'Active token not found' });
     }
 
