@@ -10,7 +10,9 @@ import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
  */
 
 const PROGRAM_ID = new PublicKey(process.env.COMMERCE_PROGRAM_ID || 'Ddpj5GCjz8jFuBQXopUfzxkAmkWPCCwC7mhpL6SY9fdx');
-const SOLANA_RPC = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+const CLUSTER = process.env.SOLANA_CLUSTER || 'devnet';
+const RPC_URLS = { devnet: 'https://api.devnet.solana.com', mainnet: 'https://api.mainnet-beta.solana.com' };
+const SOLANA_RPC = process.env.SOLANA_RPC_URL || process.env.SOLANA_RPC || RPC_URLS[CLUSTER] || RPC_URLS.devnet;
 
 const connection = new Connection(SOLANA_RPC, 'confirmed');
 

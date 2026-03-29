@@ -407,7 +407,9 @@ Both `mint` and `mintAddress` are accepted (aliases). Amount is **lamports** for
 Response includes both `mintPublicKey` and `mintAddress` (same value, aliases for compatibility).
 
 ### create-token — supports payerWallet for rent
-Pass `payerWallet` in the request body to use a different wallet as fee payer (covers Metaplex metadata rent ~0.015 SOL + tx fee). If omitted, the creator wallet pays. Fresh agents off registration (~0.01 SOL) should use a funded `payerWallet`.
+Pass `payerWallet` in the request body to use a different wallet as fee payer (covers Metaplex metadata rent ~0.015 SOL + tx fee). If omitted, the creator wallet pays everything.
+- **With payerWallet:** creator needs ≥ 0.006 SOL (pool vault rent), payer covers the rest
+- **Without payerWallet:** creator needs ≥ 0.02 SOL (metadata + pool vault rent + fees)
 ```json
 { "creatorWallet": "agent...", "payerWallet": "funded...", "name": "...", "symbol": "...", "uri": "..." }
 ```

@@ -1,7 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { stmts } from '../services/db.js';
 import * as commerce from '../services/commerce.js';
-import { connection } from '../services/commerce.js';
+import { getConnection } from '../services/solana.js';
 
 /**
  * Jobs routes — REST API for the Agentic Commerce Protocol (EIP-8183 on Solana).
@@ -34,16 +34,17 @@ const DISPUTE_WINDOW_HOURS = 24;
  * Returns true if the tx exists and succeeded (meta.err === null).
  */
 async function verifyTx(signature) {
+  const conn = getConnection(); // uses solana.js devnet connection, NOT commerce.js mainnet
   try {
     // Try getSignatureStatuses first — more reliable on devnet (tx history drops after ~1 min)
-    const { value } = await connection.getSignatureStatuses([signature]);
+    const { value } = await conn.getSignatureStatuses([signature]);
     if (value && value[0]) {
       const status = value[0];
       if (status.err) return false;
       if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') return true;
     }
     // Fallback to getTransaction for older txs
-    const tx = await connection.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
+    const tx = await conn.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
     if (!tx) return false;
     if (tx.meta && tx.meta.err !== null) return false;
     return true;
