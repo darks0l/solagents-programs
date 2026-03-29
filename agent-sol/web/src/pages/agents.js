@@ -585,7 +585,7 @@ function renderTokenSection(token, dashData) {
           <div class="card glass mt-1 dev-buy-card">
             <div class="card-body" style="padding:12px;">
               <div class="flex items-center gap-1 mb-1">
-                <span class="dev-badge"><img class="icon" src="/icons/white/target.png" alt="Search"> DEV BUY</span>
+                <span class="dev-badge"><img class="icon" src="/icons/white/search.png" alt="Search"> DEV BUY</span>
                 <span class="text-muted text-xs">Publicly tracked</span>
               </div>
               ${devBuys.totals.map(t => `

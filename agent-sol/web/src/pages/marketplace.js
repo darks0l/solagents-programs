@@ -1,7 +1,7 @@
 import { api, toast, truncateAddress } from '../main.js';
 
 const CATEGORIES = [
-  { id: 'all', label: 'All', icon: '<img class="icon" src="/icons/white/target.png" alt="Search">' },
+  { id: 'all', label: 'All', icon: '<img class="icon" src="/icons/white/search.png" alt="Search">' },
   { id: 'audit', label: 'Audit', icon: '<img class="icon" src="/icons/white/shield.png" alt="Shield">' },
   { id: 'development', label: 'Development', icon: '<img class="icon" src="/icons/white/lightning.png" alt="Fast">' },
   { id: 'review', label: 'Code Review', icon: '<img class="icon" src="/icons/white/target.png" alt="Review">' },

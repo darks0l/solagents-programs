@@ -293,7 +293,7 @@ export function renderTokenize(container) {
     <!-- Dev Buy Transparency -->
     <div class="card glass mt-2" style="max-width:800px;margin-left:auto;margin-right:auto;">
       <div class="card-header">
-        <h2 class="font-semibold"><img class="icon" src="/icons/white/target.png" alt="Search"> Dev Buy Transparency</h2>
+        <h2 class="font-semibold"><img class="icon" src="/icons/white/search.png" alt="Search"> Dev Buy Transparency</h2>
       </div>
       <div class="card-body">
         <p class="text-secondary text-sm">

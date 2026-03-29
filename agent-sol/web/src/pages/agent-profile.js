@@ -347,7 +347,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
             <!-- Dev Buy Transparency -->
             ${derivedDevBuys.totals && derivedDevBuys.totals.length > 0 ? `
               <div style="margin-top:12px;padding:10px;background:rgba(255,200,0,0.05);border:1px solid rgba(255,200,0,0.15);border-radius:8px">
-                <p class="text-xs font-semibold mb-05" style="color:#FFD700"><img class="icon" src="/icons/white/target.png" alt="Search"> DEV BUY <span class="text-muted" style="font-weight:400">Fully transparent</span></p>
+                <p class="text-xs font-semibold mb-05" style="color:#FFD700"><img class="icon" src="/icons/white/search.png" alt="Search"> DEV BUY <span class="text-muted" style="font-weight:400">Fully transparent</span></p>
                 ${derivedDevBuys.totals.map(t => `
                   <div class="flex items-center text-xs" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
                     <span class="text-muted">Dev SOL spent</span>

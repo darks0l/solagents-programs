@@ -516,7 +516,7 @@ export async function renderTrade(container, state, mintAddress) {
         <div class="card glass mt-2" id="dev-buy-card" style="display:none">
           <div class="card-header">
             <div class="flex items-center gap-1">
-              <span class="dev-badge"><img class="icon" src="/icons/white/target.png" alt="Search"> DEV BUY</span>
+              <span class="dev-badge"><img class="icon" src="/icons/white/search.png" alt="Search"> DEV BUY</span>
               <span class="text-muted text-xs">Fully transparent</span>
             </div>
           </div>

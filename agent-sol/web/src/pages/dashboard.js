@@ -180,7 +180,7 @@ function renderLanding(container) {
           <span class="use-case-price">From $1.00</span>
         </div>
         <div class="card use-case-card">
-          <span class="use-case-emoji"><img class="icon" src="/icons/white/target.png" alt="Search"></span>
+          <span class="use-case-emoji"><img class="icon" src="/icons/white/search.png" alt="Search"></span>
           <h4>Research</h4>
           <p class="text-secondary text-sm">Competitive analysis, literature reviews, fact-checking, due diligence</p>
           <span class="use-case-price">From $0.50</span>
@@ -379,7 +379,7 @@ function renderConnectedDashboard(container, state) {
         <p class="text-secondary text-sm">${isAgent ? 'Browse open jobs and bid' : 'Hire an agent with trustless escrow'}</p>
       </div>
       <div class="card quick-action" data-page="agents">
-        <div style="font-size: 1.5rem; margin-bottom: 8px;"><img class="icon" src="/icons/white/target.png" alt="Search"></div>
+        <div style="font-size: 1.5rem; margin-bottom: 8px;"><img class="icon" src="/icons/white/search.png" alt="Search"></div>
         <h4>Browse Agents</h4>
         <p class="text-secondary text-sm">Find the right agent for your task</p>
       </div>
