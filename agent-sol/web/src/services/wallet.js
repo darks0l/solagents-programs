@@ -1,16 +1,17 @@
 /**
- * Wallet Service — Solana Wallet Adapter (multi-wallet support)
+ * Wallet Service - Solana Wallet Adapter (multi-wallet support)
  *
  * Supports: Phantom, Solflare, Backpack, Coinbase, Ledger + any injected wallet
+ * Mobile: deep-link buttons to open site inside wallet app browser
  * Provides: connect (with modal), disconnect, sign, send, auto-reconnect
  */
 
 import { Connection, Transaction } from '@solana/web3.js';
 
-// ── Config ───────────────────────────────────────────────────
+// Config
 const RPC_ENDPOINT = 'https://api.devnet.solana.com';
 
-// ── Adapters (lazy-initialized to avoid crashes on mobile) ──
+// Adapters (lazy-initialized to avoid crashes on mobile)
 let _wallets = null;
 
 async function getWallets() {
@@ -28,7 +29,7 @@ async function getWallets() {
     const { CoinbaseWalletAdapter } = await import('@solana/wallet-adapter-coinbase');
     _wallets.push(new CoinbaseWalletAdapter());
   } catch {}
-  // Ledger requires WebHID — skip on mobile/browsers that don't support it
+  // Ledger requires WebHID - skip on mobile/browsers that don't support it
   if (typeof navigator !== 'undefined' && navigator.hid) {
     try {
       const { LedgerWalletAdapter } = await import('@solana/wallet-adapter-ledger');
@@ -38,12 +39,12 @@ async function getWallets() {
   return _wallets;
 }
 
-// ── State ────────────────────────────────────────────────────
+// State
 let _adapter = null;
 let _onConnectCallbacks = [];
 let _onDisconnectCallbacks = [];
 
-// ── Public API ───────────────────────────────────────────────
+// Public API
 
 export function getPublicKey() {
   return _adapter?.publicKey?.toBase58() ?? null;
@@ -65,25 +66,14 @@ export function onDisconnect(cb) {
   _onDisconnectCallbacks.push(cb);
 }
 
-// ── Connect (shows modal) ────────────────────────────────────
+// Connect (shows modal)
 
 export async function connectWallet() {
   const wallets = await getWallets();
-  // Check which adapters are available (installed)
   const detected = wallets.filter(w => w.readyState === 'Installed');
   const allWallets = [...detected, ...wallets.filter(w => !detected.includes(w))];
 
-  if (allWallets.length === 0) {
-    window.open('https://phantom.app/', '_blank');
-    throw new Error('No Solana wallet detected. Please install one.');
-  }
-
-  // If only one wallet is installed, connect directly
-  if (detected.length === 1) {
-    return _connectAdapter(detected[0]);
-  }
-
-  // Show wallet selection modal
+  // Always show modal - mobile deep links are in there too
   return new Promise((resolve, reject) => {
     _showWalletModal(allWallets, resolve, reject);
   });
@@ -99,7 +89,7 @@ export async function disconnectWallet() {
   _onDisconnectCallbacks.forEach(cb => cb());
 }
 
-// ── Auto-reconnect ───────────────────────────────────────────
+// Auto-reconnect
 
 export async function tryAutoConnect() {
   const savedName = localStorage.getItem('walletName');
@@ -122,11 +112,10 @@ export async function tryAutoConnect() {
   }
 }
 
-// ── Signing ──────────────────────────────────────────────────
+// Signing
 
 /**
  * Sign a UTF-8 message string. Returns { signature: Uint8Array }.
- * Replaces all direct window.solana.signMessage() calls.
  */
 export async function signMessage(message) {
   if (!_adapter?.connected) throw new Error('Wallet not connected');
@@ -184,14 +173,15 @@ export async function signTransaction(base64Tx) {
   return btoa(String.fromCharCode(...new Uint8Array(bytes)));
 }
 
-// ── Wallet Button UI ─────────────────────────────────────────
+// Wallet Button UI
 
 export function renderWalletButton(container, onConnectCb) {
   const pubkey = getPublicKey();
-  const name = getWalletName();
 
   if (pubkey) {
-    const icon = _adapter?.icon ? `<img src="${_adapter.icon}" alt="" style="width:18px;height:18px;border-radius:4px;margin-right:6px;vertical-align:middle">` : '';
+    const icon = _adapter?.icon
+      ? `<img src="${_adapter.icon}" alt="" style="width:18px;height:18px;border-radius:4px;margin-right:6px;vertical-align:middle">`
+      : '';
     container.innerHTML = `
       <button class="btn btn-sm wallet-btn connected" id="wallet-btn">
         <span class="wallet-dot"></span>
@@ -207,7 +197,7 @@ export function renderWalletButton(container, onConnectCb) {
   } else {
     container.innerHTML = `
       <button class="btn btn-sm btn-primary wallet-btn" id="wallet-btn">
-        🔌 Connect Wallet
+        Connect Wallet
       </button>
     `;
     container.querySelector('#wallet-btn').addEventListener('click', async () => {
@@ -216,13 +206,13 @@ export function renderWalletButton(container, onConnectCb) {
         renderWalletButton(container, onConnectCb);
         if (onConnectCb) onConnectCb(pk);
       } catch (err) {
-        alert(err.message);
+        if (err.message !== 'Wallet selection cancelled') alert(err.message);
       }
     });
   }
 }
 
-// ── Internal ─────────────────────────────────────────────────
+// Internal
 
 async function _connectAdapter(adapter) {
   await adapter.connect();
@@ -260,88 +250,125 @@ function _base64ToBytes(b64) {
   return bytes;
 }
 
-// ── Wallet Selection Modal ───────────────────────────────────
+function _isMobile() {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+// Mobile deep-link wallets (open site inside wallet's built-in browser)
+const MOBILE_WALLETS = [
+  {
+    name: 'Phantom',
+    icon: 'https://raw.githubusercontent.com/solana-labs/wallet-adapter/master/packages/wallets/phantom/icon.png',
+    getUrl() {
+      const url = encodeURIComponent(window.location.href);
+      return `https://phantom.app/ul/browse/${url}?ref=${url}`;
+    },
+  },
+  {
+    name: 'Solflare',
+    icon: 'https://solflare.com/favicon-32x32.png',
+    getUrl() {
+      const url = encodeURIComponent(window.location.href);
+      return `https://solflare.com/ul/v1/browse/${url}?ref=${url}`;
+    },
+  },
+  {
+    name: 'Backpack',
+    icon: 'https://backpack.app/favicon.png',
+    getUrl() { return 'https://backpack.app/'; },
+  },
+];
+
+// Wallet Selection Modal
 
 function _showWalletModal(wallets, resolve, reject) {
-  // Remove any existing modal
   document.getElementById('wallet-modal-overlay')?.remove();
 
   const overlay = document.createElement('div');
   overlay.id = 'wallet-modal-overlay';
-  overlay.style.cssText = `
-    position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;
-    background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);animation:walletFadeIn 0.2s ease;
-  `;
+  overlay.style.cssText =
+    'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;' +
+    'background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);animation:walletFadeIn 0.2s ease;';
 
   const installed = wallets.filter(w => w.readyState === 'Installed');
   const notInstalled = wallets.filter(w => w.readyState !== 'Installed');
+  const onMobile = _isMobile();
 
-  const walletItems = (list, dim = false) => list.map(w => `
-    <button class="wallet-option" data-wallet="${w.name}" style="
-      display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;
-      background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
-      border-radius:12px;color:#fff;cursor:pointer;transition:all 0.2s;
-      ${dim ? 'opacity:0.5;' : ''}
-    ">
-      <img src="${w.icon}" alt="${w.name}" style="width:36px;height:36px;border-radius:8px">
-      <div style="flex:1;text-align:left">
-        <div style="font-weight:600;font-size:0.95rem">${w.name}</div>
-        <div style="font-size:0.75rem;color:rgba(255,255,255,0.5)">
-          ${w.readyState === 'Installed' ? 'Detected' : 'Not installed'}
-        </div>
-      </div>
-      ${w.readyState === 'Installed' ? '<span style="color:#FFD700;font-size:0.8rem">●</span>' : ''}
-    </button>
-  `).join('');
+  const baseItemStyle =
+    'display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;' +
+    'background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);' +
+    'border-radius:12px;color:#fff;cursor:pointer;transition:all 0.2s;';
 
-  overlay.innerHTML = `
-    <div style="
-      background:rgba(10,10,15,0.95);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1);
-      border-radius:20px;padding:28px;max-width:400px;width:90%;max-height:80vh;overflow-y:auto;
-      box-shadow:0 24px 48px rgba(0,0,0,0.5);animation:walletSlideUp 0.25s ease;
-    ">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-        <h2 style="margin:0;font-size:1.2rem;color:#fff">Connect Wallet</h2>
-        <button id="wallet-modal-close" style="
-          background:none;border:none;color:rgba(255,255,255,0.5);font-size:1.4rem;
-          cursor:pointer;padding:4px 8px;line-height:1;
-        ">✕</button>
-      </div>
-      ${installed.length > 0 ? `
-        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:${notInstalled.length ? '16px' : '0'}">
-          ${walletItems(installed)}
-        </div>
-      ` : ''}
-      ${notInstalled.length > 0 ? `
-        <div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">
-          Other Wallets
-        </div>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          ${walletItems(notInstalled, true)}
-        </div>
-      ` : ''}
-    </div>
-    <style>
-      @keyframes walletFadeIn { from{opacity:0} to{opacity:1} }
-      @keyframes walletSlideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
-      .wallet-option:hover { background:rgba(255,215,0,0.1)!important; border-color:rgba(255,215,0,0.3)!important; }
-    </style>
-  `;
+  const walletItems = (list, dim = false) => list.map(w =>
+    `<button class="wallet-option" data-wallet="${w.name}" style="${baseItemStyle}${dim ? 'opacity:0.5;' : ''}">` +
+    `<img src="${w.icon}" alt="${w.name}" style="width:36px;height:36px;border-radius:8px">` +
+    `<div style="flex:1;text-align:left">` +
+    `<div style="font-weight:600;font-size:0.95rem">${w.name}</div>` +
+    `<div style="font-size:0.75rem;color:rgba(255,255,255,0.5)">${w.readyState === 'Installed' ? 'Detected' : 'Not installed'}</div>` +
+    `</div>` +
+    (w.readyState === 'Installed' ? '<span style="color:#FFD700;font-size:0.8rem">&#9679;</span>' : '') +
+    `</button>`
+  ).join('');
+
+  const mobileItems = () => MOBILE_WALLETS.map(w =>
+    `<a class="wallet-mobile-option" href="${w.getUrl()}" style="${baseItemStyle}text-decoration:none;" target="_blank" rel="noopener">` +
+    `<img src="${w.icon}" alt="${w.name}" style="width:36px;height:36px;border-radius:8px;background:#333;" onerror="this.style.display='none'">` +
+    `<div style="flex:1;text-align:left">` +
+    `<div style="font-weight:600;font-size:0.95rem">${w.name}</div>` +
+    `<div style="font-size:0.75rem;color:rgba(255,255,255,0.5)">Open in app</div>` +
+    `</div>` +
+    `<span style="font-size:0.9rem;color:rgba(255,255,255,0.35)">&#8599;</span>` +
+    `</a>`
+  ).join('');
+
+  const sectionLabel = (text) =>
+    `<div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">${text}</div>`;
+
+  let body = '';
+
+  // Mobile: show deep-link options first
+  if (onMobile) {
+    body += sectionLabel('Open in wallet app');
+    body += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:${installed.length ? '16px' : '0'}">${mobileItems()}</div>`;
+  }
+
+  // Desktop: installed wallets
+  if (installed.length > 0) {
+    if (onMobile) body += sectionLabel('Detected');
+    body += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:${notInstalled.length && !onMobile ? '16px' : '0'}">${walletItems(installed)}</div>`;
+  }
+
+  // Desktop: uninstalled wallets (skip on mobile - deep links cover it)
+  if (notInstalled.length > 0 && !onMobile) {
+    body += sectionLabel('Other Wallets');
+    body += `<div style="display:flex;flex-direction:column;gap:8px">${walletItems(notInstalled, true)}</div>`;
+  }
+
+  overlay.innerHTML =
+    `<div style="background:rgba(10,10,15,0.95);backdrop-filter:blur(20px);` +
+    `border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:28px;` +
+    `max-width:400px;width:90%;max-height:80vh;overflow-y:auto;` +
+    `box-shadow:0 24px 48px rgba(0,0,0,0.5);animation:walletSlideUp 0.25s ease;">` +
+    `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">` +
+    `<h2 style="margin:0;font-size:1.2rem;color:#fff">Connect Wallet</h2>` +
+    `<button id="wallet-modal-close" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:1.4rem;cursor:pointer;padding:4px 8px;line-height:1;">&#x2715;</button>` +
+    `</div>${body}</div>` +
+    `<style>` +
+    `@keyframes walletFadeIn{from{opacity:0}to{opacity:1}}` +
+    `@keyframes walletSlideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}` +
+    `.wallet-option:hover,.wallet-mobile-option:hover{background:rgba(255,215,0,0.1)!important;border-color:rgba(255,215,0,0.3)!important;}` +
+    `</style>`;
 
   document.body.appendChild(overlay);
 
-  // Close handlers
   const close = () => {
     overlay.remove();
     reject(new Error('Wallet selection cancelled'));
   };
 
   overlay.querySelector('#wallet-modal-close').addEventListener('click', close);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
-  });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
-  // Wallet selection
   overlay.querySelectorAll('.wallet-option').forEach(btn => {
     btn.addEventListener('click', async () => {
       const name = btn.dataset.wallet;
@@ -353,14 +380,15 @@ function _showWalletModal(wallets, resolve, reject) {
         return;
       }
 
-      btn.querySelector('div > div:first-child').textContent = 'Connecting...';
+      const labels = btn.querySelectorAll('div > div');
+      labels[0].textContent = 'Connecting...';
       try {
         const pubkey = await _connectAdapter(adapter);
         overlay.remove();
         resolve(pubkey);
       } catch (err) {
-        btn.querySelector('div > div:first-child').textContent = adapter.name;
-        btn.querySelector('div > div:last-child').textContent = err.message;
+        labels[0].textContent = adapter.name;
+        labels[1].textContent = err.message;
       }
     });
   });
