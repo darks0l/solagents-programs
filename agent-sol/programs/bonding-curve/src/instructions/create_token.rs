@@ -376,7 +376,7 @@ pub fn handler(
             // Update pool state
             pool.virtual_sol_reserve = pool.virtual_sol_reserve.checked_add(sol_after_fee).ok_or(CurveError::MathOverflow)?;
             pool.virtual_token_reserve = pool.virtual_token_reserve.checked_sub(tokens_out).ok_or(CurveError::MathOverflow)?;
-            pool.real_sol_balance = pool.real_sol_balance.checked_add(sol_after_fee).ok_or(CurveError::MathOverflow)?;
+            pool.real_sol_balance = pool.real_sol_balance.checked_add(dev_sol).ok_or(CurveError::MathOverflow)?;
             pool.real_token_balance = pool.real_token_balance.checked_sub(tokens_out).ok_or(CurveError::MathOverflow)?;
             pool.dev_buy_sol = dev_sol;
             pool.dev_buy_tokens = tokens_out;
