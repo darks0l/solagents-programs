@@ -107,7 +107,7 @@ export default async function agentRoutes(fastify) {
       metadata: meta,
       registeredAt: agent.registered_at,
       lastSeen: agent.last_seen,
-      tokenized: !!token && token.status === 'active',
+      tokenized: !!token && ['active', 'graduated', 'graduating'].includes(token.status),
       token: tokenData,
       stats: stats ? {
         totalJobs: stats.total_jobs,

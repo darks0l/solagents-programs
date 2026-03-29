@@ -148,9 +148,15 @@ export default async function chainRoutes(fastify) {
         market_cap_sol: (vTokenBig > 0n
           ? (Number(BigInt(pool.realSolBalance.toString())) / LAMPORTS_PER_SOL + 30) * (Number(BigInt(pool.totalSupply.toString()) / BigInt(1e9)) / (vToken / 1e9))
           : 0).toFixed(4),
-        graduation_progress: pool.realSolBalance
-          ? ((Number(BigInt(pool.realSolBalance.toString())) / Number(config?.graduationThreshold || 85_000_000_000n)) * 100).toFixed(2) + '%'
-          : '0%',
+        graduation_progress: (() => {
+          const realSolBig = BigInt(pool.realSolBalance?.toString() || '0');
+          const unclaimedFees = (BigInt(pool.creatorFeesEarned?.toString() || '0') - BigInt(pool.creatorFeesClaimed?.toString() || '0'))
+            + (BigInt(pool.platformFeesEarned?.toString() || '0') - BigInt(pool.platformFeesClaimed?.toString() || '0'));
+          const netSol = realSolBig - unclaimedFees;
+          return netSol > 0n
+            ? ((Number(netSol) / Number(config?.graduationThreshold || 85_000_000_000n)) * 100).toFixed(2) + '%'
+            : '0%';
+        })(),
         graduation_threshold: Number(config?.graduationThreshold || 85_000_000_000n) / LAMPORTS_PER_SOL,
         raydium_pool_address: dbPool?.raydium_pool_address || null,
       };
@@ -391,7 +397,9 @@ export default async function chainRoutes(fastify) {
 
       // Calculate expected tokens out using constant product formula (BigInt for overflow safety)
       const solLamBig = BigInt(solAmountLamports);
-      const fee = solLamBig * 200n / 10000n; // 2% fee
+      const config = await readCurveConfig();
+      const totalFeeBps = BigInt(config.creatorFeeBps) + BigInt(config.platformFeeBps);
+      const fee = solLamBig * totalFeeBps / 10000n;
       const solAfterFee = solLamBig - fee;
       const tokensOut = Number((vToken * solAfterFee) / (vSol + solAfterFee));
 
@@ -515,7 +523,9 @@ export default async function chainRoutes(fastify) {
 
       const rawTokens = BigInt(tokenAmount);
       const solOut = Number((vSol * rawTokens) / (vToken + rawTokens));
-      const fee = Math.floor(solOut * 200 / 10000);
+      const config = await readCurveConfig();
+      const totalFeeBps = Number(config.creatorFeeBps) + Number(config.platformFeeBps);
+      const fee = Math.floor(solOut * totalFeeBps / 10000);
       const solAfterFee = solOut - fee;
 
       const minSolOut = Math.floor(solAfterFee * (10000 - slippageBps) / 10000);
@@ -749,13 +759,16 @@ export default async function chainRoutes(fastify) {
         const config = await readCurveConfig();
         if (config && tokenId) {
           const realSol = BigInt(pool.realSolBalance.toString());
+          const unclaimedFees = (BigInt(pool.creatorFeesEarned?.toString() || '0') - BigInt(pool.creatorFeesClaimed?.toString() || '0'))
+            + (BigInt(pool.platformFeesEarned?.toString() || '0') - BigInt(pool.platformFeesClaimed?.toString() || '0'));
+          const netSol = realSol - unclaimedFees;
           const threshold = BigInt(config.graduationThreshold.toString());
 
           // pool.status: Anchor enum { active: {} } or { graduated: {} }
           const poolStatus = (pool.status?.graduated !== undefined) ? 1 : 0;
           const dbTokenStatus = dbToken?.status;
 
-          if (realSol >= threshold && poolStatus === 0 && dbTokenStatus !== 'graduating' && dbTokenStatus !== 'graduated') {
+          if (netSol >= threshold && poolStatus === 0 && dbTokenStatus !== 'graduating' && dbTokenStatus !== 'graduated') {
             // Set status to 'graduating' to block new trades
             stmts.updateAgentTokenStatus?.run('graduating', mintAddress, dbToken?.pool_address, dbToken?.launch_tx, tokenId);
 

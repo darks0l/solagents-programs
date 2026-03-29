@@ -33,16 +33,18 @@ At creation:
 - **All 1B tokens** placed on the bonding curve — no reserve, no split
 - Mint authority + freeze authority revoked immediately
 
-At graduation (85 SOL threshold):
-- Remaining tokens in the pool are split:
-  - `tokens_for_raydium = remaining × (real_sol / (real_sol + virtual_sol))` → ~73.9% of remaining
-  - `tokens_to_burn = remaining × (virtual_sol / (real_sol + virtual_sol))` → ~26.1% of remaining
-- Excess tokens are **burned permanently** (removed from circulating supply)
-- 85 SOL (net of unclaimed fees) + tokens_for_raydium → Raydium CPMM pool
-- LP tokens **burned permanently** — liquidity can never be pulled (stronger than locking)
+At graduation (graduation threshold):
+- Remaining tokens in the pool are split using the **price continuity formula**:
+  - `tokens_for_raydium = sol_for_raydium × virtual_token_reserve / virtual_sol_reserve`
+  - This ensures Raydium opens at the exact same price as the bonding curve's final price
+  - Remaining tokens not sent to Raydium are **burned permanently** (removed from circulating supply)
+- SOL at threshold (net of unclaimed fees) + `tokens_for_raydium` → Raydium CPMM pool
+- LP tokens **burned at graduation (permanently locked liquidity)** — liquidity can never be pulled
 - Raydium opens at the exact same price as the bonding curve's final price
 
-This is the pump.fun model — all tokens on curve, burn excess at graduation for price continuity. The 85 SOL graduation threshold is set in `CurveConfig.graduation_threshold`.
+This is the pump.fun model — all tokens on curve, burn excess at graduation for price continuity.
+
+> **Graduation threshold:** Configurable via on-chain `CurveConfig.graduation_threshold`. Current devnet value: **5 SOL**. Program default: **85 SOL**. Always read from `GET /api/chain/config` — do not hardcode.
 
 ---
 
@@ -70,7 +72,7 @@ pub struct CurvePool {
     pub total_trades: u64,
     pub raydium_pool: Pubkey,       // Set at graduation
     pub raydium_lp_mint: Pubkey,    // Set at graduation
-    pub lp_tokens_locked: u64,      // LP tokens burned (historical field name — tokens are burned, not locked)
+    pub lp_tokens_locked: u64,      // Historical field name — LP tokens are burned at graduation (permanently locked liquidity)
     // ... timestamps, name, symbol, uri, bumps
 }
 ```
@@ -78,6 +80,23 @@ pub struct CurvePool {
 > ⚠️ **`total_buys` and `total_sells` were REMOVED** from this struct. They caused OOM errors on
 > existing devnet pools (stack overflow during deserialization). Do NOT re-add them — the account
 > size is already tight at 537 bytes. Use `total_trades` for aggregate count.
+
+---
+
+## Bonding Curve Program Instructions
+
+| Instruction | Description |
+|-------------|-------------|
+| `initialize` | One-time setup of `CurveConfig` |
+| `create_token` | Launch a new bonding curve pool + mints |
+| `buy` | SOL in → tokens out |
+| `sell` | Tokens in → SOL out |
+| `claim_creator_fees` | Creator claims accumulated 1.4% trade fees |
+| `claim_platform_fees` | Treasury wallet claims accumulated platform fees (treasury is the signer, not admin) |
+| `claim_raydium_fees` | Claim post-graduation Raydium LP fees. Splits 50/50 between creator and treasury. |
+| `set_payment_mint` | Set or update the payment mint for a pool |
+| `update_config` | Update global `CurveConfig` parameters (admin only). All fields optional. |
+| `graduate` | Graduate pool to Raydium CPMM at graduation threshold |
 
 ---
 
@@ -177,9 +196,9 @@ The trade page fetches SOL/USD from CoinGecko and multiplies.
 
 ## Graduation Progress Bar
 
-- Target: **85 SOL** (`graduation_threshold` in `CurveConfig`)
-- Progress: `real_sol_balance / 85 × 100%`
-- UI in `web/src/pages/trade.js` shows: `{realSol.toFixed(2)} / 85 SOL → Raydium`
+- Target: read from `CurveConfig.graduation_threshold` (current devnet: **5 SOL**; program default: **85 SOL**)
+- Progress: `real_sol_balance / graduation_threshold × 100%`
+- UI in `web/src/pages/trade.js` shows: `{realSol.toFixed(2)} / {threshold} SOL → Raydium`
 - On graduation, bar shows: `🎓 Graduated — Now on Raydium`
 
 ---
@@ -277,22 +296,26 @@ TREASURY_WALLET         Platform fee receiver
 The API enforces a strict on-chain escrow flow on top of the Anchor program:
 
 ```
-open → funded → submitted → completed → settled
+open → funded → submitted → Completed → Expired (auto-settle after 24h dispute window)
                           → rejected
-       → refunded (after expiry)
+       → Expired (after expiry / refund claimed)
 ```
 
+> **State naming:** Final states are `Completed` (previously `settled`) and `Expired` (previously `refunded`). The `settled` and `refunded` labels are deprecated.
+
+> **API-layer constructs:** The 72-hour auto-release and 24-hour dispute window are enforced by the API layer, **not** on-chain by the Anchor program. The on-chain program has no awareness of these timers — they are checked and enforced in the API middleware.
+
 ### Enforcement Rules
-- **Budget > 0** required at job creation
+- **Budget** — optional at job creation (can be omitted, stored as 0). Only validated if a non-zero value is provided.
 - **On-chain address** (`onchain_address`) must exist before submit/complete — proves real escrow
 - **`funded_at`** must be set before completion — proves funds were actually locked on-chain
 - **Expiry** enforced on submit and complete — cannot advance past deadline
 
 ### Seller Protection: 72-Hour Auto-Release
-When a provider submits a deliverable, a 72-hour auto-release timer starts. If the evaluator doesn't respond within 72h, the provider can call `POST /jobs/:id/auto-release` to complete the job and release payment. This prevents providers from being ghosted.
+When a provider submits a deliverable, a 72-hour auto-release timer starts. If the evaluator doesn't respond within 72h, the provider can call `POST /jobs/:id/auto-release` to complete the job and release payment. This prevents providers from being ghosted. *(API-layer enforcement only.)*
 
 ### Buyer Protection: 24-Hour Dispute Window
-After a job is completed, there's a 24-hour dispute window before settlement. Either the client or provider can file a dispute via `POST /jobs/:id/dispute` to freeze funds. Jobs auto-settle after 24h if no dispute is raised.
+After a job is completed, there's a 24-hour dispute window before settlement. Either the client or provider can file a dispute via `POST /jobs/:id/dispute` to freeze funds. Jobs auto-settle after 24h if no dispute is raised. *(API-layer enforcement only.)*
 
 ### Dashboard Stats (On-Chain Verified)
 Platform stats (`GET /platform/stats`) and job stats (`GET /jobs/stats`) only count jobs with on-chain backing (`onchain_address IS NOT NULL`) for volume and completion metrics. Test/unverified jobs are excluded from public stats.
@@ -327,10 +350,12 @@ GET  /trade/quote-grad         Post-grad Raydium quote
 
 GET  /platform/stats           Platform-wide stats (on-chain verified only)
 
-POST /jobs/create              Create job (budget > 0 required)
+POST /jobs/create              Create job (budget optional — defaults to 0)
 GET  /jobs                     List jobs
 GET  /jobs?client=wallet       Jobs by client
 GET  /jobs?provider=wallet     Jobs by provider
+POST /jobs/:id/provider        Set/reassign provider (set_provider instruction)
+POST /jobs/:id/budget          Set expected budget (set_budget instruction)
 POST /jobs/:id/fund            Fund job escrow
 POST /jobs/:id/submit          Submit deliverable
 POST /jobs/:id/complete        Approve + pay
@@ -340,6 +365,13 @@ POST /jobs/:id/auto-release    Provider claims after 72h no response
 POST /jobs/:id/dispute         File dispute (24h window after completion)
 POST /jobs/:id/confirm         Verify on-chain tx + advance state
 POST /admin/reset-test-jobs    Admin: clean up test jobs
+
+# Agentic Commerce on-chain instructions
+# set_provider    — reassign provider
+# set_budget      — set expected budget
+# set_payment_mint — set/update payment mint
+# update_config   — update global config (admin only)
+# close_job       — close terminal job account, reclaim rent
 
 WS   /ws/trades                Live trade feed
 ```

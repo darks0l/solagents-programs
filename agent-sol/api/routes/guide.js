@@ -45,7 +45,7 @@ const INTEGRATION_GUIDE = {
     initial_virtual_sol_lamports: 30_000_000_000,
     initial_virtual_sol_note: '30 SOL — phantom reserve that sets starting price, never withdrawable',
     graduation_threshold_lamports: 5_000_000_000,
-    graduation_threshold_note: '5 SOL real SOL raised triggers Raydium CPMM graduation (devnet)',
+    graduation_threshold_note: '5 SOL on current devnet config. Default program constant is 85 SOL. Always read from GET /api/chain/config for the live value.',
     fees: {
       creator_fee_bps: 140,
       platform_fee_bps: 60,
@@ -99,7 +99,7 @@ const INTEGRATION_GUIDE = {
         { name: 'graduated_at',                  type: 'i64',    description: 'Unix timestamp of Raydium graduation (0 if not graduated)' },
         { name: 'raydium_pool',                  type: 'Pubkey', description: 'Raydium CPMM pool address after graduation (zero before)' },
         { name: 'raydium_lp_mint',               type: 'Pubkey', description: 'LP token mint from Raydium (zero before graduation)' },
-        { name: 'lp_tokens_locked',              type: 'u64',    description: 'LP tokens locked by our program (held, not burned)' },
+        { name: 'lp_tokens_locked',              type: 'u64',    description: 'LP tokens burned at graduation (permanently locked liquidity). Field name is historical.' },
         { name: 'raydium_fees_claimed_token_0',  type: 'u64',    description: 'Cumulative Raydium creator fees claimed for token 0' },
         { name: 'raydium_fees_claimed_token_1',  type: 'u64',    description: 'Cumulative Raydium creator fees claimed for WSOL (token 1)' },
         { name: 'total_volume_sol',              type: 'u64',    description: 'Total SOL trading volume (lamports)' },
@@ -214,9 +214,29 @@ const INTEGRATION_GUIDE = {
       accounts: ['creator (signer, mut)', 'config (PDA)', 'pool (mut, PDA)', 'sol_vault (mut, PDA)', 'system_program'],
     },
     claim_platform_fees: {
-      description: 'Admin claims accumulated platform fees to treasury.',
+      description: 'Treasury wallet claims accumulated platform fees.',
       args: [],
-      accounts: ['admin (signer, mut)', 'config (PDA)', 'pool (mut, PDA)', 'sol_vault (mut, PDA)', 'treasury (mut)', 'system_program'],
+      accounts: ['treasury (signer, mut) — must be config.treasury; receives SOL directly', 'config (PDA)', 'pool (mut, PDA)', 'sol_vault (mut, PDA)', 'system_program'],
+    },
+    claim_raydium_fees: {
+      description: 'Claim post-graduation Raydium LP fees. Splits 50/50 between creator and treasury.',
+      args: [],
+      accounts: ['creator (signer, mut)', 'config (PDA)', 'pool (mut, PDA)', 'raydium_pool', 'raydium_authority', 'raydium_token_0_vault', 'raydium_token_1_vault', 'creator_token_0_account (mut)', 'treasury_token_0_account (mut)', 'creator_token_1_account (mut)', 'treasury_token_1_account (mut)', 'raydium_program', 'token_program'],
+    },
+    update_config: {
+      description: 'Update global config parameters. Admin only.',
+      args: [
+        { name: 'creator_fee_bps', type: 'Option<u16>' },
+        { name: 'platform_fee_bps', type: 'Option<u16>' },
+        { name: 'graduation_threshold', type: 'Option<u64>' },
+        { name: 'total_supply', type: 'Option<u64>' },
+        { name: 'decimals', type: 'Option<u8>' },
+        { name: 'initial_virtual_sol', type: 'Option<u64>' },
+        { name: 'treasury', type: 'Option<Pubkey>' },
+        { name: 'paused', type: 'Option<bool>' },
+        { name: 'raydium_permission_enabled', type: 'Option<bool>' },
+      ],
+      accounts: ['admin (signer, mut)', 'config (mut, PDA)'],
     },
     graduate: {
       description: 'Graduates a pool to Raydium CPMM when graduation threshold is met. Admin or permissionless trigger.',
@@ -227,6 +247,10 @@ const INTEGRATION_GUIDE = {
   },
 
   api_endpoints: {
+    meta: [
+      { method: 'GET', path: '/api/integration-guide', auth: 'none', description: 'This endpoint — machine-readable platform spec' },
+      { method: 'GET', path: '/api/auth/spec',         auth: 'none', description: 'Auth scheme documentation' },
+    ],
     chain: [
       { method: 'GET',  path: '/api/chain/config',                    auth: false, description: 'Read live on-chain CurveConfig fields' },
       { method: 'GET',  path: '/api/chain/state/pool/:mintAddress',   auth: false, description: 'Read live pool state by token mint' },
@@ -238,6 +262,11 @@ const INTEGRATION_GUIDE = {
       { method: 'POST', path: '/api/chain/build/claim-fees',          auth: false, description: 'Build a claim creator fees transaction' },
       { method: 'POST', path: '/api/chain/sync/trade',                auth: false, description: 'Sync DB after a confirmed trade tx (call after wallet signs + sends)' },
       { method: 'POST', path: '/api/chain/sync/pool/:mintAddress',    auth: false, description: 'Re-sync pool DB state from chain' },
+      { method: 'GET',  path: '/api/chain/raydium/pool/:mintAddress', auth: 'none', description: 'Raydium CPMM pool state for graduated token' },
+      { method: 'GET',  path: '/api/chain/quote/post-grad',           auth: 'none', description: 'Quote buy/sell via Raydium for graduated token. Query: mintAddress, side (buy|sell), amount' },
+      { method: 'POST', path: '/api/chain/build/post-grad/buy',       auth: 'none', description: 'Build Raydium buy TX for graduated token' },
+      { method: 'POST', path: '/api/chain/build/post-grad/sell',      auth: 'none', description: 'Build Raydium sell TX for graduated token' },
+      { method: 'POST', path: '/api/chain/sync/trade/post-grad',      auth: 'none', description: 'Sync a post-graduation Raydium trade to DB' },
     ],
     tokens: [
       { method: 'GET',  path: '/api/tokens',               auth: false, description: 'List all active agent tokens' },
@@ -252,12 +281,15 @@ const INTEGRATION_GUIDE = {
       { method: 'GET',  path: '/api/agents/:id',          auth: false,    description: 'Agent profile with token + stats' },
       { method: 'POST', path: '/api/agents/:id/tokenize', auth: 'optional', description: 'Create tokenization record + initial DB pool for agent' },
       { method: 'GET',  path: '/api/agents/:id/token',    auth: false,    description: 'Get agent token info' },
-      { method: 'GET',  path: '/api/agents/:id/fees',     auth: 'bearer', description: 'Get unclaimed creator fees' },
-      { method: 'POST', path: '/api/agents/:id/fees/claim', auth: 'bearer', description: 'Initiate fee claim (returns tx to sign)' },
+      { method: 'GET',  path: '/api/agents/:id/fees',          auth: 'none',   description: 'Get unclaimed creator fees' },
+      { method: 'POST', path: '/api/agents/:id/fees/claim',    auth: 'bearer', description: 'Initiate fee claim (returns tx to sign)' },
+      { method: 'GET',  path: '/api/agents/:agentId/claims',   auth: 'none',   description: 'Fee claim history for an agent' },
+      { method: 'GET',  path: '/api/agents/top',               auth: 'none',   description: 'Top agents by combined revenue' },
     ],
     pool: [
       { method: 'GET',  path: '/api/pool/:tokenId',                  auth: false, description: 'Pool state + dev buy transparency from DB' },
       { method: 'GET',  path: '/api/pool/:tokenId/quote',            auth: false, description: 'Price quote. ?side=buy|sell&amount=<lamports|raw>' },
+      { method: 'GET',  path: '/api/pool/by-mint/:mintAddress',      auth: 'none', description: 'Pool state lookup by mint address' },
       { method: 'GET',  path: '/api/tokenize/config',                auth: false, description: 'Platform tokenization config (fees, supply, curve params)' },
     ],
     upload: [
@@ -459,6 +491,70 @@ await fetch('/api/chain/sync/trade', {
     ata_not_found: {
       cause: 'Buyer token account (ATA) does not exist on-chain',
       fix: 'The build/buy endpoint auto-detects missing ATAs and includes createATA instruction. Make sure to use the returned transaction without modification.',
+    },
+    Unauthorized: {
+      cause: 'Signer is not authorized to perform this action (e.g. wrong admin or treasury wallet)',
+      fix: 'Ensure the signer matches the expected account in config (admin for admin-only instructions, treasury for claim_platform_fees)',
+    },
+    CreationPaused: {
+      cause: 'Config.paused = true — new token creation is blocked by admin',
+      fix: 'Wait for the platform to resume, or contact admin. Check GET /api/chain/config for paused status.',
+    },
+    AlreadyGraduated: {
+      cause: 'Attempted a bonding curve action on a pool that has already graduated to Raydium',
+      fix: 'Use post-graduation endpoints: /api/chain/build/post-grad/buy, /api/chain/build/post-grad/sell',
+    },
+    NotReadyToGraduate: {
+      cause: 'Tried to call graduate before real_sol_balance reached graduation_threshold',
+      fix: 'Check GET /api/chain/state/pool/:mintAddress — real_sol_balance must reach graduation_threshold_lamports before graduation',
+    },
+    InsufficientSol: {
+      cause: 'sol_vault does not hold enough SOL to cover the payout (sell or fee claim)',
+      fix: 'Trade size may exceed available real SOL in the vault. Reduce the amount or check pool state.',
+    },
+    InsufficientTokens: {
+      cause: 'Token vault does not hold enough tokens to fill the buy order',
+      fix: 'Reduce the buy amount. Pool may be near depletion. Check virtual_token_reserve via GET /api/chain/state/pool/:mintAddress.',
+    },
+    ZeroAmount: {
+      cause: 'A zero value was passed for sol_amount or token_amount',
+      fix: 'Always pass a positive non-zero amount. Minimum useful trade is >1000 lamports to avoid dust.',
+    },
+    ExceedsPoolBalance: {
+      cause: 'Sell order requests more tokens than the seller actually holds or more than the vault can handle',
+      fix: 'Check seller token balance and pool real_token_balance. Reduce token_amount accordingly.',
+    },
+    ExceedsRealSol: {
+      cause: 'Sell payout would exceed the real SOL available in the vault',
+      fix: 'Reduce sell amount. The vault only holds real SOL deposited by buyers, not virtual reserves.',
+    },
+    CreatorMismatch: {
+      cause: 'The signer of claim_creator_fees does not match pool.creator',
+      fix: 'Only the original token creator wallet can call claim_creator_fees. Verify the signing wallet.',
+    },
+    NotGraduated: {
+      cause: 'Attempted a post-graduation action (e.g. claim_raydium_fees) on a pool that has not yet graduated',
+      fix: 'Pool must have status Graduated. Check GET /api/chain/state/pool/:mintAddress for current status.',
+    },
+    NoRaydiumFees: {
+      cause: 'claim_raydium_fees called but there are no accrued LP fees to collect',
+      fix: 'Raydium fees accumulate from post-graduation trading. Wait for volume to build before claiming.',
+    },
+    NameTooLong: {
+      cause: 'Token name exceeds 32 characters',
+      fix: 'Shorten the name to 32 characters or fewer.',
+    },
+    SymbolTooLong: {
+      cause: 'Token symbol exceeds 10 characters',
+      fix: 'Shorten the symbol to 10 characters or fewer.',
+    },
+    UriTooLong: {
+      cause: 'Metadata URI exceeds 200 characters',
+      fix: 'Use a shorter IPFS CID-based URI. POST /api/upload/metadata returns a compact URI.',
+    },
+    InvalidFee: {
+      cause: 'Fee basis points are out of range (e.g. total fee > 10000 bps)',
+      fix: 'Ensure creator_fee_bps + platform_fee_bps <= 10000. Default is 140 + 60 = 200 bps.',
     },
   },
 };

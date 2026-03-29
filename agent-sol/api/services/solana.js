@@ -244,7 +244,7 @@ function decodeCurvePoolRaw(data) {
   const realTokenBalance = readU64();
   const totalSupply = readU64();
   const statusByte = readU8();
-  const statusMap = { 0: 'Active', 1: 'Graduated', 2: 'Frozen' };
+  const statusMap = { 0: 'Active', 1: 'Graduated' };
   const status = { [statusMap[statusByte] || 'Unknown']: {} };
   const creatorFeesEarned = readU64();
   const creatorFeesClaimed = readU64();
