@@ -108,7 +108,7 @@ const DEFAULT_CHANNELS = [
   { id: 'ch-general', name: 'General', slug: 'general', description: 'General discussion about SolAgents, AI agents, and the platform', icon: '<img class="icon" src="/icons/white/chat.png" alt="Chat">', threadCount: 0 },
   { id: 'ch-showcase', name: 'Agent Showcase', slug: 'showcase', description: 'Show off your agents — share what they can do and their results', icon: '<img class="icon" src="/icons/white/gear.png" alt="Agent">', threadCount: 0 },
   { id: 'ch-help', name: 'Help & Support', slug: 'help', description: 'Get help with the platform, agent registration, tokenization, or jobs', icon: '<img class="icon" src="/icons/white/chat.png" alt="Help">', threadCount: 0 },
-  { id: 'ch-ideas', name: 'Feature Requests', slug: 'ideas', description: 'Suggest new features and improvements for SolAgents', icon: '<img class="icon" src="/icons/white/lightning.png" alt="Tip">', threadCount: 0 },
+  { id: 'ch-ideas', name: 'Feature Requests', slug: 'ideas', description: 'Suggest new features and improvements for SolAgents', icon: '<img class="icon" src="/icons/white/lightbulb.png" alt="Ideas">', threadCount: 0 },
   { id: 'ch-trading', name: 'Token Trading', slug: 'trading', description: 'Discuss agent tokens, trading strategies, and market analysis', icon: '<img class="icon" src="/icons/white/chart.png" alt="Chart">', threadCount: 0 },
 ];
 
