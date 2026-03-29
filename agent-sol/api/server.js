@@ -87,7 +87,8 @@ fastify.get('/api/health', async () => ({
 }));
 
 // IDL endpoints — agents need these to interact with on-chain programs
-const idlDir = join(__dirname, '..', 'target', 'idl');
+// Files live in api/idl/ (deploy-safe location; target/ is in .railwayignore)
+const idlDir = join(__dirname, 'idl');
 fastify.get('/api/idl/agentic_commerce', async (req, reply) => {
   const p = join(idlDir, 'agentic_commerce.json');
   if (!existsSync(p)) return reply.code(404).send({ error: 'IDL not found' });

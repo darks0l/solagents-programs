@@ -8,17 +8,32 @@ import { connection } from '../services/commerce.js';
 
 /**
  * Verify a Solana transaction was confirmed on-chain.
+ * Retries up to 3 times with 1s delay to handle RPC propagation lag.
  * Returns true if the tx exists and succeeded (meta.err === null).
  */
 async function verifyTx(signature) {
-  try {
-    const tx = await connection.getTransaction(signature, { commitment: 'confirmed' });
-    if (!tx) return false;
-    if (tx.meta && tx.meta.err !== null) return false;
-    return true;
-  } catch {
-    return false;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const tx = await connection.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
+      if (tx) {
+        if (tx.meta && tx.meta.err !== null) return false;
+        return true;
+      }
+      // tx not found yet — if this is a fresh submission, try confirmTransaction
+      if (attempt === 0) {
+        try {
+          const latestBlockhash = await connection.getLatestBlockhash();
+          await connection.confirmTransaction({
+            signature,
+            blockhash: latestBlockhash.blockhash,
+            lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+          }, 'confirmed');
+        } catch { /* ignore — will retry getTransaction */ }
+      }
+    } catch { /* ignore — will retry */ }
+    if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
   }
+  return false;
 }
 
 /**
@@ -682,6 +697,7 @@ export default async function tokenRoutes(fastify) {
       onchain_completed_jobs: stats?.onchain_completed_jobs || 0,
       active_onchain_jobs: stats?.active_onchain_jobs || 0,
       total_escrowed_usd: parseFloat(paidUsd.toFixed(2)),
+      total_volume_usd: parseFloat(paidUsd.toFixed(2)), // alias matching docs
       total_token_trades: stats?.total_token_trades || 0,
     };
   });

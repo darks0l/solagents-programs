@@ -461,7 +461,7 @@ export async function buildCreateTokenTransaction({
   const conn = getConnection();
   const creator = new PublicKey(creatorPublicKey);
 
-  // Generate a new mint keypair
+  // Generate a new mint keypair — fresh every call, so reuse isn't the issue
   const mintKp = Keypair.generate();
   const mint = mintKp.publicKey;
 
@@ -472,42 +472,69 @@ export async function buildCreateTokenTransaction({
   const [metadata] = getMetadataPDA(mint);
   const creatorATA = await getAssociatedTokenAddress(mint, creator);
 
+  // Pre-flight: check if metadata PDA already exists (deterministic from mint).
+  // A stale failed tx can leave residual account state that causes InvalidAccountData on retry.
+  const metadataInfo = await conn.getAccountInfo(metadata);
+  if (metadataInfo !== null) {
+    const err = new Error(
+      'InvalidAccountData: Metaplex metadata account already exists for this mint. ' +
+      'This can happen if a previous create_token transaction partially landed. ' +
+      'A new mint keypair will be generated on your next call — please retry the request.'
+    );
+    err.code = 'METADATA_ACCOUNT_EXISTS';
+    throw err;
+  }
+
   const config = await program.account.curveConfig.fetch(configPDA);
 
   const devBuyArg = devBuySol
     ? new BN(Math.round(devBuySol * 1e9))
     : null;
 
-  const ix = await program.methods
-    .createToken(name, symbol, uri, devBuyArg)
-    .accounts({
-      creator,
-      config: configPDA,
-      mint,
-      pool,
-      solVault,
-      tokenVault,
-      metadata,
-      metadataProgram: METAPLEX_PROGRAM_ID,
-      creatorTokenAccount: creatorATA,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-      rent: SYSVAR_RENT_PUBKEY,
-    })
-    .instruction();
+  try {
+    const ix = await program.methods
+      .createToken(name, symbol, uri, devBuyArg)
+      .accounts({
+        creator,
+        config: configPDA,
+        mint,
+        pool,
+        solVault,
+        tokenVault,
+        metadata,
+        metadataProgram: METAPLEX_PROGRAM_ID,
+        creatorTokenAccount: creatorATA,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .instruction();
 
-  const { blockhash } = await conn.getLatestBlockhash();
-  const tx = new Transaction({ recentBlockhash: blockhash, feePayer: creator });
-  tx.add(ix);
+    const { blockhash } = await conn.getLatestBlockhash();
+    const tx = new Transaction({ recentBlockhash: blockhash, feePayer: creator });
+    tx.add(ix);
 
-  // Partially sign with mint keypair (mint account must be a signer)
-  tx.partialSign(mintKp);
+    // Partially sign with mint keypair (mint account must be a signer)
+    tx.partialSign(mintKp);
 
-  return {
-    transaction: Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64'),
-    mintPublicKey: mint.toBase58(),
-    poolAddress: pool.toBase58(),
-  };
+    return {
+      transaction: Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64'),
+      mintPublicKey: mint.toBase58(),
+      poolAddress: pool.toBase58(),
+    };
+  } catch (err) {
+    if (err.message?.includes('InvalidAccountData') || err.code === 'InvalidAccountData') {
+      const enhanced = new Error(
+        'InvalidAccountData building create_token instruction. ' +
+        'A Metaplex metadata or ATA account may already exist from a prior failed attempt. ' +
+        'Please retry — a fresh mint keypair will be generated. ' +
+        'If the issue persists, try a different token name/symbol combination or contact support.'
+      );
+      enhanced.code = 'INVALID_ACCOUNT_DATA';
+      throw enhanced;
+    }
+    throw err;
+  }
 }
 
 /**

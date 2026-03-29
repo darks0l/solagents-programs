@@ -578,30 +578,30 @@ export default async function chainRoutes(fastify) {
         stmts.updatePool.run(vSol, vToken, realSol, realToken, circulating, priceLamports.toString(), tokenId);
       }
 
+      // Extract SOL and token amounts from tx meta — needed for both DB insert and WebSocket payload
+      let solAmount = '0';
+      let tokenAmount = '0';
+      if (tx?.meta) {
+        const accountKeys = tx.transaction?.message?.staticAccountKeys
+          || tx.transaction?.message?.accountKeys || [];
+        const traderIdx = accountKeys.findIndex(k => k.toBase58() === (traderWallet || ''));
+        if (traderIdx >= 0) {
+          const pre = tx.meta.preBalances?.[traderIdx] || 0;
+          const post = tx.meta.postBalances?.[traderIdx] || 0;
+          solAmount = Math.abs(post - pre).toString();
+        }
+        // Token amounts from pre/postTokenBalances
+        const preToken = tx.meta.preTokenBalances?.find(b => b.owner === (traderWallet || '') && b.mint === mintAddress);
+        const postToken = tx.meta.postTokenBalances?.find(b => b.owner === (traderWallet || '') && b.mint === mintAddress);
+        const preAmt = BigInt(preToken?.uiTokenAmount?.amount || '0');
+        const postAmt = BigInt(postToken?.uiTokenAmount?.amount || '0');
+        tokenAmount = (postAmt > preAmt ? postAmt - preAmt : preAmt - postAmt).toString();
+      }
+
       // Record trade in DB
       if (tokenId && stmts.insertTokenTrade) {
         const isBuy = tx?.meta?.logMessages?.some(l => l.includes('buy') || l.includes('Buy')) ?? true;
         const tradeId = randomUUID();
-
-        // Extract SOL difference from pre/post balances for the trader
-        let solAmount = '0';
-        let tokenAmount = '0';
-        if (tx?.meta) {
-          const accountKeys = tx.transaction?.message?.staticAccountKeys
-            || tx.transaction?.message?.accountKeys || [];
-          const traderIdx = accountKeys.findIndex(k => k.toBase58() === (traderWallet || ''));
-          if (traderIdx >= 0) {
-            const pre = tx.meta.preBalances?.[traderIdx] || 0;
-            const post = tx.meta.postBalances?.[traderIdx] || 0;
-            solAmount = Math.abs(post - pre).toString();
-          }
-          // Token amounts from pre/postTokenBalances
-          const preToken = tx.meta.preTokenBalances?.find(b => b.owner === (traderWallet || '') && b.mint === mintAddress);
-          const postToken = tx.meta.postTokenBalances?.find(b => b.owner === (traderWallet || '') && b.mint === mintAddress);
-          const preAmt = BigInt(preToken?.uiTokenAmount?.amount || '0');
-          const postAmt = BigInt(postToken?.uiTokenAmount?.amount || '0');
-          tokenAmount = (postAmt > preAmt ? postAmt - preAmt : preAmt - postAmt).toString();
-        }
 
         stmts.insertTokenTrade.run(
           tradeId, tokenId, traderWallet || '', isBuy ? 'buy' : 'sell',
@@ -758,13 +758,31 @@ export default async function chainRoutes(fastify) {
       // Create/update token in DB
       if (agentId && stmts.insertAgentToken) {
         const tokenId = randomUUID();
+        // Column order: id, agent_id, token_name, token_symbol, total_supply,
+        //   creator_wallet, creator_fee_bps, platform_fee_bps, logo_url, description,
+        //   agent_description, social_twitter, social_telegram, social_discord,
+        //   social_website, ipfs_logo_cid, ipfs_metadata_cid
         stmts.insertAgentToken.run(
-          tokenId, agentId, name || 'Agent Token', symbol || 'TOKEN',
-          mint, null, pool.totalSupply.toString(),
+          tokenId,
+          agentId,
+          name || 'Agent Token',
+          symbol || 'TOKEN',
+          pool.totalSupply.toString(),
           creatorWallet || pool.creator.toBase58(),
-          140, 60, null, null, null, null,
-          1, 'active', txSignature
+          140,
+          60,
+          null, // logo_url
+          null, // description
+          null, // agent_description
+          null, // social_twitter
+          null, // social_telegram
+          null, // social_discord
+          null, // social_website
+          null, // ipfs_logo_cid
+          null  // ipfs_metadata_cid
         );
+        // Set mint address, pool address, launch tx and mark active
+        stmts.updateAgentTokenStatus?.run('active', mint, null, txSignature, tokenId);
 
         // Create pool record
         if (stmts.insertPool) {
