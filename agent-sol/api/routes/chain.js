@@ -79,6 +79,9 @@ export default async function chainRoutes(fastify) {
       const pool = await readPool(mintAddress);
       if (!pool) return reply.code(404).send({ error: 'Pool not found on-chain' });
 
+      // Read config for graduation threshold
+      const config = await readCurveConfig();
+
       // Calculate price in SOL per human token
       // vSol is in lamports (raw), vToken is in raw token units (9 decimals)
       // Price per human token in SOL = (vSol / LAMPORTS_PER_SOL) / (vToken / 1e9)
