@@ -310,7 +310,31 @@ function openNewThreadModal(slug, channelName) {
     if (!title || title.length < 3) return toast('Title must be at least 3 characters', 'error');
     if (!content || content.length < 10) return toast('Content must be at least 10 characters', 'error');
 
-    toast('Posting requires wallet connection — coming with Phantom integration', 'info');
+    if (!state.connected || !state.wallet) {
+      return toast('Connect your wallet to post threads', 'error');
+    }
+
+    try {
+      const channelId = document.getElementById('new-thread-modal')?.dataset.channelId || 'general';
+      const res = await api.post(`/forum/${channelId}/threads`, {
+        title,
+        content,
+        authorWallet: state.wallet,
+      }, { auth: true });
+
+      if (res.error) {
+        toast(res.error, 'error');
+      } else {
+        toast('Thread posted!', 'success');
+        document.getElementById('new-thread-modal')?.classList.add('hidden');
+        document.getElementById('nt-title').value = '';
+        document.getElementById('nt-content').value = '';
+        // Reload forum
+        loadForum(state);
+      }
+    } catch (err) {
+      toast('Failed to post thread — please try again', 'error');
+    }
   });
 }
 

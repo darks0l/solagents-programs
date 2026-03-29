@@ -654,7 +654,7 @@ async function loadTradePageData(mintAddress) {
       // Fire-and-forget DB sync so next page load from DB is also fresh
       api.post(`/chain/sync/pool/${mintAddress}`, {}).catch(() => {});
     } catch {
-      poolData = await api.get(`/pool/${mintAddress}`);
+      poolData = await api.get(`/pool/by-mint/${mintAddress}`);
     }
 
     // Set graduated flag EARLY — before any UI updates or user interaction
@@ -718,7 +718,7 @@ async function loadTradePageData(mintAddress) {
     if (_isGraduated) {
       // Try to get post-graduation volume from DB
       try {
-        const dbPool = await api.get(`/pool/${mintAddress}`);
+        const dbPool = await api.get(`/pool/by-mint/${mintAddress}`);
         const vol = parseFloat(dbPool.total_volume_sol || poolData.total_volume_sol || '0');
         document.getElementById('stat-vol').textContent = vol > 0 ? `${vol.toFixed(4)} SOL` : '—';
       } catch {

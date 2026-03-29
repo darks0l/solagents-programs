@@ -52,6 +52,43 @@ export default async function poolRoutes(fastify) {
     };
   });
 
+  // Get pool state by mint address (for frontend fallback when only mint is known)
+  fastify.get('/api/pool/by-mint/:mintAddress', async (request, reply) => {
+    const token = stmts.getAgentTokenByMint?.get(request.params.mintAddress);
+    if (!token) return reply.code(404).send({ error: 'Token not found for mint' });
+
+    const pool = stmts.getPool.get(token.id);
+    if (!pool) return reply.code(404).send({ error: 'Pool not found' });
+
+    const stats = getPoolStats(pool);
+    const devBuys = stmts.getDevBuys.all(token.id);
+
+    return {
+      pool: {
+        ...stats,
+        virtual_sol_reserve: lamportsToSol(pool.virtual_sol_reserve),
+        virtual_token_reserve: rawToTokens(pool.virtual_token_reserve),
+        status: pool.status,
+        total_volume_sol: pool.total_volume_sol,
+        raydium_pool_address: pool.raydium_pool_address,
+      },
+      token: {
+        id: token.id,
+        name: token.token_name,
+        symbol: token.token_symbol,
+        logo: token.logo_url,
+      },
+      devBuys: devBuys.map(d => ({
+        wallet: d.dev_wallet,
+        sol_spent: lamportsToSol(d.amount_sol),
+        tokens_received: rawToTokens(d.amount_token),
+        price: lamportsToSol(d.price_per_token),
+        tx: d.tx_signature,
+        timestamp: d.created_at,
+      })),
+    };
+  });
+
   // Get price quote (read-only, no execution)
   fastify.get('/api/pool/:tokenId/quote', async (request, reply) => {
     const pool = stmts.getPool.get(request.params.tokenId);

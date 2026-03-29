@@ -164,10 +164,10 @@ export default async function chainRoutes(fastify) {
     try {
       const { mintAddress } = request.params;
       const pool = await readPool(mintAddress);
-      if (!pool) return reply.code(404).send({ error: 'Pool not found on-chain' });
+      if (!pool) return { skipped: true, reason: 'pool_not_onchain' };
 
       const dbToken = stmts.getAgentTokenByMint?.get(mintAddress);
-      if (!dbToken) return reply.code(404).send({ error: 'Token not in DB' });
+      if (!dbToken) return { skipped: true, reason: 'token_not_in_db' };
 
       const tokenId = dbToken.id;
       const vSol = pool.virtualSolReserve.toString();

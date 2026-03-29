@@ -10,6 +10,12 @@ export function renderDashboard(container, state) {
 
 function renderLanding(container) {
   container.innerHTML = `
+    <!-- Wallet Connect Banner -->
+    <div style="background: linear-gradient(90deg, rgba(139,92,246,0.15), rgba(59,130,246,0.15)); border: 1px solid rgba(139,92,246,0.3); border-radius: 12px; padding: 16px 24px; margin: 16px auto; max-width: 640px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap;">
+      <span style="color: var(--text-secondary); font-size: 0.95rem;"><img class="icon" src="/icons/white/wallet.png" alt="Wallet"> Connect your Phantom wallet to access your dashboard</span>
+      <button class="btn btn-primary btn-sm btn-glow" onclick="document.getElementById('btn-connect')?.click()">Connect Wallet</button>
+    </div>
+
     <!-- Hero -->
     <div class="hero text-center" style="padding: 100px 20px 56px;">
       <img src="/assets/solagents-logo.png" alt="Sol Agents" class="hero-logo" />

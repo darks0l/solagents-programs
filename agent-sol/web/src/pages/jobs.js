@@ -690,13 +690,13 @@ function wireJobActions(jobId) {
 
 async function loadJobStats() {
   try {
-    const stats = await api.get('/jobs/stats');
+    const stats = await api.get('/jobs/stats', { auth: false });
     const el = (id) => document.getElementById(id);
-    if (stats) {
-      if (el('jstat-open')) el('jstat-open').textContent = stats.open || 0;
-      if (el('jstat-funded')) el('jstat-funded').textContent = stats.funded || 0;
-      if (el('jstat-submitted')) el('jstat-submitted').textContent = stats.submitted || 0;
-      if (el('jstat-completed')) el('jstat-completed').textContent = stats.completed || 0;
+    if (stats && !stats.error) {
+      if (el('jstat-open')) el('jstat-open').textContent = stats.open ?? 0;
+      if (el('jstat-funded')) el('jstat-funded').textContent = stats.funded ?? 0;
+      if (el('jstat-submitted')) el('jstat-submitted').textContent = stats.submitted ?? 0;
+      if (el('jstat-completed')) el('jstat-completed').textContent = stats.completed ?? 0;
     }
   } catch { /* silent */ }
 }
