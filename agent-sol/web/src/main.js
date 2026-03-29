@@ -173,6 +173,7 @@ function navigate(page, params = {}, skipHistory = false) {
 
   // Hide mobile nav
   document.querySelector('.mobile-nav-overlay')?.classList.add('hidden');
+  document.body.classList.remove('nav-open');
 
   // Render page
   const content = document.getElementById('page-content');
@@ -276,13 +277,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Mobile toggle
   document.querySelector('.nav-mobile-toggle')?.addEventListener('click', () => {
-    document.querySelector('.mobile-nav-overlay')?.classList.toggle('hidden');
+    const overlay = document.querySelector('.mobile-nav-overlay');
+    overlay?.classList.toggle('hidden');
+    document.body.classList.toggle('nav-open', !overlay?.classList.contains('hidden'));
   });
 
   // Close mobile nav on overlay click
   document.querySelector('.mobile-nav-overlay')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) {
       e.currentTarget.classList.add('hidden');
+      document.body.classList.remove('nav-open');
     }
   });
 

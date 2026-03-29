@@ -663,7 +663,10 @@ tr:hover td { background: rgba(34, 211, 238, 0.02); }
 .mobile-nav-overlay {
   position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85);
   z-index: 99; backdrop-filter: blur(12px);
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
+
+body.nav-open { overflow: hidden; position: fixed; width: 100%; }
 
 .mobile-nav {
   position: absolute; top: 56px; left: 0; right: 0;
