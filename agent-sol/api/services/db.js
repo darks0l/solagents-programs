@@ -218,7 +218,7 @@ db.exec(`
     ipfs_metadata_cid TEXT,
     metadata_uri TEXT,
     lp_locked INTEGER NOT NULL DEFAULT 1,
-    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'minting', 'active', 'graduated', 'failed')),
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'minting', 'active', 'graduating', 'graduated', 'failed')),
     launch_tx TEXT,
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
     launched_at INTEGER,
@@ -456,6 +456,63 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_disputes_job ON disputes(job_id);
   CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status);
 `);
+
+// v5: Add 'graduating' to agent_tokens status CHECK constraint
+// SQLite doesn't support ALTER CHECK — must recreate the table
+try {
+  const hasGraduating = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='agent_tokens'"
+  ).get();
+  if (hasGraduating?.sql && !hasGraduating.sql.includes('graduating')) {
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec('DROP TABLE IF EXISTS agent_tokens_new');
+    db.exec(`
+      CREATE TABLE agent_tokens_new (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL REFERENCES agents(id),
+        token_name TEXT NOT NULL,
+        token_symbol TEXT NOT NULL,
+        mint_address TEXT UNIQUE,
+        pool_address TEXT,
+        total_supply TEXT NOT NULL DEFAULT '1000000000',
+        creator_wallet TEXT NOT NULL,
+        creator_fee_bps INTEGER NOT NULL DEFAULT 140,
+        platform_fee_bps INTEGER NOT NULL DEFAULT 60,
+        logo_url TEXT,
+        description TEXT,
+        agent_description TEXT,
+        social_twitter TEXT,
+        social_telegram TEXT,
+        social_discord TEXT,
+        social_website TEXT,
+        ipfs_logo_cid TEXT,
+        ipfs_metadata_cid TEXT,
+        metadata_uri TEXT,
+        lp_locked INTEGER NOT NULL DEFAULT 1,
+        status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'minting', 'active', 'graduating', 'graduated', 'failed')),
+        launch_tx TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        launched_at INTEGER,
+        UNIQUE(agent_id)
+      );
+      INSERT INTO agent_tokens_new SELECT
+        id, agent_id, token_name, token_symbol, mint_address, pool_address, total_supply,
+        creator_wallet, creator_fee_bps, platform_fee_bps, logo_url, description, agent_description,
+        social_twitter, social_telegram, social_discord, social_website, ipfs_logo_cid, ipfs_metadata_cid,
+        metadata_uri, COALESCE(lp_locked, 1), status, launch_tx, created_at, launched_at
+      FROM agent_tokens;
+      DROP TABLE agent_tokens;
+      ALTER TABLE agent_tokens_new RENAME TO agent_tokens;
+      CREATE INDEX IF NOT EXISTS idx_agent_tokens_agent ON agent_tokens(agent_id);
+      CREATE INDEX IF NOT EXISTS idx_agent_tokens_mint ON agent_tokens(mint_address);
+      CREATE INDEX IF NOT EXISTS idx_agent_tokens_status ON agent_tokens(status);
+    `);
+    db.exec('PRAGMA foreign_keys = ON');
+    console.log('[migration] v5: Added graduating status to agent_tokens');
+  }
+} catch (e) {
+  console.error('[migration] v5 failed:', e.message);
+}
 
 // === Prepared Statements ===
 
