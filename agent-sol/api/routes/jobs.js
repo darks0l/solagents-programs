@@ -35,7 +35,15 @@ const DISPUTE_WINDOW_HOURS = 24;
  */
 async function verifyTx(signature) {
   try {
-    const tx = await connection.getTransaction(signature, { commitment: 'confirmed' });
+    // Try getSignatureStatuses first — more reliable on devnet (tx history drops after ~1 min)
+    const { value } = await connection.getSignatureStatuses([signature]);
+    if (value && value[0]) {
+      const status = value[0];
+      if (status.err) return false;
+      if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') return true;
+    }
+    // Fallback to getTransaction for older txs
+    const tx = await connection.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
     if (!tx) return false;
     if (tx.meta && tx.meta.err !== null) return false;
     return true;

@@ -456,10 +456,12 @@ export async function buildCreateTokenTransaction({
   symbol,
   uri,
   devBuySol = null,
+  payerPublicKey = null,
 }) {
   const program = getBondingCurveProgram();
   const conn = getConnection();
   const creator = new PublicKey(creatorPublicKey);
+  const payer = payerPublicKey ? new PublicKey(payerPublicKey) : creator;
 
   // Generate a new mint keypair — fresh every call, so reuse isn't the issue
   const mintKp = Keypair.generate();
@@ -511,7 +513,7 @@ export async function buildCreateTokenTransaction({
       .instruction();
 
     const { blockhash } = await conn.getLatestBlockhash();
-    const tx = new Transaction({ recentBlockhash: blockhash, feePayer: creator });
+    const tx = new Transaction({ recentBlockhash: blockhash, feePayer: payer });
     tx.add(ix);
 
     // Partially sign with mint keypair (mint account must be a signer)
@@ -521,6 +523,7 @@ export async function buildCreateTokenTransaction({
       transaction: Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64'),
       mintPublicKey: mint.toBase58(),
       poolAddress: pool.toBase58(),
+      feePayer: payer.toBase58(),
     };
   } catch (err) {
     if (err.message?.includes('InvalidAccountData') || err.code === 'InvalidAccountData') {

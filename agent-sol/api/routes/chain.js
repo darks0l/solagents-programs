@@ -577,7 +577,7 @@ export default async function chainRoutes(fastify) {
 
   // Build create token transaction
   fastify.post('/api/chain/build/create-token', async (request, reply) => {
-    const { creatorWallet, name, symbol, uri, devBuySol } = request.body || {};
+    const { creatorWallet, name, symbol, uri, devBuySol, payerWallet } = request.body || {};
 
     if (!creatorWallet) return reply.code(400).send({ error: 'creatorWallet required' });
     if (!name) return reply.code(400).send({ error: 'name required' });
@@ -594,6 +594,7 @@ export default async function chainRoutes(fastify) {
         symbol,
         uri: uri || '',
         devBuySol: devBuySol || null,
+        payerPublicKey: payerWallet || null,
       });
 
       return {
@@ -601,6 +602,7 @@ export default async function chainRoutes(fastify) {
         mintPublicKey: result.mintPublicKey,
         mintAddress: result.mintPublicKey, // alias for compatibility
         poolAddress: result.poolAddress,
+        feePayer: result.feePayer,
       };
     } catch (err) {
       return reply.code(500).send({ error: `Failed to build create-token tx: ${err.message}` });
