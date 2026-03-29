@@ -250,6 +250,8 @@ export default async function chainRoutes(fastify) {
             address: p.publicKey.toBase58(),
             mint: pool.mint.toBase58(),
             creator: pool.creator.toBase58(),
+            name: pool.name?.replace(/\0/g, '').trim() || '',
+            symbol: pool.symbol?.replace(/\0/g, '').trim() || '',
             price_sol: priceSol.toFixed(12),
             real_sol_balance: (pool.realSolBalance.toNumber() / LAMPORTS_PER_SOL).toFixed(9),
             total_trades: pool.totalTrades?.toNumber() || 0,
@@ -265,8 +267,9 @@ export default async function chainRoutes(fastify) {
 
   // On-chain quote — reads pool state from chain and calculates expected output
   fastify.get('/api/chain/quote', async (request, reply) => {
-    const { mint, side, amount } = request.query;
-    if (!mint || !side || !amount) return reply.code(400).send({ error: 'mint, side, amount required' });
+    const { mint: _mint, mintAddress, side, amount } = request.query;
+    const mint = _mint || mintAddress;
+    if (!mint || !side || !amount) return reply.code(400).send({ error: 'mint (or mintAddress), side, amount required' });
 
     try {
       const pool = await readPool(mint);

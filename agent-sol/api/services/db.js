@@ -179,7 +179,7 @@ db.exec(`
     description TEXT NOT NULL,
     budget INTEGER DEFAULT 0,
     expired_at INTEGER NOT NULL,
-    status TEXT DEFAULT 'open' CHECK(status IN ('open', 'funded', 'submitted', 'completed', 'rejected', 'expired')),
+    status TEXT DEFAULT 'open' CHECK(status IN ('open', 'funded', 'submitted', 'completed', 'rejected', 'expired', 'pending_open', 'pending_funded', 'pending_submitted', 'pending_completed', 'pending_rejected', 'pending_expired')),
     deliverable TEXT,
     reason TEXT,
     hook TEXT,
@@ -432,6 +432,43 @@ const socialIpfsMigrations = [
 for (const sql of socialIpfsMigrations) {
   try { db.exec(sql); } catch (_) { /* column already exists */ }
 }
+
+// v5: Expand jobs status CHECK to include pending_* states (SQLite requires table recreate)
+try {
+  const hasOldConstraint = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='jobs'`).get();
+  if (hasOldConstraint && hasOldConstraint.sql && !hasOldConstraint.sql.includes('pending_open')) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS jobs_new (
+        id TEXT PRIMARY KEY,
+        client TEXT NOT NULL,
+        provider TEXT,
+        evaluator TEXT NOT NULL,
+        description TEXT NOT NULL,
+        budget INTEGER DEFAULT 0,
+        expired_at INTEGER NOT NULL,
+        status TEXT DEFAULT 'open' CHECK(status IN ('open', 'funded', 'submitted', 'completed', 'rejected', 'expired', 'pending_open', 'pending_funded', 'pending_submitted', 'pending_completed', 'pending_rejected', 'pending_expired')),
+        deliverable TEXT,
+        reason TEXT,
+        hook TEXT,
+        onchain_address TEXT,
+        onchain_job_id INTEGER,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        completed_at INTEGER,
+        auto_release_at INTEGER DEFAULT NULL,
+        settled_at INTEGER DEFAULT NULL,
+        funded_at INTEGER DEFAULT NULL,
+        submitted_at INTEGER DEFAULT NULL,
+        dispute_status TEXT DEFAULT NULL
+      );
+      INSERT INTO jobs_new SELECT id, client, provider, evaluator, description, budget, expired_at, status, deliverable, reason, hook, onchain_address, onchain_job_id, created_at, completed_at, auto_release_at, settled_at, funded_at, submitted_at, dispute_status FROM jobs;
+      DROP TABLE jobs;
+      ALTER TABLE jobs_new RENAME TO jobs;
+      CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+      CREATE INDEX IF NOT EXISTS idx_jobs_client ON jobs(client);
+      CREATE INDEX IF NOT EXISTS idx_jobs_provider ON jobs(provider);
+    `);
+  }
+} catch (e) { console.warn('jobs migration:', e.message); }
 
 // v3: Job lifecycle columns
 try { db.exec('ALTER TABLE jobs ADD COLUMN auto_release_at INTEGER DEFAULT NULL'); } catch (_) { /* already exists */ }

@@ -70,6 +70,7 @@ export async function verifyRegistrationPayment(txSignature, senderWallet, minAm
 export function getRegistrationInfo() {
   return {
     treasury: TREASURY_WALLET,
+    treasuryAddress: TREASURY_WALLET, // alias for skills compatibility
     feeLamports: REGISTRATION_FEE_LAMPORTS,
     feeSol: REGISTRATION_FEE_LAMPORTS / 1e9,
     // Aliases matching documented field names

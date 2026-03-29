@@ -103,9 +103,9 @@ fastify.get('/api/idl/bonding_curve', async (req, reply) => {
   return readFileSync(p, 'utf-8');
 });
 
-// Dynamic IDL route — serves any IDL by program name
+// Dynamic IDL route — serves any IDL by program name (accepts hyphens or underscores)
 fastify.get('/api/idl/:program', async (req, reply) => {
-  const name = req.params.program.replace(/\.json$/, '');
+  const name = req.params.program.replace(/\.json$/, '').replace(/-/g, '_');
   const p = join(idlDir, `${name}.json`);
   if (!existsSync(p)) return reply.code(404).send({ error: `IDL not found for program: ${name}` });
   reply.header('content-type', 'application/json');
