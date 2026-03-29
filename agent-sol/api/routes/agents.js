@@ -188,27 +188,25 @@ export default async function agentRoutes(fastify) {
 
     return {
       updated: true,
-      agent: {
-        id: updated.id,
-        name: updated.name,
-        walletAddress: updated.wallet_address,
-        publicKey: updated.public_key,
-        capabilities: JSON.parse(updated.capabilities || '[]'),
-        description: updatedMeta.description || null,
-        github: updatedMeta.github || null,
-        twitter: updatedMeta.twitter || null,
-        metadata: updatedMeta,
-        registeredAt: updated.registered_at,
-        lastSeen: updated.last_seen,
-        tokenized: !!updatedToken && ['active', 'graduated', 'graduating'].includes(updatedToken?.status),
-        stats: updatedStats ? {
-          totalJobs: updatedStats.total_jobs,
-          completedJobs: updatedStats.completed_jobs,
-          rejectedJobs: updatedStats.rejected_jobs,
-          successRate: updatedStats.success_rate,
-          totalEarned: updatedStats.total_earned,
-        } : { totalJobs: 0, completedJobs: 0, rejectedJobs: 0, successRate: 0, totalEarned: '0' },
-      },
+      id: updated.id,
+      name: updated.name,
+      walletAddress: updated.wallet_address,
+      publicKey: updated.public_key,
+      capabilities: JSON.parse(updated.capabilities || '[]'),
+      description: updatedMeta.description || null,
+      github: updatedMeta.github || null,
+      twitter: updatedMeta.twitter || null,
+      metadata: updatedMeta,
+      registeredAt: updated.registered_at,
+      lastSeen: updated.last_seen,
+      tokenized: !!updatedToken && ['active', 'graduated', 'graduating'].includes(updatedToken?.status),
+      stats: updatedStats ? {
+        totalJobs: updatedStats.total_jobs,
+        completedJobs: updatedStats.completed_jobs,
+        rejectedJobs: updatedStats.rejected_jobs,
+        successRate: updatedStats.success_rate,
+        totalEarned: updatedStats.total_earned,
+      } : { totalJobs: 0, completedJobs: 0, rejectedJobs: 0, successRate: 0, totalEarned: '0' },
     };
   });
 }

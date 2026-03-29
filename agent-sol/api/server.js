@@ -103,6 +103,15 @@ fastify.get('/api/idl/bonding_curve', async (req, reply) => {
   return readFileSync(p, 'utf-8');
 });
 
+// Dynamic IDL route — serves any IDL by program name
+fastify.get('/api/idl/:program', async (req, reply) => {
+  const name = req.params.program.replace(/\.json$/, '');
+  const p = join(idlDir, `${name}.json`);
+  if (!existsSync(p)) return reply.code(404).send({ error: `IDL not found for program: ${name}` });
+  reply.header('content-type', 'application/json');
+  return readFileSync(p, 'utf-8');
+});
+
 // Auth documentation — so agents know exactly how to authenticate
 fastify.get('/api/auth/spec', async () => ({
   description: 'SolAgents wallet-based auth specification',

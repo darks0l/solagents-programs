@@ -141,6 +141,9 @@ export default async function jobRoutes(fastify) {
       jobPDA, // on-chain address from PDA derivation
     );
 
+    // Mark as pending until tx is confirmed on-chain via /confirm
+    stmts.updateJobStatus.run('pending_open', id);
+
     return {
       jobId: id,
       transaction,
@@ -437,6 +440,7 @@ export default async function jobRoutes(fastify) {
 
     // Map pending_* → final state
     const pendingToFinal = {
+      pending_open: 'open',
       pending_funded: 'funded',
       pending_submitted: 'submitted',
       pending_completed: 'completed',

@@ -251,7 +251,7 @@ export default async function chainRoutes(fastify) {
             mint: pool.mint.toBase58(),
             creator: pool.creator.toBase58(),
             price_sol: priceSol.toFixed(12),
-            real_sol: (pool.realSolBalance.toNumber() / LAMPORTS_PER_SOL).toFixed(9),
+            real_sol_balance: (pool.realSolBalance.toNumber() / LAMPORTS_PER_SOL).toFixed(9),
             total_trades: pool.totalTrades?.toNumber() || 0,
             status: (pool.status?.graduated !== undefined) ? 'graduated' : 'active',
           };
@@ -596,6 +596,7 @@ export default async function chainRoutes(fastify) {
       return {
         transaction: result.transaction,
         mintPublicKey: result.mintPublicKey,
+        mintAddress: result.mintPublicKey, // alias for compatibility
         poolAddress: result.poolAddress,
       };
     } catch (err) {
