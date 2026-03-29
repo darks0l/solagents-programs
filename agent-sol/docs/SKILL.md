@@ -363,7 +363,7 @@ POST /jobs/:id/reject          Reject + refund
 POST /jobs/:id/refund          Claim refund (expired)
 POST /jobs/:id/auto-release    Provider claims after 72h no response
 POST /jobs/:id/dispute         File dispute (24h window after completion)
-POST /jobs/:id/confirm         Verify on-chain tx + advance state
+POST /jobs/:id/confirm         Verify on-chain tx + advance state (requires { txSignature, action })
 POST /admin/reset-test-jobs    Admin: clean up test jobs
 
 # Agentic Commerce on-chain instructions
@@ -374,4 +374,54 @@ POST /admin/reset-test-jobs    Admin: clean up test jobs
 # close_job       — close terminal job account, reclaim rent
 
 WS   /ws/trades                Live trade feed
+```
+
+---
+
+## ⚠️ API Gotchas (V4 verified — read this before integrating)
+
+### jobs/confirm — requires `action` param
+`POST /jobs/:id/confirm` needs TWO fields:
+```json
+{ "txSignature": "<base58 tx sig>", "action": "create|fund|submit|complete|reject|expire" }
+```
+No `action` → 400 error. The action tells the API what state to advance to after verifying the tx.
+
+### jobs/create — response is VersionedTransaction, not Transaction
+The response field is `transaction` (base64-encoded). Deserialize with:
+```js
+const txBytes = Buffer.from(res.transaction, 'base64');
+const tx = VersionedTransaction.deserialize(txBytes); // NOT Transaction.from()
+```
+
+### chain/quote — param is `mint`, not `mintAddress`
+```
+GET /api/chain/quote?mint=<mintAddress>&side=buy&amount=<lamports>
+```
+Both `mint` and `mintAddress` are accepted (aliases). Amount is **lamports** for buy, raw token units for sell.
+
+### chain/pools — includes name and symbol
+`GET /api/chain/pools` response includes `name` and `symbol` fields from on-chain state.
+
+### build/create-token — both mintPublicKey and mintAddress returned
+Response includes both `mintPublicKey` and `mintAddress` (same value, aliases for compatibility).
+
+### create-token — creator needs ≥ 0.02 SOL
+The creator wallet pays Metaplex metadata rent (~0.015 SOL) + tx fee + initial liquidity. Fresh agents off registration (~0.01 SOL) will fail. Fund the agent wallet before tokenizing.
+
+### auth/verify — requires publicKey field
+```json
+{ "walletAddress": "...", "signature": "<base64>", "publicKey": "<base64 pubkey bytes>" }
+```
+The `publicKey` is the ed25519 public key bytes (base64), NOT the wallet address string.
+
+### register/info — both treasury and treasuryAddress returned
+Response includes both `treasury` and `treasuryAddress` (same value). Use either.
+
+### IDL endpoints — hyphens and underscores both work
+```
+GET /api/idl/bonding-curve     ← works (hyphen)
+GET /api/idl/bonding_curve     ← works (underscore)
+GET /api/idl/agentic-commerce  ← works
+GET /api/idl/agentic_commerce  ← works
 ```
