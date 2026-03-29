@@ -623,6 +623,123 @@ export default async function chainRoutes(fastify) {
   });
 
   // ═══════════════════════════════════════════════════════════
+  // GRADUATE — trigger graduation for a pool that crossed threshold
+  // ═══════════════════════════════════════════════════════════
+
+  fastify.post('/api/chain/build/graduate', async (request, reply) => {
+    const { mintAddress } = request.body || {};
+    if (!mintAddress) return reply.code(400).send({ error: 'mintAddress required' });
+
+    try {
+      // Check DB status first
+      const dbToken = stmts.getAgentTokenByMint?.get(mintAddress);
+      if (!dbToken) return reply.code(404).send({ error: 'Token not found in DB' });
+      if (dbToken.status === 'graduated') {
+        const dbPool = stmts.getPool?.get(dbToken.id);
+        return reply.code(400).send({ error: 'Token already graduated', raydiumPool: dbPool?.raydium_pool_address });
+      }
+      if (dbToken.status === 'graduating') {
+        return reply.code(423).send({ error: 'Graduation already in progress', status: 'graduating' });
+      }
+
+      // Read on-chain pool + config
+      const pool = await readPool(mintAddress);
+      if (!pool) return reply.code(404).send({ error: 'Pool not found on-chain' });
+
+      const config = await readCurveConfig();
+      if (!config) return reply.code(500).send({ error: 'Could not read curve config' });
+
+      // Check threshold
+      const realSol = BigInt(pool.realSolBalance.toString());
+      const unclaimedFees = (BigInt(pool.creatorFeesEarned?.toString() || '0') - BigInt(pool.creatorFeesClaimed?.toString() || '0'))
+        + (BigInt(pool.platformFeesEarned?.toString() || '0') - BigInt(pool.platformFeesClaimed?.toString() || '0'));
+      const netSol = realSol - unclaimedFees;
+      const threshold = BigInt(config.graduationThreshold.toString());
+
+      if (netSol < threshold) {
+        return reply.code(400).send({
+          error: 'Pool has not reached graduation threshold',
+          netSol: netSol.toString(),
+          threshold: threshold.toString(),
+          progress: ((Number(netSol) / Number(threshold)) * 100).toFixed(2) + '%',
+        });
+      }
+
+      // Check if already graduated on-chain
+      if (pool.status?.graduated !== undefined || pool.graduatedAt > 0) {
+        return reply.code(400).send({ error: 'Pool already graduated on-chain' });
+      }
+
+      // Set DB status to graduating
+      const tokenId = dbToken.id;
+      stmts.updateAgentTokenStatus?.run('graduating', mintAddress, dbToken?.pool_address, dbToken?.launch_tx, tokenId);
+
+      // Notify clients
+      emitTrade(mintAddress, { type: 'graduating', mintAddress, message: 'Token is graduating to Raydium CPMM...', symbol: dbToken?.token_symbol });
+      if (tokenId) emitTrade(tokenId, { type: 'graduating', mintAddress, message: 'Token is graduating to Raydium CPMM...', symbol: dbToken?.token_symbol });
+
+      // Build, sign, send graduation TX with deployer
+      const deployer = getDeployer();
+      const graduateResult = await buildGraduateTransaction({ mintAddress, payer: deployer.publicKey.toBase58() });
+      graduateResult.tx.sign(deployer);
+
+      const conn = getConnection();
+      const gradTxSig = await conn.sendRawTransaction(graduateResult.tx.serialize(), { skipPreflight: false });
+      await conn.confirmTransaction(gradTxSig, 'confirmed');
+
+      // Update DB
+      stmts.graduatePool?.run(graduateResult.raydiumPoolState, tokenId);
+      stmts.updateAgentTokenStatus?.run('graduated', mintAddress, dbToken?.pool_address, dbToken?.launch_tx, tokenId);
+
+      // Notify clients
+      const gradPayload = { type: 'graduation', mintAddress, raydiumPool: graduateResult.raydiumPoolState, txSignature: gradTxSig, symbol: dbToken?.token_symbol };
+      emitTrade(mintAddress, gradPayload);
+      if (tokenId) emitTrade(tokenId, gradPayload);
+
+      return {
+        graduated: true,
+        raydiumPool: graduateResult.raydiumPoolState,
+        graduationTx: gradTxSig,
+        mintAddress,
+      };
+    } catch (err) {
+      // Revert status on failure
+      const dbToken = stmts.getAgentTokenByMint?.get(mintAddress);
+      if (dbToken) stmts.updateAgentTokenStatus?.run('active', mintAddress, dbToken?.pool_address, dbToken?.launch_tx, dbToken.id);
+      console.error(`[build/graduate] Failed for ${mintAddress}:`, err.message);
+      return reply.code(500).send({ error: `Graduation failed: ${err.message}`, hint: 'Pool reverted to active, trading can continue' });
+    }
+  });
+
+  // Check graduation eligibility without triggering it
+  fastify.get('/api/chain/check-graduation/:mint', async (request, reply) => {
+    const { mint } = request.params;
+    try {
+      const pool = await readPool(mint);
+      if (!pool) return reply.code(404).send({ error: 'Pool not found' });
+
+      const config = await readCurveConfig();
+      const realSol = BigInt(pool.realSolBalance.toString());
+      const unclaimedFees = (BigInt(pool.creatorFeesEarned?.toString() || '0') - BigInt(pool.creatorFeesClaimed?.toString() || '0'))
+        + (BigInt(pool.platformFeesEarned?.toString() || '0') - BigInt(pool.platformFeesClaimed?.toString() || '0'));
+      const netSol = realSol - unclaimedFees;
+      const threshold = BigInt(config.graduationThreshold.toString());
+
+      const dbToken = stmts.getAgentTokenByMint?.get(mint);
+      return {
+        eligible: netSol >= threshold,
+        graduated: pool.status?.graduated !== undefined || pool.graduatedAt > 0,
+        dbStatus: dbToken?.status || 'unknown',
+        netSol: netSol.toString(),
+        threshold: threshold.toString(),
+        progress: ((Number(netSol) / Number(threshold)) * 100).toFixed(2) + '%',
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════
   // SYNC — update DB from on-chain state after tx confirmation
   // ═══════════════════════════════════════════════════════════
 
@@ -765,10 +882,11 @@ export default async function chainRoutes(fastify) {
           const threshold = BigInt(config.graduationThreshold.toString());
 
           // pool.status: Anchor enum { active: {} } or { graduated: {} }
-          const poolStatus = (pool.status?.graduated !== undefined) ? 1 : 0;
+          // Also check graduatedAt > 0 (more reliable — DARK graduated with status still showing active)
+          const alreadyGraduated = (pool.status?.graduated !== undefined) || (pool.graduatedAt > 0);
           const dbTokenStatus = dbToken?.status;
 
-          if (netSol >= threshold && poolStatus === 0 && dbTokenStatus !== 'graduating' && dbTokenStatus !== 'graduated') {
+          if (netSol >= threshold && !alreadyGraduated && dbTokenStatus !== 'graduating' && dbTokenStatus !== 'graduated') {
             // Set status to 'graduating' to block new trades
             stmts.updateAgentTokenStatus?.run('graduating', mintAddress, dbToken?.pool_address, dbToken?.launch_tx, tokenId);
 
