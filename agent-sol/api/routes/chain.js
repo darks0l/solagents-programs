@@ -351,12 +351,45 @@ export default async function chainRoutes(fastify) {
       const solAmountLamports = Math.round(solAmount * LAMPORTS_PER_SOL);
 
       // Read current pool state to calculate expected output + slippage
-      const pool = await readPool(mintAddress);
-      if (!pool) return reply.code(404).send({ error: 'Pool not found on-chain. Token may not be created yet.' });
+      let pool;
+      try {
+        pool = await readPool(mintAddress);
+      } catch (poolErr) {
+        return reply.code(500).send({
+          error: `Failed to read pool from chain: ${poolErr.message}`,
+          hint: 'The RPC may be unavailable or the mint address is invalid.',
+          guide: 'GET /api/integration-guide for field layout and PDA derivation',
+        });
+      }
+
+      if (!pool) {
+        return reply.code(404).send({
+          error: 'Pool not found on-chain. Token may not be created yet.',
+          hint: 'Ensure the create_token transaction has been confirmed and POST /api/tokens/:id/activate has been called.',
+          guide: 'GET /api/integration-guide → token_lifecycle for the full creation flow',
+          mintAddress,
+        });
+      }
+
+      // Sanity check pool fields
+      let vSol, vToken;
+      try {
+        vSol = BigInt(pool.virtualSolReserve.toString());
+        vToken = BigInt(pool.virtualTokenReserve.toString());
+        if (vSol === 0n || vToken === 0n) throw new Error('zero reserves');
+      } catch (parseErr) {
+        return reply.code(500).send({
+          error: 'Pool data appears malformed — reserves could not be read.',
+          pool_fields: {
+            virtualSolReserve: pool.virtualSolReserve?.toString() ?? 'undefined',
+            virtualTokenReserve: pool.virtualTokenReserve?.toString() ?? 'undefined',
+          },
+          hint: 'Expected u64 values > 0. Pool may not be initialized correctly.',
+          guide: 'GET /api/integration-guide → structs.CurvePool for field layout',
+        });
+      }
 
       // Calculate expected tokens out using constant product formula (BigInt for overflow safety)
-      const vSol = BigInt(pool.virtualSolReserve.toString());
-      const vToken = BigInt(pool.virtualTokenReserve.toString());
       const solLamBig = BigInt(solAmountLamports);
       const fee = solLamBig * 200n / 10000n; // 2% fee
       const solAfterFee = solLamBig - fee;
@@ -378,13 +411,34 @@ export default async function chainRoutes(fastify) {
         needsATA = true;
       }
 
-      const transaction = await buildBuyTransaction({
-        buyerPublicKey: buyerWallet,
-        mintAddress,
-        solAmountLamports,
-        minTokensOut,
-        createATA: needsATA,
-      });
+      let transaction;
+      try {
+        transaction = await buildBuyTransaction({
+          buyerPublicKey: buyerWallet,
+          mintAddress,
+          solAmountLamports,
+          minTokensOut,
+          createATA: needsATA,
+        });
+      } catch (buildErr) {
+        const msg = buildErr.message || '';
+        let hint = `Failed to build buy tx: ${msg}`;
+        if (msg.includes('MathOverflow') || msg.includes('overflow')) {
+          hint = 'MathOverflow: trade size too large or pool reserves near zero. Reduce solAmount.';
+        } else if (msg.includes('insufficient') || msg.includes('lamports')) {
+          hint = 'Insufficient lamports: buyer wallet does not have enough SOL. Need solAmount + ~0.01 SOL for fees/rent.';
+        } else if (msg.includes('SlippageExceeded') || msg.includes('slippage')) {
+          hint = 'Slippage exceeded: price moved too much. Try a larger slippageBps (e.g. 300) or reduce trade size.';
+        } else if (msg.includes('PoolNotActive') || msg.includes('not active')) {
+          hint = 'Pool is not active. Token may have graduated to Raydium. Use POST /api/chain/build/post-grad/buy instead.';
+        } else if (msg.includes('simulation')) {
+          hint = `Transaction simulation failed: ${msg}. Check wallet SOL balance and token pool state.`;
+        }
+        return reply.code(400).send({
+          error: hint,
+          guide: 'GET /api/integration-guide → common_errors for troubleshooting',
+        });
+      }
 
       return {
         transaction,
@@ -395,7 +449,10 @@ export default async function chainRoutes(fastify) {
         priceImpact: (Number(solAfterFee * 10000n / (vSol + solAfterFee)) / 100).toFixed(2) + '%',
       };
     } catch (err) {
-      return reply.code(500).send({ error: `Failed to build buy tx: ${err.message}` });
+      return reply.code(500).send({
+        error: `Failed to build buy tx: ${err.message}`,
+        guide: 'GET /api/integration-guide → common_errors for troubleshooting',
+      });
     }
   });
 
@@ -418,11 +475,44 @@ export default async function chainRoutes(fastify) {
         return reply.code(400).send({ error: 'Token has graduated to Raydium. Use post-grad trading endpoints.', status: 'graduated', raydiumPool: dbPoolCheck?.raydium_pool_address });
       }
 
-      const pool = await readPool(mintAddress);
-      if (!pool) return reply.code(404).send({ error: 'Pool not found on-chain' });
+      let pool;
+      try {
+        pool = await readPool(mintAddress);
+      } catch (poolErr) {
+        return reply.code(500).send({
+          error: `Failed to read pool from chain: ${poolErr.message}`,
+          hint: 'The RPC may be unavailable or the mint address is invalid.',
+          guide: 'GET /api/integration-guide for field layout and PDA derivation',
+        });
+      }
 
-      const vSol = BigInt(pool.virtualSolReserve.toString());
-      const vToken = BigInt(pool.virtualTokenReserve.toString());
+      if (!pool) {
+        return reply.code(404).send({
+          error: 'Pool not found on-chain.',
+          hint: 'Verify mintAddress is correct and the token has been activated via POST /api/tokens/:id/activate.',
+          guide: 'GET /api/integration-guide → token_lifecycle',
+          mintAddress,
+        });
+      }
+
+      // Sanity check pool fields
+      let vSol, vToken;
+      try {
+        vSol = BigInt(pool.virtualSolReserve.toString());
+        vToken = BigInt(pool.virtualTokenReserve.toString());
+        if (vSol === 0n || vToken === 0n) throw new Error('zero reserves');
+      } catch (parseErr) {
+        return reply.code(500).send({
+          error: 'Pool data appears malformed — reserves could not be read.',
+          pool_fields: {
+            virtualSolReserve: pool.virtualSolReserve?.toString() ?? 'undefined',
+            virtualTokenReserve: pool.virtualTokenReserve?.toString() ?? 'undefined',
+          },
+          hint: 'Expected u64 values > 0.',
+          guide: 'GET /api/integration-guide → structs.CurvePool for field layout',
+        });
+      }
+
       const rawTokens = BigInt(tokenAmount);
       const solOut = Number((vSol * rawTokens) / (vToken + rawTokens));
       const fee = Math.floor(solOut * 200 / 10000);
@@ -430,12 +520,33 @@ export default async function chainRoutes(fastify) {
 
       const minSolOut = Math.floor(solAfterFee * (10000 - slippageBps) / 10000);
 
-      const transaction = await buildSellTransaction({
-        sellerPublicKey: sellerWallet,
-        mintAddress,
-        tokenAmount: tokenAmount.toString(),
-        minSolOut,
-      });
+      let transaction;
+      try {
+        transaction = await buildSellTransaction({
+          sellerPublicKey: sellerWallet,
+          mintAddress,
+          tokenAmount: tokenAmount.toString(),
+          minSolOut,
+        });
+      } catch (buildErr) {
+        const msg = buildErr.message || '';
+        let hint = `Failed to build sell tx: ${msg}`;
+        if (msg.includes('MathOverflow') || msg.includes('overflow')) {
+          hint = 'MathOverflow: token amount too large for current pool reserves. Reduce tokenAmount.';
+        } else if (msg.includes('ExceedsRealSol') || msg.includes('real sol')) {
+          hint = 'ExceedsRealSol: selling too many tokens would require more SOL than is in the pool. Reduce tokenAmount.';
+        } else if (msg.includes('SlippageExceeded') || msg.includes('slippage')) {
+          hint = 'Slippage exceeded: price moved too much. Increase slippageBps (e.g. 300) or reduce trade size.';
+        } else if (msg.includes('PoolNotActive') || msg.includes('not active')) {
+          hint = 'Pool is not active. Token may have graduated to Raydium. Use POST /api/chain/build/post-grad/sell instead.';
+        } else if (msg.includes('insufficient') || msg.includes('balance')) {
+          hint = 'Insufficient token balance: seller may not hold enough tokens. tokenAmount is in raw units (human_tokens * 10^9).';
+        }
+        return reply.code(400).send({
+          error: hint,
+          guide: 'GET /api/integration-guide → common_errors for troubleshooting',
+        });
+      }
 
       return {
         transaction,
@@ -444,7 +555,10 @@ export default async function chainRoutes(fastify) {
         fee: fee / LAMPORTS_PER_SOL,
       };
     } catch (err) {
-      return reply.code(500).send({ error: `Failed to build sell tx: ${err.message}` });
+      return reply.code(500).send({
+        error: `Failed to build sell tx: ${err.message}`,
+        guide: 'GET /api/integration-guide → common_errors for troubleshooting',
+      });
     }
   });
 

@@ -288,16 +288,31 @@ export default async function tokenRoutes(fastify) {
         // Stuck pending — delete and allow re-tokenize
         stmts.deletePendingToken.run(existing.id);
       } else {
-        return reply.code(409).send({ error: 'Agent already tokenized', token: existing });
+        return reply.code(409).send({
+          error: 'Agent already tokenized',
+          token: existing,
+          hint: existing.status === 'pending'
+            ? 'Token is pending on-chain creation. Call POST /api/chain/build/create-token then POST /api/tokens/:id/activate.'
+            : `Token is ${existing.status}. Use GET /api/agents/${agentId}/token to see current state.`,
+          guide: 'GET /api/integration-guide → token_lifecycle',
+        });
       }
     }
 
     // Validate inputs
     if (!tokenName || tokenName.length < 2 || tokenName.length > 32) {
-      return reply.code(400).send({ error: 'Token name must be 2-32 characters' });
+      return reply.code(400).send({
+        error: 'Token name must be 2-32 characters',
+        received_length: tokenName?.length ?? 0,
+        hint: 'Name is stored on-chain in the CurvePool — max 32 bytes. Keep it short.',
+      });
     }
     if (!tokenSymbol || tokenSymbol.length < 2 || tokenSymbol.length > 10) {
-      return reply.code(400).send({ error: 'Token symbol must be 2-10 characters' });
+      return reply.code(400).send({
+        error: 'Token symbol must be 2-10 characters',
+        received_length: tokenSymbol?.length ?? 0,
+        hint: 'Symbol is stored on-chain — max 10 bytes. Use a short ticker like "SOL" or "MYTKN".',
+      });
     }
 
     const supply = totalSupply || '1000000000';
@@ -396,7 +411,18 @@ export default async function tokenRoutes(fastify) {
     // Verify on-chain state: check pool account exists for this mint.
     // This replaces the old getTransaction(launchTx) check which fails on devnet
     // because devnet doesn't keep full tx history. Pool state is the source of truth.
-    const poolState = await readPool(mintAddress);
+    let poolState;
+    try {
+      poolState = await readPool(mintAddress);
+    } catch (rpcErr) {
+      return reply.code(502).send({
+        error: `RPC error while verifying pool on-chain: ${rpcErr.message}`,
+        hint: 'The Solana RPC may be temporarily unavailable. Try again in a few seconds.',
+        mintAddress,
+        guide: 'GET /api/integration-guide → token_lifecycle step 4 (activate)',
+      });
+    }
+
     if (!poolState) {
       // Fallback: try verifying the tx signature if provided (works for fresh txs)
       let txConfirmed = false;
@@ -408,7 +434,12 @@ export default async function tokenRoutes(fastify) {
           error: 'Token not found on-chain. No pool account exists for this mint and launchTx could not be confirmed.',
           mintAddress,
           launchTx: launchTx || null,
-          hint: 'Ensure the create_token transaction has landed and a bonding curve pool exists.',
+          hint: [
+            'Did the create_token transaction fully confirm? Wait ~15 seconds and retry.',
+            'The pool PDA is derived from ["curve_pool", mintAddress]. Confirm the mint address is exactly what was returned by POST /api/chain/build/create-token.',
+            'On devnet you can verify: solana account <mintAddress> --url devnet',
+          ],
+          guide: 'GET /api/integration-guide → token_lifecycle and pda_seeds',
         });
       }
     }

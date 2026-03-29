@@ -25,6 +25,7 @@ import adminRoutes from './routes/admin.js';
 import servicesRoutes from './routes/services.js';
 import applicationRoutes from './routes/applications.js';
 import uploadRoutes from './routes/upload.js';
+import guideRoutes from './routes/guide.js';
 import { initPinata } from './services/ipfs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -259,6 +260,7 @@ await fastify.register(adminRoutes);
 await fastify.register(servicesRoutes);
 await fastify.register(applicationRoutes);
 await fastify.register(uploadRoutes, { stmts: {} });
+await fastify.register(guideRoutes);
 
 // SPA fallback — serve index.html for non-API routes
 fastify.setNotFoundHandler((request, reply) => {
