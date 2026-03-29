@@ -116,8 +116,8 @@ export default async function jobRoutes(fastify) {
       return reply.code(400).send({ error: 'budget must be greater than 0' });
     }
 
-    // Build the on-chain instruction
-    const instruction = commerce.buildCreateJobTx({
+    // Build the on-chain transaction (returns base64 serialized tx)
+    const { transaction, jobPDA, jobId: onchainJobId } = await commerce.buildCreateJobTransaction({
       client,
       provider,
       evaluator,
@@ -138,13 +138,15 @@ export default async function jobRoutes(fastify) {
       budget || 0,
       expiredAt,
       hook || null,
-      null, // on-chain address (set after confirmation)
+      jobPDA, // on-chain address from PDA derivation
     );
 
     return {
       jobId: id,
-      instruction,
-      message: 'Sign and submit this transaction to create the job on-chain',
+      transaction,
+      jobPDA,
+      onchainJobId,
+      message: 'Sign and submit this transaction to create the job on-chain. Then call POST /api/jobs/:jobId/confirm with txSignature.',
     };
   });
 

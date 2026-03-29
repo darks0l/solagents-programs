@@ -9,6 +9,37 @@ export default async function guideRoutes(fastify) {
     reply.header('cache-control', 'public, max-age=300');
     return INTEGRATION_GUIDE;
   });
+
+  // IDL endpoints — serve the Anchor IDL JSON for each program
+  fastify.get('/api/idl/:program', async (request, reply) => {
+    const { program } = request.params;
+    const allowed = ['bonding_curve', 'agentic_commerce'];
+    if (!allowed.includes(program)) {
+      return reply.code(404).send({ error: `Unknown program: ${program}` });
+    }
+    const fs = await import('fs');
+    const path = await import('path');
+    const idlPath = path.join(import.meta.dirname, '..', 'idl', `${program}.json`);
+    try {
+      const idl = JSON.parse(fs.readFileSync(idlPath, 'utf-8'));
+      reply.header('cache-control', 'public, max-age=3600');
+      return idl;
+    } catch (err) {
+      return reply.code(500).send({ error: `Failed to read IDL: ${err.message}` });
+    }
+  });
+
+  // Auth spec endpoint — machine-readable auth scheme documentation
+  fastify.get('/api/auth/spec', async (request, reply) => {
+    reply.header('cache-control', 'public, max-age=300');
+    return {
+      scheme: 'Bearer',
+      format: 'Bearer <agentId>:<base64Signature>:<unixTimestamp>',
+      signaturePayload: 'AgentSol:<agentId>:<unixTimestamp>',
+      algorithm: 'ed25519',
+      notes: 'Sign the payload with your Solana wallet private key. Timestamp must be within 5 minutes.',
+    };
+  });
 }
 
 const INTEGRATION_GUIDE = {

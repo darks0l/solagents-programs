@@ -190,4 +190,98 @@ export function getJobPDAs(configKey, fromId, count) {
   return pdas;
 }
 
+/**
+ * Build a full base64-serialized create_job transaction.
+ * Reads the on-chain config to get jobCounter, derives the job PDA,
+ * and builds the instruction via the Anchor IDL — same pattern as
+ * the bonding curve build* endpoints in solana.js.
+ *
+ * Returns { transaction: base64, jobPDA: string, jobId: number }
+ */
+export async function buildCreateJobTransaction({
+  client,
+  provider,
+  evaluator,
+  expiredAt,
+  description,
+  hook,
+  paymentMint,
+}) {
+  // Lazy-import solana.js helpers to avoid circular deps
+  const {
+    getAgenticCommerceProgram,
+    getConnection,
+    getPlatformConfigPDA,
+    AGENTIC_COMMERCE_PROGRAM_ID,
+  } = await import('./solana.js');
+  const anchor = await import('@coral-xyz/anchor');
+  const { PublicKey, Transaction, SystemProgram, SYSVAR_RENT_PUBKEY } = await import('@solana/web3.js');
+  const { TOKEN_PROGRAM_ID } = await import('@solana/spl-token');
+  const { BN } = anchor.default || anchor;
+
+  const conn = getConnection();
+  const program = getAgenticCommerceProgram();
+  const [configKey] = getPlatformConfigPDA();
+
+  // Read on-chain config to get current jobCounter
+  const configAccount = await program.account.platformConfig.fetch(configKey);
+  const jobCounter = configAccount.jobCounter; // BN
+
+  // Derive job PDA: seeds = ["job", configKey, jobCounter as LE u64]
+  const jobCounterBuf = Buffer.alloc(8);
+  jobCounterBuf.writeBigUInt64LE(BigInt(jobCounter.toString()));
+  const [jobPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from('job'), configKey.toBuffer(), jobCounterBuf],
+    AGENTIC_COMMERCE_PROGRAM_ID,
+  );
+
+  // Derive vault PDA: seeds = ["vault", jobKey]
+  const [vaultPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from('vault'), jobPDA.toBuffer()],
+    AGENTIC_COMMERCE_PROGRAM_ID,
+  );
+
+  const clientPk = new PublicKey(client);
+  const providerPk = provider ? new PublicKey(provider) : PublicKey.default;
+  const evaluatorPk = new PublicKey(evaluator);
+  const hookPk = hook ? new PublicKey(hook) : PublicKey.default;
+
+  // Resolve payment mint from param or on-chain config
+  const mintPk = paymentMint
+    ? new PublicKey(paymentMint)
+    : configAccount.paymentMint;
+
+  const ix = await program.methods
+    .createJob(
+      providerPk,
+      evaluatorPk,
+      new BN(expiredAt),
+      description,
+      hookPk,
+    )
+    .accounts({
+      client: clientPk,
+      config: configKey,
+      job: jobPDA,
+      vault: vaultPDA,
+      paymentMint: mintPk,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+      rent: SYSVAR_RENT_PUBKEY,
+    })
+    .instruction();
+
+  const { blockhash } = await conn.getLatestBlockhash();
+  const tx = new Transaction({ recentBlockhash: blockhash, feePayer: clientPk });
+  tx.add(ix);
+
+  const transaction = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
+
+  return {
+    transaction,
+    jobPDA: jobPDA.toBase58(),
+    jobId: Number(jobCounter.toString()),
+  };
+}
+
 export { connection, PROGRAM_ID };
