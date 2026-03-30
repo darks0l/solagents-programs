@@ -34,6 +34,10 @@ pub struct CurveConfig {
     pub tokens_created: u64,
     /// Total tokens graduated to Raydium
     pub tokens_graduated: u64,
+    /// Whether trading (buy/sell) is paused — emergency kill switch
+    pub trading_paused: bool,
+    /// Proposed new admin (two-step transfer). Pubkey::default() = no pending transfer.
+    pub pending_admin: Pubkey,
     /// Bump seed for PDA
     pub bump: u8,
 }

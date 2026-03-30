@@ -62,6 +62,8 @@ pub fn handler(
     require!(sol_amount > 0, CurveError::ZeroAmount);
 
     let config = &ctx.accounts.config;
+    require!(!config.trading_paused, CurveError::TradingPaused);
+
     let pool = &mut ctx.accounts.pool;
 
     // ── Calculate fees ──────────────────────────────────────

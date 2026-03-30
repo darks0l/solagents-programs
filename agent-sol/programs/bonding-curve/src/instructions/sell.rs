@@ -62,6 +62,7 @@ pub fn handler(
     require!(token_amount > 0, CurveError::ZeroAmount);
 
     let config = &ctx.accounts.config;
+    require!(!config.trading_paused, CurveError::TradingPaused);
 
     // ── Calculate SOL out from curve ──────────────────────────────────────
     let sol_out_before_fee = ctx.accounts.pool.calculate_sell(token_amount)

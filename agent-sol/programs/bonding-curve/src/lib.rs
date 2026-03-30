@@ -116,6 +116,7 @@ pub mod bonding_curve {
 
     /// Update global config.
     /// Only admin can call this. Fee changes don't affect existing pools retroactively.
+    /// Setting new_admin initiates a two-step transfer — the new admin must call accept_admin.
     pub fn update_config(
         ctx: Context<UpdateConfig>,
         new_creator_fee_bps: Option<u16>,
@@ -125,6 +126,7 @@ pub mod bonding_curve {
         new_admin: Option<Pubkey>,
         paused: Option<bool>,
         raydium_permission_enabled: Option<bool>,
+        trading_paused: Option<bool>,
     ) -> Result<()> {
         instructions::update_config::handler(
             ctx,
@@ -135,6 +137,28 @@ pub mod bonding_curve {
             new_admin,
             paused,
             raydium_permission_enabled,
+            trading_paused,
         )
+    }
+
+    /// Accept a pending admin transfer.
+    /// The pending admin (set via update_config) calls this to complete the two-step transfer.
+    pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+        instructions::accept_admin::handler(ctx)
+    }
+
+    /// Batch claim platform fees across multiple pools in a single transaction.
+    /// Treasury signs once; remaining_accounts contains [pool, sol_vault] pairs.
+    pub fn claim_all_platform_fees<'info>(
+        ctx: Context<'_, '_, 'info, 'info, ClaimAllPlatformFees<'info>>,
+    ) -> Result<()> {
+        instructions::claim_all_platform_fees::handler(ctx)
+    }
+
+    /// Close a graduated pool's accounts and reclaim rent to treasury.
+    /// Pool must be graduated and have all fees claimed; token vault must be empty.
+    /// Only admin or treasury can call.
+    pub fn close_graduated_pool(ctx: Context<CloseGraduatedPool>) -> Result<()> {
+        instructions::close_graduated_pool::handler(ctx)
     }
 }

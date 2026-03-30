@@ -53,6 +53,8 @@ pub fn handler(
     config.raydium_permission_enabled = false; // Default: standard mode until Raydium whitelists us
     config.tokens_created = 0;
     config.tokens_graduated = 0;
+    config.trading_paused = false;
+    config.pending_admin = Pubkey::default();
     config.bump = ctx.bumps.config;
 
     emit!(ConfigInitialized {

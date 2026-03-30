@@ -70,4 +70,22 @@ pub enum CurveError {
 
     #[msg("No Raydium creator fees to claim")]
     NoRaydiumFees,
+
+    #[msg("Trading is currently paused")]
+    TradingPaused,
+
+    #[msg("No pending admin transfer")]
+    NoPendingAdmin,
+
+    #[msg("Only the pending admin can accept the transfer")]
+    NotPendingAdmin,
+
+    #[msg("Pool still has unclaimed fees — claim all fees before closing")]
+    UnclaimedFees,
+
+    #[msg("Token vault is not empty")]
+    VaultNotEmpty,
+
+    #[msg("Dev buy exceeds maximum allowed (50% of graduation threshold)")]
+    DevBuyExceedsMax,
 }

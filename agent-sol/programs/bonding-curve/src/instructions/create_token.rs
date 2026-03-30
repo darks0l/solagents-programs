@@ -323,6 +323,10 @@ pub fn handler(
     // ── Handle optional dev buy ─────────────────────────────
     if let Some(dev_sol) = dev_buy_sol {
         if dev_sol > 0 {
+            // Cap: dev buy cannot exceed 50% of graduation threshold
+            let max_dev_buy = config.graduation_threshold / 2;
+            require!(dev_sol <= max_dev_buy, CurveError::DevBuyExceedsMax);
+
             let total_fee_bps = config.creator_fee_bps as u64 + config.platform_fee_bps as u64;
             let fee = dev_sol.checked_mul(total_fee_bps).ok_or(CurveError::MathOverflow)?
                 .checked_div(10_000).ok_or(CurveError::MathOverflow)?;

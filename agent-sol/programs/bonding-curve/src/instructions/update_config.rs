@@ -26,6 +26,7 @@ pub fn handler(
     new_admin: Option<Pubkey>,
     paused: Option<bool>,
     raydium_permission_enabled: Option<bool>,
+    trading_paused: Option<bool>,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
 
@@ -36,6 +37,8 @@ pub fn handler(
     let old_admin = config.admin;
     let old_paused = config.paused;
     let old_raydium_permission = config.raydium_permission_enabled;
+    let old_trading_paused = config.trading_paused;
+    let old_pending_admin = config.pending_admin;
 
     // Apply updates
     if let Some(fee) = new_creator_fee_bps {
@@ -58,14 +61,18 @@ pub fn handler(
     if let Some(treasury) = new_treasury {
         config.treasury = treasury;
     }
-    if let Some(admin) = new_admin {
-        config.admin = admin;
+    // Two-step admin transfer: set pending_admin instead of directly changing admin
+    if let Some(pending) = new_admin {
+        config.pending_admin = pending;
     }
     if let Some(p) = paused {
         config.paused = p;
     }
     if let Some(rp) = raydium_permission_enabled {
         config.raydium_permission_enabled = rp;
+    }
+    if let Some(tp) = trading_paused {
+        config.trading_paused = tp;
     }
 
     emit!(ConfigUpdated {
@@ -80,10 +87,14 @@ pub fn handler(
         new_treasury: config.treasury,
         old_admin,
         new_admin: config.admin,
+        old_pending_admin,
+        new_pending_admin: config.pending_admin,
         old_paused,
         new_paused: config.paused,
         old_raydium_permission,
         new_raydium_permission: config.raydium_permission_enabled,
+        old_trading_paused,
+        new_trading_paused: config.trading_paused,
     });
 
     Ok(())
@@ -102,8 +113,12 @@ pub struct ConfigUpdated {
     pub new_treasury: Pubkey,
     pub old_admin: Pubkey,
     pub new_admin: Pubkey,
+    pub old_pending_admin: Pubkey,
+    pub new_pending_admin: Pubkey,
     pub old_paused: bool,
     pub new_paused: bool,
     pub old_raydium_permission: bool,
     pub new_raydium_permission: bool,
+    pub old_trading_paused: bool,
+    pub new_trading_paused: bool,
 }

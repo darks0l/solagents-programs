@@ -28,7 +28,10 @@ pub mod wsol {
 /// - Permissionless trigger: anyone can call once threshold met
 #[derive(Accounts)]
 pub struct Graduate<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = payer.key() == config.admin || payer.key() == config.treasury @ CurveError::Unauthorized,
+    )]
     pub payer: Signer<'info>,
 
     #[account(
@@ -181,10 +184,17 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
 
     let sol_for_raydium = net_sol;
 
+    // ── Rent reimbursement for payer (Raydium account creation costs) ──────
+    // Deducted from sol_for_raydium before wrapping; sent directly as SOL to payer.
+    let rent_reimbursement: u64 = 65_000_000; // 0.065 SOL
+    let sol_for_wsol = sol_for_raydium
+        .checked_sub(rent_reimbursement)
+        .ok_or(CurveError::MathOverflow)?;
+
     // ── Price-matching: tokens for Raydium ──────────────────
-    // tokens_for_raydium = sol * virtual_token / virtual_sol
+    // tokens_for_raydium = sol_for_wsol * virtual_token / virtual_sol
     // This ensures Raydium opens at the same price as the curve's final spot price.
-    let tokens_for_raydium = (sol_for_raydium as u128)
+    let tokens_for_raydium = (sol_for_wsol as u128)
         .checked_mul(pool.virtual_token_reserve as u128)
         .ok_or(CurveError::MathOverflow)?
         .checked_div(pool.virtual_sol_reserve as u128)
@@ -195,8 +205,8 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
         .checked_sub(tokens_for_raydium)
         .ok_or(CurveError::MathOverflow)?;
 
-    msg!("Graduating pool: {} SOL + {} tokens to Raydium, burning {} tokens",
-        sol_for_raydium, tokens_for_raydium, tokens_to_burn);
+    msg!("Graduating pool: {} SOL + {} tokens to Raydium, burning {} tokens (rent reimbursement: {} lamports)",
+        sol_for_wsol, tokens_for_raydium, tokens_to_burn, rent_reimbursement);
     msg!("Permission mode: {}", config.raydium_permission_enabled);
 
     // ── Burn excess tokens for price continuity ─────────────
@@ -241,9 +251,9 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
         (ctx.accounts.payer_wsol_ata.to_account_info(), ctx.accounts.payer_agent_ata.to_account_info())
     };
     let (init_amount_0, init_amount_1) = if agent_is_token_0 {
-        (tokens_for_raydium, sol_for_raydium)
+        (tokens_for_raydium, sol_for_wsol)
     } else {
-        (sol_for_raydium, tokens_for_raydium)
+        (sol_for_wsol, tokens_for_raydium)
     };
     let (vault_0_info, vault_1_info) = if agent_is_token_0 {
         (ctx.accounts.raydium_token_0_vault.to_account_info(), ctx.accounts.raydium_token_1_vault.to_account_info())
@@ -269,13 +279,29 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
     )?;
     msg!("Transferred {} tokens to payer ATA", tokens_for_raydium);
 
-    // ── Pre-wrap: SOL → payer WSOL ATA ──────────────────────
-    // Transfer SOL from vault to payer's WSOL ATA, then sync_native.
+    // ── Rent reimbursement: SOL vault → payer (as plain SOL) ────────────
+    invoke_signed(
+        &system_instruction::transfer(
+            ctx.accounts.sol_vault.key,
+            ctx.accounts.payer.key,
+            rent_reimbursement,
+        ),
+        &[
+            ctx.accounts.sol_vault.to_account_info(),
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+        &[vault_seeds],
+    )?;
+    msg!("Reimbursed {} lamports to payer for Raydium rent", rent_reimbursement);
+
+    // ── Pre-wrap: remaining SOL → payer WSOL ATA ─────────────────────────
+    // Transfer remaining SOL from vault to payer's WSOL ATA, then sync_native.
     invoke_signed(
         &system_instruction::transfer(
             ctx.accounts.sol_vault.key,
             ctx.accounts.payer_wsol_ata.to_account_info().key,
-            sol_for_raydium,
+            sol_for_wsol,
         ),
         &[
             ctx.accounts.sol_vault.to_account_info(),
@@ -288,7 +314,7 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
         ctx.accounts.token_program.to_account_info(),
         token::SyncNative { account: ctx.accounts.payer_wsol_ata.to_account_info() },
     ))?;
-    msg!("Wrapped {} lamports to WSOL in payer ATA", sol_for_raydium);
+    msg!("Wrapped {} lamports to WSOL in payer ATA", sol_for_wsol);
 
     // ── CPI to Raydium ──────────────────────────────────────
     // Payer (wallet keypair, no data) is the Raydium creator.
@@ -446,7 +472,7 @@ pub fn handler(ctx: Context<Graduate>) -> Result<()> {
         pool: pool.key(),
         mint: pool.mint,
         creator: pool.creator,
-        sol_to_raydium: sol_for_raydium,
+        sol_to_raydium: sol_for_wsol,
         tokens_to_raydium: tokens_for_raydium,
         tokens_burned: tokens_to_burn,
         total_volume: pool.total_volume_sol,
