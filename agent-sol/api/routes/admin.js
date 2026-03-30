@@ -18,10 +18,16 @@ import {
   readPool,
   readCurveConfig,
   initializeBondingCurve,
+  getCurveConfigPDA,
+  getCurvePoolPDA,
+  getSolVaultPDA,
+  BONDING_CURVE_PROGRAM_ID,
   LAMPORTS_PER_SOL,
 } from '../services/solana.js';
 import { stmts } from '../services/db.js';
+import db from '../services/db.js';
 import { emitTrade } from '../services/ws-feed.js';
+import { PublicKey, Transaction, TransactionInstruction, AccountMeta } from '@solana/web3.js';
 
 export default async function adminRoutes(fastify) {
 
@@ -451,6 +457,433 @@ export default async function adminRoutes(fastify) {
     try {
       stmts.updateAgentTokenStatus.run('active', mintAddress, poolAddress || null, launchTx || null, tokenId);
       return { updated: true, tokenId, mintAddress, triggeredBy: request.adminWallet };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // PLATFORM FEES — Query
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * GET /api/admin/platform-fees
+   * Returns all pools with their platform fee status.
+   * Requires: admin
+   */
+  fastify.get('/api/admin/platform-fees', { preHandler: adminAuthHook }, async (request, reply) => {
+    try {
+      const rows = db.prepare(`
+        SELECT
+          at.id, at.mint_address, at.token_name, at.token_symbol, at.status,
+          tp.platform_fees_earned, tp.platform_fees_claimed,
+          tp.graduated_at, tp.raydium_pool_address
+        FROM agent_tokens at
+        JOIN token_pools tp ON tp.token_id = at.id
+        WHERE at.status IN ('active', 'graduated')
+          AND CAST(tp.platform_fees_earned AS REAL) > CAST(tp.platform_fees_claimed AS REAL)
+        ORDER BY (CAST(tp.platform_fees_earned AS REAL) - CAST(tp.platform_fees_claimed AS REAL)) DESC
+      `).all();
+
+      let totalUnclaimed = 0n;
+
+      const pools = rows.map(row => {
+        const earned = BigInt(row.platform_fees_earned || '0');
+        const claimed = BigInt(row.platform_fees_claimed || '0');
+        const unclaimed = earned > claimed ? earned - claimed : 0n;
+        totalUnclaimed += unclaimed;
+
+        return {
+          mint: row.mint_address,
+          name: row.token_name,
+          symbol: row.token_symbol,
+          status: row.status,
+          platformFeesEarned: Number(earned),
+          platformFeesClaimed: Number(claimed),
+          unclaimed: Number(unclaimed),
+          unclaimedSol: Number(unclaimed) / LAMPORTS_PER_SOL,
+        };
+      });
+
+      return {
+        pools,
+        totalUnclaimed: Number(totalUnclaimed),
+        totalUnclaimedSol: Number(totalUnclaimed) / LAMPORTS_PER_SOL,
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // CLOSEABLE POOLS — Query
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * GET /api/admin/closeable-pools
+   * Returns graduated pools where all fees are claimed.
+   * Requires: admin
+   */
+  fastify.get('/api/admin/closeable-pools', { preHandler: adminAuthHook }, async (request, reply) => {
+    try {
+      const rows = db.prepare(`
+        SELECT
+          at.id, at.mint_address, at.token_name, at.token_symbol,
+          tp.graduated_at, tp.raydium_pool_address,
+          tp.platform_fees_earned, tp.platform_fees_claimed
+        FROM agent_tokens at
+        JOIN token_pools tp ON tp.token_id = at.id
+        WHERE at.status = 'graduated'
+          AND CAST(tp.platform_fees_earned AS REAL) <= CAST(tp.platform_fees_claimed AS REAL)
+        ORDER BY tp.graduated_at ASC
+      `).all();
+
+      // Estimated rent per pool account (pool + vault accounts)
+      // CurvePool ~600 bytes + SolVault ~128 bytes ≈ ~0.01 SOL in rent
+      const ESTIMATED_RENT_PER_POOL = 10_000_000; // 0.01 SOL in lamports
+      const totalRent = rows.length * ESTIMATED_RENT_PER_POOL;
+
+      const pools = rows.map(row => ({
+        mint: row.mint_address,
+        name: row.token_name,
+        symbol: row.token_symbol,
+        graduatedAt: row.graduated_at,
+        raydiumPool: row.raydium_pool_address,
+        estimatedRent: ESTIMATED_RENT_PER_POOL,
+      }));
+
+      return {
+        pools,
+        totalRent,
+        totalRentSol: totalRent / LAMPORTS_PER_SOL,
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // CLAIM ALL PLATFORM FEES
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * POST /api/admin/claim-all-fees
+   * Build batch claim_all_platform_fees transaction(s) for admin to sign.
+   * Requires: admin
+   *
+   * TODO: Fill in actual Anchor instruction building once IDL is updated
+   *       with claim_all_platform_fees using remaining_accounts.
+   */
+  fastify.post('/api/admin/claim-all-fees', { preHandler: adminAuthHook }, async (request, reply) => {
+    try {
+      const conn = getConnection();
+      const { adminPublicKey } = request.body || {};
+
+      // Require the signing wallet pubkey from the caller
+      if (!adminPublicKey) {
+        return reply.code(400).send({ error: 'adminPublicKey required (the wallet that will sign)' });
+      }
+
+      // Query DB for pools with unclaimed fees
+      const rows = db.prepare(`
+        SELECT at.mint_address, at.token_name, at.token_symbol,
+               tp.platform_fees_earned, tp.platform_fees_claimed
+        FROM agent_tokens at
+        JOIN token_pools tp ON tp.token_id = at.id
+        WHERE at.status IN ('active', 'graduated')
+          AND CAST(tp.platform_fees_earned AS REAL) > CAST(tp.platform_fees_claimed AS REAL)
+          AND at.mint_address IS NOT NULL
+      `).all();
+
+      if (rows.length === 0) {
+        return { transactions: [], totalPools: 0, totalEstimatedSol: 0 };
+      }
+
+      const BATCH_SIZE = 14; // max remaining_accounts pairs per TX
+      const batches = [];
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        batches.push(rows.slice(i, i + BATCH_SIZE));
+      }
+
+      const [configPDA] = getCurveConfigPDA();
+      const { blockhash } = await conn.getLatestBlockhash();
+      const adminPubkey = new PublicKey(adminPublicKey);
+
+      const transactions = [];
+
+      for (const batch of batches) {
+        let batchEstimatedSol = 0n;
+
+        // Build remaining_accounts: for each pool, [pool_pda (writable), sol_vault (writable)]
+        const remainingAccounts = [];
+        for (const row of batch) {
+          const mint = new PublicKey(row.mint_address);
+          const [poolPDA] = getCurvePoolPDA(mint);
+          const [solVaultPDA] = getSolVaultPDA(poolPDA);
+
+          remainingAccounts.push({ pubkey: poolPDA, isSigner: false, isWritable: true });
+          remainingAccounts.push({ pubkey: solVaultPDA, isSigner: false, isWritable: true });
+
+          const earned = BigInt(row.platform_fees_earned || '0');
+          const claimed = BigInt(row.platform_fees_claimed || '0');
+          batchEstimatedSol += earned > claimed ? earned - claimed : 0n;
+        }
+
+        // TODO: Replace with actual Anchor instruction once IDL is updated.
+        // The claim_all_platform_fees instruction should look like:
+        //
+        //   program.methods.claimAllPlatformFees()
+        //     .accounts({ admin: adminPubkey, config: configPDA, treasury: ..., systemProgram: SystemProgram.programId })
+        //     .remainingAccounts(remainingAccounts)
+        //     .instruction()
+        //
+        // For now, we return a stub placeholder transaction so the UI flow works end-to-end.
+        // When the new IDL is ready, replace the stub instruction below with the real one.
+
+        // STUB: TransactionInstruction with correct structure (will fail on-chain until IDL is ready)
+        const CLAIM_ALL_DISCRIMINATOR = Buffer.from([0xca, 0xfe, 0xba, 0xbe, 0x01, 0x02, 0x03, 0x04]); // placeholder
+        const stubIx = new TransactionInstruction({
+          programId: BONDING_CURVE_PROGRAM_ID,
+          keys: [
+            { pubkey: adminPubkey, isSigner: true, isWritable: false },
+            { pubkey: configPDA, isSigner: false, isWritable: true },
+            ...remainingAccounts,
+          ],
+          data: CLAIM_ALL_DISCRIMINATOR,
+        });
+
+        const tx = new Transaction({ recentBlockhash: blockhash, feePayer: adminPubkey });
+        tx.add(stubIx);
+
+        const base64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
+        transactions.push({
+          base64,
+          poolCount: batch.length,
+          estimatedSol: Number(batchEstimatedSol) / LAMPORTS_PER_SOL,
+          pools: batch.map(r => ({ mint: r.mint_address, name: r.token_name, symbol: r.token_symbol })),
+        });
+      }
+
+      const totalEstimatedSol = transactions.reduce((acc, t) => acc + t.estimatedSol, 0);
+
+      return {
+        transactions,
+        totalPools: rows.length,
+        totalEstimatedSol,
+        _note: 'TODO: stub transactions — replace instruction discriminator once IDL is updated with claim_all_platform_fees',
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // CLOSE GRADUATED POOL
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * POST /api/admin/close-pool
+   * Build close_graduated_pool transaction for admin to sign.
+   * Requires: superAdmin
+   *
+   * TODO: Fill in actual Anchor instruction once IDL is updated with close_graduated_pool.
+   */
+  fastify.post('/api/admin/close-pool', { preHandler: superAdminHook }, async (request, reply) => {
+    try {
+      const { mint, adminPublicKey } = request.body || {};
+      if (!mint) return reply.code(400).send({ error: 'mint required' });
+      if (!adminPublicKey) return reply.code(400).send({ error: 'adminPublicKey required' });
+
+      // Validate: must be graduated
+      const token = stmts.getAgentTokenByMint?.get(mint);
+      if (!token) return reply.code(404).send({ error: 'Token not found' });
+      if (token.status !== 'graduated') return reply.code(400).send({ error: 'Pool must be graduated before closing' });
+
+      // Validate: all fees must be claimed
+      const pool = stmts.getPool?.get(token.id);
+      if (!pool) return reply.code(404).send({ error: 'Pool record not found in DB' });
+
+      const earned = BigInt(pool.platform_fees_earned || '0');
+      const claimed = BigInt(pool.platform_fees_claimed || '0');
+      if (earned > claimed) {
+        return reply.code(400).send({
+          error: 'Cannot close pool — unclaimed platform fees remain',
+          unclaimedSol: Number(earned - claimed) / LAMPORTS_PER_SOL,
+        });
+      }
+
+      const conn = getConnection();
+      const mintPubkey = new PublicKey(mint);
+      const adminPubkey = new PublicKey(adminPublicKey);
+      const [configPDA] = getCurveConfigPDA();
+      const [poolPDA] = getCurvePoolPDA(mintPubkey);
+      const [solVaultPDA] = getSolVaultPDA(poolPDA);
+
+      // TODO: Replace with actual Anchor instruction once IDL is updated.
+      // The close_graduated_pool instruction should look like:
+      //
+      //   program.methods.closeGraduatedPool()
+      //     .accounts({
+      //       admin: adminPubkey,
+      //       config: configPDA,
+      //       pool: poolPDA,
+      //       solVault: solVaultPDA,
+      //       mint: mintPubkey,
+      //       systemProgram: SystemProgram.programId,
+      //     })
+      //     .instruction()
+      //
+      // STUB placeholder until IDL is ready:
+      const CLOSE_POOL_DISCRIMINATOR = Buffer.from([0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04]); // placeholder
+      const stubIx = new TransactionInstruction({
+        programId: BONDING_CURVE_PROGRAM_ID,
+        keys: [
+          { pubkey: adminPubkey, isSigner: true, isWritable: true },
+          { pubkey: configPDA, isSigner: false, isWritable: false },
+          { pubkey: poolPDA, isSigner: false, isWritable: true },
+          { pubkey: solVaultPDA, isSigner: false, isWritable: true },
+          { pubkey: mintPubkey, isSigner: false, isWritable: false },
+        ],
+        data: CLOSE_POOL_DISCRIMINATOR,
+      });
+
+      const { blockhash } = await conn.getLatestBlockhash();
+      const tx = new Transaction({ recentBlockhash: blockhash, feePayer: adminPubkey });
+      tx.add(stubIx);
+
+      const base64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
+
+      // Estimate rent reclaim: pool account + sol vault account
+      const ESTIMATED_RENT = 10_000_000; // ~0.01 SOL
+
+      return {
+        transaction: base64,
+        rentReclaimed: ESTIMATED_RENT,
+        mint,
+        _note: 'TODO: stub transaction — replace instruction discriminator once IDL is updated with close_graduated_pool',
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // TOGGLE TRADING PAUSE
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * POST /api/admin/toggle-trading-pause
+   * Build update_config transaction with trading_paused param for admin to sign.
+   * Requires: superAdmin
+   *
+   * TODO: Fill in actual Anchor instruction once IDL is updated with trading_paused field in update_config.
+   */
+  fastify.post('/api/admin/toggle-trading-pause', { preHandler: superAdminHook }, async (request, reply) => {
+    try {
+      const { paused, adminPublicKey } = request.body || {};
+      if (typeof paused !== 'boolean') return reply.code(400).send({ error: 'paused (boolean) required' });
+      if (!adminPublicKey) return reply.code(400).send({ error: 'adminPublicKey required' });
+
+      const conn = getConnection();
+      const adminPubkey = new PublicKey(adminPublicKey);
+      const [configPDA] = getCurveConfigPDA();
+
+      // TODO: Replace with actual Anchor instruction once IDL is updated.
+      // The update_config instruction should look like:
+      //
+      //   program.methods.updateConfig({ tradingPaused: paused, /* other fields null */ })
+      //     .accounts({ admin: adminPubkey, config: configPDA })
+      //     .instruction()
+      //
+      // STUB placeholder:
+      const TOGGLE_PAUSE_DISCRIMINATOR = Buffer.from([0xab, 0xcd, 0xef, 0x01, 0x02, 0x03, 0x04, 0x05]); // placeholder
+      // Encode the paused bool as the last byte for context
+      const data = Buffer.concat([TOGGLE_PAUSE_DISCRIMINATOR, Buffer.from([paused ? 1 : 0])]);
+      const stubIx = new TransactionInstruction({
+        programId: BONDING_CURVE_PROGRAM_ID,
+        keys: [
+          { pubkey: adminPubkey, isSigner: true, isWritable: false },
+          { pubkey: configPDA, isSigner: false, isWritable: true },
+        ],
+        data,
+      });
+
+      const { blockhash } = await conn.getLatestBlockhash();
+      const tx = new Transaction({ recentBlockhash: blockhash, feePayer: adminPubkey });
+      tx.add(stubIx);
+
+      const base64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
+
+      return {
+        transaction: base64,
+        paused,
+        _note: 'TODO: stub transaction — replace instruction once IDL is updated with trading_paused in update_config',
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // PROPOSE NEW ADMIN (two-step admin transfer)
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * POST /api/admin/propose-admin
+   * Build update_config transaction with new_admin param (sets pending_admin on-chain).
+   * Requires: superAdmin
+   *
+   * TODO: Fill in actual Anchor instruction once IDL is updated with pending_admin two-step.
+   */
+  fastify.post('/api/admin/propose-admin', { preHandler: superAdminHook }, async (request, reply) => {
+    try {
+      const { newAdmin, adminPublicKey } = request.body || {};
+      if (!newAdmin) return reply.code(400).send({ error: 'newAdmin pubkey required' });
+      if (!adminPublicKey) return reply.code(400).send({ error: 'adminPublicKey required' });
+
+      // Validate pubkey format
+      let newAdminPubkey;
+      try {
+        newAdminPubkey = new PublicKey(newAdmin);
+      } catch {
+        return reply.code(400).send({ error: 'Invalid newAdmin pubkey' });
+      }
+
+      const conn = getConnection();
+      const adminPubkey = new PublicKey(adminPublicKey);
+      const [configPDA] = getCurveConfigPDA();
+
+      // TODO: Replace with actual Anchor instruction once IDL is updated.
+      // The update_config instruction with new_admin should look like:
+      //
+      //   program.methods.updateConfig({ newAdmin: newAdminPubkey, /* other fields null */ })
+      //     .accounts({ admin: adminPubkey, config: configPDA })
+      //     .instruction()
+      //
+      // STUB placeholder:
+      const PROPOSE_ADMIN_DISCRIMINATOR = Buffer.from([0x11, 0x22, 0x33, 0x44, 0x01, 0x02, 0x03, 0x04]); // placeholder
+      // Encode new admin pubkey in data for context
+      const data = Buffer.concat([PROPOSE_ADMIN_DISCRIMINATOR, newAdminPubkey.toBuffer()]);
+      const stubIx = new TransactionInstruction({
+        programId: BONDING_CURVE_PROGRAM_ID,
+        keys: [
+          { pubkey: adminPubkey, isSigner: true, isWritable: false },
+          { pubkey: configPDA, isSigner: false, isWritable: true },
+        ],
+        data,
+      });
+
+      const { blockhash } = await conn.getLatestBlockhash();
+      const tx = new Transaction({ recentBlockhash: blockhash, feePayer: adminPubkey });
+      tx.add(stubIx);
+
+      const base64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
+
+      return {
+        transaction: base64,
+        newAdmin,
+        _note: 'TODO: stub transaction — replace instruction once IDL is updated with two-step admin transfer',
+      };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
     }

@@ -5,7 +5,7 @@
  */
 
 import { api, toast, truncateAddress } from '../main.js';
-import { connectWallet, signMessage, getPublicKey, isConnected } from '../services/wallet.js';
+import { connectWallet, signMessage, getPublicKey, isConnected, signAndSendTransaction } from '../services/wallet.js';
 
 // === Admin Auth State ===
 let _adminWallet = null;
@@ -261,6 +261,86 @@ function renderAdminDashboard(container) {
       </div>
     </div>
 
+    <!-- Platform Fees Section -->
+    <div class="card glass mt-2" id="platform-fees-section">
+      <div class="card-header flex items-center" style="justify-content:space-between">
+        <h2 class="font-semibold">🧹 Platform Fees</h2>
+        <button class="btn btn-sm btn-primary" id="btn-claim-all-fees">Claim All Fees</button>
+      </div>
+      <div class="card-body" id="platform-fees-table">
+        <p class="text-muted text-sm">Loading fee data...</p>
+      </div>
+    </div>
+
+    <!-- Pool Management Section (superAdmin only) -->
+    ${isSuperAdmin ? `
+    <div class="card glass mt-2" id="pool-mgmt-section">
+      <div class="card-header flex items-center" style="justify-content:space-between">
+        <h2 class="font-semibold">🎓 Graduated Pools</h2>
+        <button class="btn btn-sm btn-ghost" id="btn-close-all-pools" style="border-color:rgba(255,68,68,0.3);color:#FF4444">Close All</button>
+      </div>
+      <div class="card-body" id="closeable-pools-table">
+        <p class="text-muted text-sm">Loading closeable pools...</p>
+      </div>
+    </div>
+    ` : ''}
+
+    <!-- Emergency Controls (superAdmin only) -->
+    ${isSuperAdmin ? `
+    <div class="card glass mt-2" id="emergency-controls-section">
+      <div class="card-header">
+        <h2 class="font-semibold">⚠️ Emergency Controls</h2>
+      </div>
+      <div class="card-body">
+        <div id="trading-pause-warning" style="display:none;margin-bottom:16px;padding:12px 16px;background:rgba(255,68,68,0.12);border:1px solid rgba(255,68,68,0.4);border-radius:8px;color:#FF4444;font-weight:600;font-size:0.95rem">
+          ⚠️ TRADING IS PAUSED — all buy/sell transactions will fail
+        </div>
+        <div class="flex items-center gap-1" style="flex-wrap:wrap">
+          <span class="text-sm font-semibold" style="margin-right:8px">Trading Paused</span>
+          <label class="toggle-switch" style="position:relative;display:inline-block;width:52px;height:28px">
+            <input type="checkbox" id="trading-pause-toggle" style="opacity:0;width:0;height:0">
+            <span class="toggle-slider" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,0.1);border-radius:28px;transition:0.3s">
+              <span style="position:absolute;content:'';height:20px;width:20px;left:4px;bottom:4px;background:#fff;border-radius:50%;transition:0.3s;display:block" id="toggle-knob"></span>
+            </span>
+          </label>
+          <span class="text-muted text-xs" id="pause-status-label" style="margin-left:8px">Loading...</span>
+          <button class="btn btn-sm" id="btn-apply-trading-pause" style="margin-left:auto;background:rgba(255,68,68,0.15);border:1px solid rgba(255,68,68,0.4);color:#FF4444">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin Transfer Section (superAdmin only) -->
+    <div class="card glass mt-2" id="admin-transfer-section">
+      <div class="card-header">
+        <h2 class="font-semibold">🔑 Admin Transfer</h2>
+      </div>
+      <div class="card-body">
+        <div class="grid grid-2 gap-1">
+          <div>
+            <label class="form-label text-xs">Current Admin (on-chain)</label>
+            <div class="font-mono text-xs" id="current-chain-admin" style="word-break:break-all;color:#9945FF">Loading...</div>
+          </div>
+          <div>
+            <label class="form-label text-xs">Pending Admin</label>
+            <div class="font-mono text-xs" id="pending-chain-admin" style="word-break:break-all;color:#FFD700">—</div>
+          </div>
+        </div>
+        <div class="flex gap-1 mt-2" style="flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1;min-width:200px">
+            <label class="form-label text-xs">Propose New Admin</label>
+            <input type="text" class="form-input" id="propose-admin-input" placeholder="New admin wallet pubkey..." style="font-family:var(--font-mono);font-size:0.85rem">
+          </div>
+          <button class="btn btn-sm btn-primary" id="btn-propose-admin" style="height:38px">Propose</button>
+        </div>
+        <div id="accept-admin-wrapper" style="display:none;margin-top:12px">
+          <button class="btn btn-sm" id="btn-accept-admin" style="background:rgba(20,241,149,0.15);border:1px solid rgba(20,241,149,0.4);color:#14F195">
+            ✅ Accept Admin Role (you are the pending admin)
+          </button>
+        </div>
+      </div>
+    </div>
+    ` : ''}
+
     <!-- System Info -->
     <div class="card glass mt-2">
       <div class="card-header">
@@ -304,10 +384,28 @@ function renderAdminDashboard(container) {
   document.getElementById('btn-update-mint')?.addEventListener('click', handleUpdateMint);
   document.getElementById('btn-trigger-grad')?.addEventListener('click', handleTriggerGraduation);
 
+  // Platform fees
+  document.getElementById('btn-claim-all-fees')?.addEventListener('click', handleClaimAllFees);
+
+  // Pool management (superAdmin)
+  document.getElementById('btn-close-all-pools')?.addEventListener('click', handleCloseAllPools);
+
+  // Emergency controls (superAdmin)
+  document.getElementById('btn-apply-trading-pause')?.addEventListener('click', handleToggleTradingPause);
+
+  // Admin transfer (superAdmin)
+  document.getElementById('btn-propose-admin')?.addEventListener('click', handleProposeAdmin);
+  document.getElementById('btn-accept-admin')?.addEventListener('click', handleAcceptAdmin);
+
   // Load data
   loadAdminDashboard();
   if (isSuperAdmin) loadAdminsList();
   loadSystemInfo();
+  loadPlatformFees();
+  if (isSuperAdmin) {
+    loadCloseablePools();
+    loadChainConfig();
+  }
 }
 
 // === Data Loaders ===
@@ -605,6 +703,446 @@ async function handleTriggerGraduation() {
     btn.disabled = false;
     btn.textContent = '<img class="icon" src="/icons/white/rocket.png" alt="Graduated"> Graduate Token';
   }
+}
+
+// === Platform Fees ===
+
+async function loadPlatformFees() {
+  const el = document.getElementById('platform-fees-table');
+  if (!el) return;
+
+  try {
+    const data = await adminFetch('/admin/platform-fees');
+    if (data.error) {
+      el.innerHTML = `<p class="text-error text-sm">${data.error}</p>`;
+      return;
+    }
+
+    const pools = data.pools || [];
+
+    if (pools.length === 0) {
+      el.innerHTML = '<p class="text-muted text-sm">No unclaimed platform fees.</p>';
+      return;
+    }
+
+    const rows = pools.map(p => `
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+        <td style="padding:10px">
+          <span class="font-semibold text-sm">${escHtml(p.name)}</span>
+          <span class="text-muted text-xs" style="margin-left:4px">${escHtml(p.symbol)}</span>
+        </td>
+        <td style="padding:10px">
+          <span class="badge" style="font-size:0.7rem;background:${p.status === 'graduated' ? 'rgba(20,241,149,0.15);color:#14F195' : 'rgba(153,69,255,0.15);color:#9945FF'}">${p.status}</span>
+        </td>
+        <td style="padding:10px;text-align:right;font-family:var(--font-mono);font-size:0.82rem">${(p.platformFeesEarned / 1e9).toFixed(6)} SOL</td>
+        <td style="padding:10px;text-align:right;font-family:var(--font-mono);font-size:0.82rem">${(p.platformFeesClaimed / 1e9).toFixed(6)} SOL</td>
+        <td style="padding:10px;text-align:right;font-family:var(--font-mono);font-size:0.82rem;color:#FFD700">${p.unclaimedSol.toFixed(6)} SOL</td>
+      </tr>
+    `).join('');
+
+    el.innerHTML = `
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+          <thead>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+              <th style="padding:10px;text-align:left;color:var(--text-muted)">Token</th>
+              <th style="padding:10px;text-align:left;color:var(--text-muted)">Status</th>
+              <th style="padding:10px;text-align:right;color:var(--text-muted)">Earned</th>
+              <th style="padding:10px;text-align:right;color:var(--text-muted)">Claimed</th>
+              <th style="padding:10px;text-align:right;color:var(--text-muted)">Unclaimed</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr style="border-top:1px solid rgba(255,215,0,0.3)">
+              <td colspan="4" style="padding:10px;font-weight:600;color:#FFD700">Total Unclaimed</td>
+              <td style="padding:10px;text-align:right;font-family:var(--font-mono);font-weight:700;color:#FFD700">${(data.totalUnclaimedSol || 0).toFixed(6)} SOL</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    `;
+  } catch (err) {
+    if (el) el.innerHTML = `<p class="text-error text-sm">Failed to load fees: ${err.message}</p>`;
+  }
+}
+
+async function handleClaimAllFees() {
+  const btn = document.getElementById('btn-claim-all-fees');
+  if (!btn) return;
+
+  if (!isConnected()) {
+    toast('Connect your wallet first', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Building transactions...';
+
+  try {
+    const result = await adminFetch('/admin/claim-all-fees', {
+      method: 'POST',
+      body: JSON.stringify({ adminPublicKey: getPublicKey() }),
+    });
+
+    if (result.error) {
+      toast(result.error, 'error');
+      return;
+    }
+
+    const txs = result.transactions || [];
+    if (txs.length === 0) {
+      toast('No unclaimed fees to collect', 'info');
+      return;
+    }
+
+    toast(`Signing ${txs.length} transaction(s) for ${result.totalPools} pools...`, 'info');
+
+    let signed = 0;
+    for (const txObj of txs) {
+      btn.textContent = `Signing ${signed + 1}/${txs.length}...`;
+      try {
+        const sig = await signAndSendTransaction(txObj.base64);
+        toast(`✅ Claimed fees from ${txObj.poolCount} pools (${txObj.estimatedSol.toFixed(4)} SOL) — ${sig.slice(0, 8)}...`, 'success');
+        signed++;
+      } catch (err) {
+        toast(`TX ${signed + 1} failed: ${err.message}`, 'error');
+        break;
+      }
+    }
+
+    // Refresh table
+    await loadPlatformFees();
+
+  } catch (err) {
+    toast(`Claim failed: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Claim All Fees';
+  }
+}
+
+// === Closeable Pools ===
+
+async function loadCloseablePools() {
+  const el = document.getElementById('closeable-pools-table');
+  if (!el) return;
+
+  try {
+    const data = await adminFetch('/admin/closeable-pools');
+    if (data.error) {
+      el.innerHTML = `<p class="text-error text-sm">${data.error}</p>`;
+      return;
+    }
+
+    const pools = data.pools || [];
+
+    if (pools.length === 0) {
+      el.innerHTML = '<p class="text-muted text-sm">No closeable pools — graduated pools must have all fees claimed first.</p>';
+      return;
+    }
+
+    const rows = pools.map(p => `
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.04)" data-mint="${escHtml(p.mint)}">
+        <td style="padding:10px">
+          <span class="font-semibold text-sm">${escHtml(p.name)}</span>
+          <span class="text-muted text-xs" style="margin-left:4px">${escHtml(p.symbol)}</span>
+        </td>
+        <td style="padding:10px;font-family:var(--font-mono);font-size:0.78rem;color:var(--text-muted)">
+          ${p.graduatedAt ? new Date(p.graduatedAt * 1000).toLocaleDateString() : '—'}
+        </td>
+        <td style="padding:10px;font-family:var(--font-mono);font-size:0.78rem">
+          ${p.raydiumPool ? `<a href="https://explorer.solana.com/address/${p.raydiumPool}" target="_blank" style="color:#9945FF">${truncateAddress(p.raydiumPool)}</a>` : '—'}
+        </td>
+        <td style="padding:10px;text-align:right;font-family:var(--font-mono);font-size:0.82rem;color:#14F195">
+          ~${(p.estimatedRent / 1e9).toFixed(4)} SOL
+        </td>
+        <td style="padding:10px;text-align:right">
+          <button class="btn btn-xs btn-ghost btn-close-pool" data-mint="${escHtml(p.mint)}" style="border-color:rgba(255,68,68,0.3);color:#FF4444;font-size:0.75rem;padding:4px 8px">
+            Close
+          </button>
+        </td>
+      </tr>
+    `).join('');
+
+    el.innerHTML = `
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+          <thead>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+              <th style="padding:10px;text-align:left;color:var(--text-muted)">Token</th>
+              <th style="padding:10px;text-align:left;color:var(--text-muted)">Graduated</th>
+              <th style="padding:10px;text-align:left;color:var(--text-muted)">Raydium Pool</th>
+              <th style="padding:10px;text-align:right;color:var(--text-muted)">Est. Rent</th>
+              <th style="padding:10px;text-align:right;color:var(--text-muted)">Actions</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr style="border-top:1px solid rgba(20,241,149,0.2)">
+              <td colspan="3" style="padding:10px;font-weight:600;color:#14F195">Total Recoverable Rent</td>
+              <td style="padding:10px;text-align:right;font-family:var(--font-mono);font-weight:700;color:#14F195">~${(data.totalRentSol || 0).toFixed(4)} SOL</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    `;
+
+    // Wire close buttons
+    el.querySelectorAll('.btn-close-pool').forEach(btn => {
+      btn.addEventListener('click', () => handleClosePool(btn.dataset.mint));
+    });
+
+  } catch (err) {
+    if (el) el.innerHTML = `<p class="text-error text-sm">Failed to load pools: ${err.message}</p>`;
+  }
+}
+
+async function handleClosePool(mint) {
+  if (!isConnected()) {
+    toast('Connect your wallet first', 'error');
+    return;
+  }
+
+  if (!confirm(`Close graduated pool for ${truncateAddress(mint)}? This reclaims rent and closes the on-chain accounts.`)) return;
+
+  try {
+    const result = await adminFetch('/admin/close-pool', {
+      method: 'POST',
+      body: JSON.stringify({ mint, adminPublicKey: getPublicKey() }),
+    });
+
+    if (result.error) {
+      toast(result.error, 'error');
+      return;
+    }
+
+    const sig = await signAndSendTransaction(result.transaction);
+    toast(`✅ Pool closed — reclaimed ~${(result.rentReclaimed / 1e9).toFixed(4)} SOL — ${sig.slice(0, 8)}...`, 'success');
+    await loadCloseablePools();
+  } catch (err) {
+    toast(`Close failed: ${err.message}`, 'error');
+  }
+}
+
+async function handleCloseAllPools() {
+  if (!isConnected()) {
+    toast('Connect your wallet first', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-close-all-pools');
+
+  // Gather all closeable mints from current table
+  const rows = document.querySelectorAll('#closeable-pools-table .btn-close-pool');
+  if (rows.length === 0) {
+    toast('No closeable pools found', 'info');
+    return;
+  }
+
+  if (!confirm(`Close all ${rows.length} graduated pools? This cannot be undone.`)) return;
+
+  btn.disabled = true;
+
+  let closed = 0;
+  for (const row of rows) {
+    const mint = row.dataset.mint;
+    try {
+      btn.textContent = `Closing ${closed + 1}/${rows.length}...`;
+      const result = await adminFetch('/admin/close-pool', {
+        method: 'POST',
+        body: JSON.stringify({ mint, adminPublicKey: getPublicKey() }),
+      });
+      if (result.error) {
+        toast(`${truncateAddress(mint)}: ${result.error}`, 'error');
+        continue;
+      }
+      const sig = await signAndSendTransaction(result.transaction);
+      toast(`Closed ${truncateAddress(mint)} — ${sig.slice(0, 8)}...`, 'success');
+      closed++;
+    } catch (err) {
+      toast(`Failed to close ${truncateAddress(mint)}: ${err.message}`, 'error');
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Close All';
+  await loadCloseablePools();
+}
+
+// === Emergency Controls ===
+
+async function loadChainConfig() {
+  try {
+    // Load on-chain config to show current admin and trading pause state
+    const res = await fetch(api.base + '/chain/config');
+    const config = await res.json();
+
+    if (config.error) return;
+
+    // Update admin transfer section
+    const currentAdminEl = document.getElementById('current-chain-admin');
+    const pendingAdminEl = document.getElementById('pending-chain-admin');
+    const acceptWrapper = document.getElementById('accept-admin-wrapper');
+    const pauseLabel = document.getElementById('pause-status-label');
+    const pauseToggle = document.getElementById('trading-pause-toggle');
+    const pauseWarning = document.getElementById('trading-pause-warning');
+    const knob = document.getElementById('toggle-knob');
+
+    if (currentAdminEl) currentAdminEl.textContent = config.admin || '—';
+    if (pendingAdminEl) pendingAdminEl.textContent = config.pendingAdmin || config.pending_admin || '—';
+
+    // Show accept button if current wallet is the pending admin
+    const pendingAdmin = config.pendingAdmin || config.pending_admin;
+    if (acceptWrapper && pendingAdmin && isConnected() && getPublicKey() === pendingAdmin) {
+      acceptWrapper.style.display = 'block';
+    }
+
+    // Trading pause state
+    const isPaused = config.tradingPaused || config.trading_paused || false;
+    if (pauseToggle) pauseToggle.checked = isPaused;
+    if (pauseLabel) pauseLabel.textContent = isPaused ? 'Trading is PAUSED' : 'Trading is active';
+    if (pauseWarning) pauseWarning.style.display = isPaused ? 'block' : 'none';
+    if (knob) knob.style.transform = isPaused ? 'translateX(24px)' : 'translateX(0)';
+    if (pauseToggle && knob) {
+      // Style the toggle based on state
+      const slider = pauseToggle.nextElementSibling;
+      if (slider) {
+        slider.style.background = isPaused ? 'rgba(255,68,68,0.6)' : 'rgba(255,255,255,0.1)';
+      }
+    }
+
+  } catch (_) {
+    // chain config may not be available
+  }
+}
+
+async function handleToggleTradingPause() {
+  if (!isConnected()) {
+    toast('Connect your wallet first', 'error');
+    return;
+  }
+
+  const toggle = document.getElementById('trading-pause-toggle');
+  const paused = toggle?.checked ?? false;
+
+  const btn = document.getElementById('btn-apply-trading-pause');
+  btn.disabled = true;
+  btn.textContent = 'Building TX...';
+
+  try {
+    const result = await adminFetch('/admin/toggle-trading-pause', {
+      method: 'POST',
+      body: JSON.stringify({ paused, adminPublicKey: getPublicKey() }),
+    });
+
+    if (result.error) {
+      toast(result.error, 'error');
+      return;
+    }
+
+    const sig = await signAndSendTransaction(result.transaction);
+    toast(`✅ Trading ${paused ? 'PAUSED' : 'resumed'} — ${sig.slice(0, 8)}...`, paused ? 'error' : 'success');
+
+    // Update UI
+    const warning = document.getElementById('trading-pause-warning');
+    const label = document.getElementById('pause-status-label');
+    const knob = document.getElementById('toggle-knob');
+    if (warning) warning.style.display = paused ? 'block' : 'none';
+    if (label) label.textContent = paused ? 'Trading is PAUSED' : 'Trading is active';
+    if (knob) knob.style.transform = paused ? 'translateX(24px)' : 'translateX(0)';
+
+  } catch (err) {
+    toast(`Toggle failed: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Apply';
+  }
+}
+
+// === Admin Transfer ===
+
+async function handleProposeAdmin() {
+  if (!isConnected()) {
+    toast('Connect your wallet first', 'error');
+    return;
+  }
+
+  const input = document.getElementById('propose-admin-input');
+  const newAdmin = input?.value.trim();
+  if (!newAdmin) {
+    toast('Enter the new admin wallet pubkey', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-propose-admin');
+  btn.disabled = true;
+  btn.textContent = 'Building TX...';
+
+  try {
+    const result = await adminFetch('/admin/propose-admin', {
+      method: 'POST',
+      body: JSON.stringify({ newAdmin, adminPublicKey: getPublicKey() }),
+    });
+
+    if (result.error) {
+      toast(result.error, 'error');
+      return;
+    }
+
+    const sig = await signAndSendTransaction(result.transaction);
+    toast(`✅ Admin transfer proposed to ${truncateAddress(newAdmin)} — ${sig.slice(0, 8)}...`, 'success');
+
+    // Update pending admin display
+    const pendingEl = document.getElementById('pending-chain-admin');
+    if (pendingEl) pendingEl.textContent = newAdmin;
+    if (input) input.value = '';
+
+    // Show accept button if proposing to self (unusual but handle it)
+    if (getPublicKey() === newAdmin) {
+      const wrapper = document.getElementById('accept-admin-wrapper');
+      if (wrapper) wrapper.style.display = 'block';
+    }
+
+  } catch (err) {
+    toast(`Propose failed: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Propose';
+  }
+}
+
+async function handleAcceptAdmin() {
+  if (!isConnected()) {
+    toast('Connect your wallet first', 'error');
+    return;
+  }
+
+  if (!confirm('Accept the admin role? This will make your wallet the new on-chain admin.')) return;
+
+  const btn = document.getElementById('btn-accept-admin');
+  btn.disabled = true;
+  btn.textContent = 'Building TX...';
+
+  try {
+    // Accept admin is a separate instruction (accept_admin / claim_admin).
+    // TODO: Build the actual accept_admin transaction once IDL is updated.
+    // For now, show a placeholder message.
+    toast('Accept admin TX not yet implemented — awaiting IDL update with two-step transfer.', 'info');
+  } catch (err) {
+    toast(`Accept failed: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✅ Accept Admin Role (you are the pending admin)';
+  }
+}
+
+// === Helpers ===
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // === Helpers ===
