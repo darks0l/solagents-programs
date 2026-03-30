@@ -153,9 +153,34 @@ Anchor.toml                     # Cluster config + program IDs
 Cargo.toml                      # Workspace manifest
 ```
 
+## Verifiable Builds
+
+These programs support [Solana Verifiable Builds](https://github.com/solana-foundation/solana-verifiable-build) — anyone can verify the deployed bytecode matches this source code.
+
+```bash
+# Install the verify CLI
+cargo install solana-verify
+
+# Build deterministically (requires Docker)
+solana-verify build
+
+# Verify deployed program matches source
+solana-verify verify-from-repo \
+  -u https://api.devnet.solana.com \
+  --program-id nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof \
+  https://github.com/darks0l/solagents-programs
+
+solana-verify verify-from-repo \
+  -u https://api.devnet.solana.com \
+  --program-id Ddpj5GCjz8jFuBQXopUfzxkAmkWPCCwC7mhpL6SY9fdx \
+  https://github.com/darks0l/solagents-programs
+```
+
 ## Security
 
-See [SECURITY.md](SECURITY.md) for the security policy and responsible disclosure process.
+Both programs embed [`solana-security-txt`](https://github.com/neodyme-labs/solana-security-txt) with contact info, source code links, and security policy — discoverable on-chain by any security researcher.
+
+See [SECURITY.md](SECURITY.md) for the full responsible disclosure policy.
 
 Both programs are currently deployed to **devnet only**. A full audit is planned before mainnet deployment.
 
