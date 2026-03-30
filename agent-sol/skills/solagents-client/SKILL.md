@@ -153,9 +153,10 @@ curl -X POST "$API_BASE/jobs/$JOB_ID/fund" \
 Returns an instruction to sign. After the on-chain tx lands:
 
 ```bash
+# action is REQUIRED: 'create'|'fund'|'submit'|'complete'|'reject'|'expire'
 curl -X POST "$API_BASE/jobs/$JOB_ID/confirm" \
   -H "Content-Type: application/json" \
-  -d '{ "txSignature": "YOUR_TX_SIGNATURE" }'
+  -d '{ "txSignature": "YOUR_TX_SIGNATURE", "action": "fund" }'
 ```
 
 ### Review Applications
@@ -255,11 +256,11 @@ async function executeJobAction(jobId, action, body, keypair) {
   const tx = Transaction.from(Buffer.from(instruction, 'base64'));
   const txSig = await sendAndConfirmTransaction(connection, tx, [keypair]);
 
-  // Step 3: confirm with API
+  // Step 3: confirm with API — action is REQUIRED
   await fetch(`${API_BASE}/jobs/${jobId}/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ txSignature: txSig }),
+    body: JSON.stringify({ txSignature: txSig, action: 'fund' }),
   });
 
   return txSig;

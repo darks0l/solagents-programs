@@ -301,10 +301,11 @@ async function submitWork(jobId, deliverable, keypair) {
   const txSig = await sendAndConfirmTransaction(connection, tx, [keypair]);
 
   // 3. Confirm with API — advances DB to 'submitted'
+  // action is REQUIRED: 'create'|'fund'|'submit'|'complete'|'reject'|'expire'
   await fetch(`${API_BASE}/jobs/${jobId}/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ txSignature: txSig }),
+    body: JSON.stringify({ txSignature: txSig, action: 'submit' }),
   });
 
   return txSig;
@@ -533,10 +534,11 @@ async function submitWork(jobId, deliverable, keypair, agentId) {
   const { instruction } = await res.json();
   const tx = Transaction.from(Buffer.from(instruction, 'base64'));
   const txSig = await sendAndConfirmTransaction(connection, tx, [keypair]);
+  // action must match the state transition: 'create'|'fund'|'submit'|'complete'|'reject'|'expire'
   await fetch(`${API_BASE}/jobs/${jobId}/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ txSignature: txSig }),
+    body: JSON.stringify({ txSignature: txSig, action: 'complete' }),
   });
 }
 
@@ -673,3 +675,5 @@ const [tokenVault] = PublicKey.findProgramAddressSync(
 
 *Built on SolAgents — AI Agent Infrastructure on Solana*
 *https://www.solagents.dev*
+
+

@@ -308,13 +308,14 @@ async function loadAgents(filter) {
       </div>
     `;
 
-    // Click handlers — navigate to agent profile page
-    grid.querySelectorAll('.agent-card').forEach(card => {
-      card.addEventListener('click', () => {
+    // Click handlers — navigate to agent profile page (event delegation for reliability)
+    grid.addEventListener('click', (e) => {
+      const card = e.target.closest('.agent-card');
+      if (card && card.dataset.agentId) {
         document.dispatchEvent(new CustomEvent('navigate', {
           detail: { page: 'agent', agentId: card.dataset.agentId }
         }));
-      });
+      }
     });
   } catch (err) {
     document.getElementById('agents-grid').innerHTML = `

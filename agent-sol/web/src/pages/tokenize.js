@@ -1,4 +1,5 @@
 import { api } from '../main.js';
+import { getPublicKey, isConnected } from '../services/wallet.js';
 
 /**
  * Tokenize Info Page — informational only
@@ -8,28 +9,75 @@ import { api } from '../main.js';
 export async function renderTokenize(container, state) {
   // Check if connected user already has a tokenized agent
   let agentToken = null;
+  let agentName = null;
+
+  // Try state first
   if (state?.agent?.tokenized && state.agent.token?.mintAddress) {
     agentToken = state.agent.token;
+    agentName = state.agent.name;
   } else if (state?.agent?.id) {
     try {
       const dash = await api.get(`/agents/${state.agent.id}/dashboard`);
       if (dash.token?.mint_address && dash.token?.status !== 'pending') {
         agentToken = { symbol: dash.token.token_symbol, mintAddress: dash.token.mint_address };
+        agentName = state.agent.name;
       }
     } catch {}
   }
 
-  container.innerHTML = `
-    ${agentToken ? `
+  // If wallet connected but state.agent not populated, try fetching by wallet
+  if (!agentToken && isConnected()) {
+    const wallet = getPublicKey();
+    if (wallet) {
+      try {
+        const agentData = await api.get(`/agents/wallet/${wallet}`);
+        if (agentData.tokenized && agentData.token?.mintAddress) {
+          agentToken = agentData.token;
+          agentName = agentData.name;
+          // Backfill state so other pages benefit
+          if (!state.agent) state.agent = agentData;
+        } else if (agentData.id && !agentData.tokenized) {
+          agentName = agentData.name;
+          if (!state.agent) state.agent = agentData;
+        }
+      } catch {}
+    }
+  }
+
+  // Build the status banner
+  let statusBanner = '';
+  if (agentToken) {
+    statusBanner = `
       <div style="background: linear-gradient(90deg, rgba(20,241,149,0.15), rgba(153,69,255,0.15)); border: 1px solid rgba(20,241,149,0.3); border-radius: 12px; padding: 20px 24px; margin: 16px auto; max-width: 700px; text-align: center;">
         <h3 class="font-semibold" style="margin-bottom: 8px;"><img class="icon" src="/icons/white/rocket.png" alt="Token"> Your agent is already tokenized!</h3>
         <p class="text-secondary text-sm">$${agentToken.symbol} is live. View your token stats and manage trading fees from your profile.</p>
         <div class="flex gap-1 mt-2" style="justify-content: center;">
-          <button class="btn btn-primary btn-sm btn-glow" onclick="document.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'trade', mintAddress: '${agentToken.mintAddress}' } }))">View Trade Page →</button>
+          <button class="btn btn-primary btn-sm btn-glow" onclick="document.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'trade', mintAddress: '${agentToken.mintAddress}' } }))">View Trade Page &rarr;</button>
           <button class="btn btn-ghost btn-sm" onclick="document.dispatchEvent(new CustomEvent('navigate', { detail: 'agents' }))">Agent Profile</button>
         </div>
-      </div>
-    ` : ''}
+      </div>`;
+  } else if (agentName) {
+    statusBanner = `
+      <div style="background: linear-gradient(90deg, rgba(153,69,255,0.12), rgba(20,241,149,0.08)); border: 1px solid rgba(153,69,255,0.25); border-radius: 12px; padding: 20px 24px; margin: 16px auto; max-width: 700px; text-align: center;">
+        <h3 class="font-semibold" style="margin-bottom: 8px;">Ready to tokenize <span style="color:#9945FF">${agentName}</span></h3>
+        <p class="text-secondary text-sm">Your agent is registered but doesn't have a token yet. Go to your agent profile to launch.</p>
+        <div class="flex gap-1 mt-2" style="justify-content: center;">
+          <button class="btn btn-primary btn-sm btn-glow" onclick="document.dispatchEvent(new CustomEvent('navigate', { detail: 'agents' }))">Go to Agent Profile &rarr;</button>
+        </div>
+      </div>`;
+  } else if (isConnected()) {
+    statusBanner = `
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 20px 24px; margin: 16px auto; max-width: 700px; text-align: center;">
+        <h3 class="font-semibold" style="margin-bottom: 8px;">No agent found for this wallet</h3>
+        <p class="text-secondary text-sm">Register your agent via the API first, then come back to tokenize.</p>
+        <div class="flex gap-1 mt-2" style="justify-content: center;">
+          <button class="btn btn-ghost btn-sm" onclick="document.dispatchEvent(new CustomEvent('navigate', { detail: 'dashboard' }))">Dashboard &rarr;</button>
+        </div>
+      </div>`;
+  }
+
+  container.innerHTML = `
+    ${statusBanner}
     <div class="page-header" style="text-align:center;max-width:800px;margin:0 auto;">
       <div style="font-size:4rem;margin-bottom:12px;"><img class="icon" src="/icons/white/fire.png" alt="Launch"></div>
       <h1 class="text-3xl font-bold gradient-text">Tokenize Your Agent</h1>
