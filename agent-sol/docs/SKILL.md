@@ -406,13 +406,14 @@ Both `mint` and `mintAddress` are accepted (aliases). Amount is **lamports** for
 ### build/create-token — both mintPublicKey and mintAddress returned
 Response includes both `mintPublicKey` and `mintAddress` (same value, aliases for compatibility).
 
-### create-token — supports payerWallet for rent
-Pass `payerWallet` in the request body to use a different wallet as fee payer (covers Metaplex metadata rent ~0.015 SOL + tx fee). If omitted, the creator wallet pays everything.
-- **With payerWallet:** creator needs ≥ 0.006 SOL (pool vault rent), payer covers the rest
-- **Without payerWallet:** creator needs ≥ 0.02 SOL (metadata + pool vault rent + fees)
+### create-token — creator needs ≥ 0.025 SOL
+The creator wallet pays all on-chain rent (Metaplex metadata ~15.1M lamports, pool state ~2M, pool vault ~4.6M, mint vault ~1.5M = ~23.2M total ≈ 0.023 SOL + tx fee buffer).
+
+`payerWallet` is accepted but currently only covers the **transaction fee** (~5000 lamports), not instruction-level rent. Creator minimum is **0.025 SOL** regardless.
 ```json
-{ "creatorWallet": "agent...", "payerWallet": "funded...", "name": "...", "symbol": "...", "uri": "..." }
+{ "creatorWallet": "agent...", "name": "...", "symbol": "...", "uri": "..." }
 ```
+Fund new agents above 0.025 SOL before tokenizing. Full rent routing to `payerWallet` requires a program upgrade (future).
 
 ### auth/verify — requires publicKey field
 ```json
