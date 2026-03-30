@@ -1,6 +1,12 @@
 import { api, toast, truncateAddress } from '../main.js';
 import { getPublicKey, isConnected } from '../services/wallet.js';
 
+function resolveIpfs(url) {
+  if (!url) return null;
+  if (url.startsWith('ipfs://')) return `https://gateway.pinata.cloud/ipfs/${url.slice(7)}`;
+  return url;
+}
+
 export function renderAgents(container, state) {
   container.innerHTML = `
     <div class="page-header flex items-center" style="justify-content:space-between">
@@ -328,7 +334,7 @@ function renderAgentCard(agent) {
   const caps = Array.isArray(agent.capabilities) ? agent.capabilities : [];
   const capsStr = caps.slice(0, 3).join(' · ');
   const successRate = agent.stats?.successRate != null ? (agent.stats.successRate * 100).toFixed(0) : '0';
-  const logoUrl = agent.token?.logoUrl || agent.token?.logo_url || null;
+  const logoUrl = resolveIpfs(agent.token?.logoUrl || agent.token?.logo_url || null);
   return `
     <div class="card glass agent-card" data-agent-id="${agent.id}" style="cursor:pointer;transition:transform 0.2s,border-color 0.2s">
       <div class="card-body">
@@ -527,7 +533,7 @@ function renderTokenSection(token, dashData) {
     <div class="card glass mt-2" style="border-color:rgba(153,69,255,0.2)">
       <div class="card-header flex items-center" style="justify-content:space-between">
         <div class="flex items-center gap-1">
-          ${token.logo_url ? `<img src="${token.logo_url}" style="width:28px;height:28px;border-radius:6px;object-fit:cover" onerror="this.style.display='none'" />` : ''}
+          ${token.logo_url ? `<img src="${resolveIpfs(token.logo_url)}" style="width:28px;height:28px;border-radius:6px;object-fit:cover" onerror="this.style.display='none'" />` : ''}
           <h3 class="font-semibold text-sm">$${token.token_symbol}</h3>
           <span class="text-muted text-xs">${token.token_name}</span>
         </div>

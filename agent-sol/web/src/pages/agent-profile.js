@@ -1,6 +1,12 @@
 import { api, toast, truncateAddress } from '../main.js';
 import { isConnected, getPublicKey, signAndSendTransaction } from '../services/wallet.js';
 
+function resolveIpfs(url) {
+  if (!url) return null;
+  if (url.startsWith('ipfs://')) return `https://gateway.pinata.cloud/ipfs/${url.slice(7)}`;
+  return url;
+}
+
 export async function renderAgentProfile(container, state, agentId) {
   if (!agentId) {
     container.innerHTML = `<div class="card glass p-3 text-center"><p class="text-muted">No agent specified.</p></div>`;
@@ -144,7 +150,7 @@ function buildProfileHTML(data, feesData, jobsData, servicesData, agentId) {
       <div class="card-body" style="padding:24px">
         <div class="flex items-center gap-2" style="flex-wrap:wrap">
           ${token?.logo_url && token.logo_url !== 'null'
-            ? `<img src="${token.logo_url}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(153,69,255,0.3)" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div style=&quot;width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:2.5rem&quot;><img class=&quot;icon&quot; src=&quot;/icons/white/gear.png&quot; alt=&quot;Agent&quot;></div>')" />`
+            ? `<img src="${resolveIpfs(token.logo_url)}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(153,69,255,0.3)" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div style=&quot;width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:2.5rem&quot;><img class=&quot;icon&quot; src=&quot;/icons/white/gear.png&quot; alt=&quot;Agent&quot;></div>')" />`
             : `<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:2.5rem"><img class="icon" src="/icons/white/gear.png" alt="Agent"></div>`
           }
           <div style="flex:1;min-width:200px">
