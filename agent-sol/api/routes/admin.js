@@ -21,13 +21,16 @@ import {
   getCurveConfigPDA,
   getCurvePoolPDA,
   getSolVaultPDA,
+  getTokenVaultPDA,
+  getBondingCurveProgram,
   BONDING_CURVE_PROGRAM_ID,
   LAMPORTS_PER_SOL,
 } from '../services/solana.js';
 import { stmts } from '../services/db.js';
 import db from '../services/db.js';
 import { emitTrade } from '../services/ws-feed.js';
-import { PublicKey, Transaction, TransactionInstruction, AccountMeta } from '@solana/web3.js';
+import { PublicKey, Transaction, SystemProgram, ComputeBudgetProgram } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 export default async function adminRoutes(fastify) {
 
@@ -569,17 +572,14 @@ export default async function adminRoutes(fastify) {
   /**
    * POST /api/admin/claim-all-fees
    * Build batch claim_all_platform_fees transaction(s) for admin to sign.
+   * Uses real Anchor IDL — remaining_accounts = [pool, sol_vault] pairs.
    * Requires: admin
-   *
-   * TODO: Fill in actual Anchor instruction building once IDL is updated
-   *       with claim_all_platform_fees using remaining_accounts.
    */
   fastify.post('/api/admin/claim-all-fees', { preHandler: adminAuthHook }, async (request, reply) => {
     try {
       const conn = getConnection();
       const { adminPublicKey } = request.body || {};
 
-      // Require the signing wallet pubkey from the caller
       if (!adminPublicKey) {
         return reply.code(400).send({ error: 'adminPublicKey required (the wallet that will sign)' });
       }
@@ -605,7 +605,10 @@ export default async function adminRoutes(fastify) {
         batches.push(rows.slice(i, i + BATCH_SIZE));
       }
 
+      const program = getBondingCurveProgram();
       const [configPDA] = getCurveConfigPDA();
+      const config = await readCurveConfig();
+      const treasuryPubkey = config.treasury;
       const { blockhash } = await conn.getLatestBlockhash();
       const adminPubkey = new PublicKey(adminPublicKey);
 
@@ -614,7 +617,6 @@ export default async function adminRoutes(fastify) {
       for (const batch of batches) {
         let batchEstimatedSol = 0n;
 
-        // Build remaining_accounts: for each pool, [pool_pda (writable), sol_vault (writable)]
         const remainingAccounts = [];
         for (const row of batch) {
           const mint = new PublicKey(row.mint_address);
@@ -629,31 +631,19 @@ export default async function adminRoutes(fastify) {
           batchEstimatedSol += earned > claimed ? earned - claimed : 0n;
         }
 
-        // TODO: Replace with actual Anchor instruction once IDL is updated.
-        // The claim_all_platform_fees instruction should look like:
-        //
-        //   program.methods.claimAllPlatformFees()
-        //     .accounts({ admin: adminPubkey, config: configPDA, treasury: ..., systemProgram: SystemProgram.programId })
-        //     .remainingAccounts(remainingAccounts)
-        //     .instruction()
-        //
-        // For now, we return a stub placeholder transaction so the UI flow works end-to-end.
-        // When the new IDL is ready, replace the stub instruction below with the real one.
-
-        // STUB: TransactionInstruction with correct structure (will fail on-chain until IDL is ready)
-        const CLAIM_ALL_DISCRIMINATOR = Buffer.from([0xca, 0xfe, 0xba, 0xbe, 0x01, 0x02, 0x03, 0x04]); // placeholder
-        const stubIx = new TransactionInstruction({
-          programId: BONDING_CURVE_PROGRAM_ID,
-          keys: [
-            { pubkey: adminPubkey, isSigner: true, isWritable: false },
-            { pubkey: configPDA, isSigner: false, isWritable: true },
-            ...remainingAccounts,
-          ],
-          data: CLAIM_ALL_DISCRIMINATOR,
-        });
+        const ix = await program.methods
+          .claimAllPlatformFees()
+          .accounts({
+            treasury: treasuryPubkey,
+            config: configPDA,
+            systemProgram: SystemProgram.programId,
+          })
+          .remainingAccounts(remainingAccounts)
+          .instruction();
 
         const tx = new Transaction({ recentBlockhash: blockhash, feePayer: adminPubkey });
-        tx.add(stubIx);
+        tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
+        tx.add(ix);
 
         const base64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
         transactions.push({
@@ -670,7 +660,6 @@ export default async function adminRoutes(fastify) {
         transactions,
         totalPools: rows.length,
         totalEstimatedSol,
-        _note: 'TODO: stub transactions — replace instruction discriminator once IDL is updated with claim_all_platform_fees',
       };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
@@ -684,9 +673,8 @@ export default async function adminRoutes(fastify) {
   /**
    * POST /api/admin/close-pool
    * Build close_graduated_pool transaction for admin to sign.
+   * Closes CurvePool + sol_vault + token_vault, reclaims rent to treasury.
    * Requires: superAdmin
-   *
-   * TODO: Fill in actual Anchor instruction once IDL is updated with close_graduated_pool.
    */
   fastify.post('/api/admin/close-pool', { preHandler: superAdminHook }, async (request, reply) => {
     try {
@@ -713,54 +701,48 @@ export default async function adminRoutes(fastify) {
       }
 
       const conn = getConnection();
+      const program = getBondingCurveProgram();
+      const config = await readCurveConfig();
       const mintPubkey = new PublicKey(mint);
       const adminPubkey = new PublicKey(adminPublicKey);
       const [configPDA] = getCurveConfigPDA();
       const [poolPDA] = getCurvePoolPDA(mintPubkey);
       const [solVaultPDA] = getSolVaultPDA(poolPDA);
+      const [tokenVaultPDA] = getTokenVaultPDA(poolPDA);
 
-      // TODO: Replace with actual Anchor instruction once IDL is updated.
-      // The close_graduated_pool instruction should look like:
-      //
-      //   program.methods.closeGraduatedPool()
-      //     .accounts({
-      //       admin: adminPubkey,
-      //       config: configPDA,
-      //       pool: poolPDA,
-      //       solVault: solVaultPDA,
-      //       mint: mintPubkey,
-      //       systemProgram: SystemProgram.programId,
-      //     })
-      //     .instruction()
-      //
-      // STUB placeholder until IDL is ready:
-      const CLOSE_POOL_DISCRIMINATOR = Buffer.from([0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04]); // placeholder
-      const stubIx = new TransactionInstruction({
-        programId: BONDING_CURVE_PROGRAM_ID,
-        keys: [
-          { pubkey: adminPubkey, isSigner: true, isWritable: true },
-          { pubkey: configPDA, isSigner: false, isWritable: false },
-          { pubkey: poolPDA, isSigner: false, isWritable: true },
-          { pubkey: solVaultPDA, isSigner: false, isWritable: true },
-          { pubkey: mintPubkey, isSigner: false, isWritable: false },
-        ],
-        data: CLOSE_POOL_DISCRIMINATOR,
-      });
+      const ix = await program.methods
+        .closeGraduatedPool()
+        .accounts({
+          caller: adminPubkey,
+          config: configPDA,
+          pool: poolPDA,
+          solVault: solVaultPDA,
+          tokenVault: tokenVaultPDA,
+          mint: mintPubkey,
+          treasury: config.treasury,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction();
 
       const { blockhash } = await conn.getLatestBlockhash();
       const tx = new Transaction({ recentBlockhash: blockhash, feePayer: adminPubkey });
-      tx.add(stubIx);
+      tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }));
+      tx.add(ix);
 
       const base64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
 
-      // Estimate rent reclaim: pool account + sol vault account
-      const ESTIMATED_RENT = 10_000_000; // ~0.01 SOL
+      // Estimate rent from on-chain account sizes
+      const poolInfo = await conn.getAccountInfo(poolPDA);
+      const vaultInfo = await conn.getAccountInfo(solVaultPDA);
+      const tokenVaultInfo = await conn.getAccountInfo(tokenVaultPDA);
+      const rentReclaimed = (poolInfo?.lamports || 0) + (vaultInfo?.lamports || 0) + (tokenVaultInfo?.lamports || 0);
 
       return {
         transaction: base64,
-        rentReclaimed: ESTIMATED_RENT,
+        rentReclaimed,
+        rentReclaimedSol: rentReclaimed / LAMPORTS_PER_SOL,
         mint,
-        _note: 'TODO: stub transaction — replace instruction discriminator once IDL is updated with close_graduated_pool',
       };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
@@ -775,8 +757,6 @@ export default async function adminRoutes(fastify) {
    * POST /api/admin/toggle-trading-pause
    * Build update_config transaction with trading_paused param for admin to sign.
    * Requires: superAdmin
-   *
-   * TODO: Fill in actual Anchor instruction once IDL is updated with trading_paused field in update_config.
    */
   fastify.post('/api/admin/toggle-trading-pause', { preHandler: superAdminHook }, async (request, reply) => {
     try {
@@ -785,39 +765,41 @@ export default async function adminRoutes(fastify) {
       if (!adminPublicKey) return reply.code(400).send({ error: 'adminPublicKey required' });
 
       const conn = getConnection();
+      const program = getBondingCurveProgram();
       const adminPubkey = new PublicKey(adminPublicKey);
       const [configPDA] = getCurveConfigPDA();
 
-      // TODO: Replace with actual Anchor instruction once IDL is updated.
-      // The update_config instruction should look like:
-      //
-      //   program.methods.updateConfig({ tradingPaused: paused, /* other fields null */ })
-      //     .accounts({ admin: adminPubkey, config: configPDA })
-      //     .instruction()
-      //
-      // STUB placeholder:
-      const TOGGLE_PAUSE_DISCRIMINATOR = Buffer.from([0xab, 0xcd, 0xef, 0x01, 0x02, 0x03, 0x04, 0x05]); // placeholder
-      // Encode the paused bool as the last byte for context
-      const data = Buffer.concat([TOGGLE_PAUSE_DISCRIMINATOR, Buffer.from([paused ? 1 : 0])]);
-      const stubIx = new TransactionInstruction({
-        programId: BONDING_CURVE_PROGRAM_ID,
-        keys: [
-          { pubkey: adminPubkey, isSigner: true, isWritable: false },
-          { pubkey: configPDA, isSigner: false, isWritable: true },
-        ],
-        data,
-      });
+      const ix = await program.methods
+        .updateConfig(
+          null,   // new_creator_fee_bps
+          null,   // new_platform_fee_bps
+          null,   // new_graduation_threshold
+          null,   // new_treasury
+          null,   // new_admin (pending_admin)
+          null,   // paused (creation pause)
+          null,   // raydium_permission_enabled
+          paused, // trading_paused
+        )
+        .accounts({
+          admin: adminPubkey,
+          config: configPDA,
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction();
 
       const { blockhash } = await conn.getLatestBlockhash();
       const tx = new Transaction({ recentBlockhash: blockhash, feePayer: adminPubkey });
-      tx.add(stubIx);
+      tx.add(ix);
 
       const base64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
+
+      // Read current state to confirm
+      const config = await readCurveConfig();
 
       return {
         transaction: base64,
         paused,
-        _note: 'TODO: stub transaction — replace instruction once IDL is updated with trading_paused in update_config',
+        currentTradingPaused: config?.tradingPaused ?? null,
       };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
@@ -830,10 +812,9 @@ export default async function adminRoutes(fastify) {
 
   /**
    * POST /api/admin/propose-admin
-   * Build update_config transaction with new_admin param (sets pending_admin on-chain).
+   * Build update_config transaction that sets pending_admin on-chain (two-step transfer).
+   * The proposed admin must then call accept_admin to complete the transfer.
    * Requires: superAdmin
-   *
-   * TODO: Fill in actual Anchor instruction once IDL is updated with pending_admin two-step.
    */
   fastify.post('/api/admin/propose-admin', { preHandler: superAdminHook }, async (request, reply) => {
     try {
@@ -841,7 +822,6 @@ export default async function adminRoutes(fastify) {
       if (!newAdmin) return reply.code(400).send({ error: 'newAdmin pubkey required' });
       if (!adminPublicKey) return reply.code(400).send({ error: 'adminPublicKey required' });
 
-      // Validate pubkey format
       let newAdminPubkey;
       try {
         newAdminPubkey = new PublicKey(newAdmin);
@@ -850,39 +830,41 @@ export default async function adminRoutes(fastify) {
       }
 
       const conn = getConnection();
+      const program = getBondingCurveProgram();
       const adminPubkey = new PublicKey(adminPublicKey);
       const [configPDA] = getCurveConfigPDA();
 
-      // TODO: Replace with actual Anchor instruction once IDL is updated.
-      // The update_config instruction with new_admin should look like:
-      //
-      //   program.methods.updateConfig({ newAdmin: newAdminPubkey, /* other fields null */ })
-      //     .accounts({ admin: adminPubkey, config: configPDA })
-      //     .instruction()
-      //
-      // STUB placeholder:
-      const PROPOSE_ADMIN_DISCRIMINATOR = Buffer.from([0x11, 0x22, 0x33, 0x44, 0x01, 0x02, 0x03, 0x04]); // placeholder
-      // Encode new admin pubkey in data for context
-      const data = Buffer.concat([PROPOSE_ADMIN_DISCRIMINATOR, newAdminPubkey.toBuffer()]);
-      const stubIx = new TransactionInstruction({
-        programId: BONDING_CURVE_PROGRAM_ID,
-        keys: [
-          { pubkey: adminPubkey, isSigner: true, isWritable: false },
-          { pubkey: configPDA, isSigner: false, isWritable: true },
-        ],
-        data,
-      });
+      // update_config with pending_admin set via the admin param
+      // In the new program, passing a pubkey to the "admin" param in update_config
+      // sets pending_admin (not direct admin change).
+      const ix = await program.methods
+        .updateConfig(
+          null,             // creator_fee_bps
+          null,             // platform_fee_bps
+          null,             // graduation_threshold
+          null,             // treasury
+          newAdminPubkey,   // new_admin → sets pending_admin
+          null,             // paused
+          null,             // raydium_permission_enabled
+          null,             // trading_paused
+        )
+        .accounts({
+          admin: adminPubkey,
+          config: configPDA,
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction();
 
       const { blockhash } = await conn.getLatestBlockhash();
       const tx = new Transaction({ recentBlockhash: blockhash, feePayer: adminPubkey });
-      tx.add(stubIx);
+      tx.add(ix);
 
       const base64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
 
       return {
         transaction: base64,
         newAdmin,
-        _note: 'TODO: stub transaction — replace instruction once IDL is updated with two-step admin transfer',
+        note: 'Proposed admin must call accept_admin to complete transfer',
       };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
