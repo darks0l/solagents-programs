@@ -57,6 +57,8 @@ export default async function chainRoutes(fastify) {
     try {
       const config = await readCurveConfig();
       if (!config) return reply.code(404).send({ error: 'Config not initialized on-chain' });
+      const pendingAdmin = config.pendingAdmin?.toBase58();
+      const defaultPubkey = '11111111111111111111111111111111';
       return {
         admin: config.admin.toBase58(),
         treasury: config.treasury.toBase58(),
@@ -66,6 +68,12 @@ export default async function chainRoutes(fastify) {
         totalSupply: config.totalSupply.toString(),
         decimals: config.decimals,
         initialVirtualSol: config.initialVirtualSol.toString(),
+        paused: config.paused ?? false,
+        tradingPaused: config.tradingPaused ?? false,
+        pendingAdmin: pendingAdmin === defaultPubkey ? null : pendingAdmin,
+        tokensCreated: config.tokensCreated ?? 0,
+        tokensGraduated: config.tokensGraduated ?? 0,
+        raydiumPermissionEnabled: config.raydiumPermissionEnabled ?? false,
       };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
