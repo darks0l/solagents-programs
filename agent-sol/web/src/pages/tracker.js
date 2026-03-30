@@ -1,5 +1,11 @@
 import { api, toast, truncateAddress, timeAgo, getSolPrice } from '../main.js';
 
+function resolveIpfs(url) {
+  if (!url) return null;
+  if (url.startsWith('ipfs://')) return `https://gateway.pinata.cloud/ipfs/${url.slice(7)}`;
+  return url;
+}
+
 /**
  * Token Tracker Page
  * - All launched agent tokens in a sortable table
@@ -131,6 +137,7 @@ async function loadTokens() {
       volume: parseFloat(t.volume_24h || t.volume || 0),
       holders: t.holders || t.holderCount || 0,
       creator: t.creator_wallet || t.creator || '',
+      logoUrl: resolveIpfs(t.logo_url || t.logoUrl || null),
     }));
     allTokens = tokens;
 
@@ -226,9 +233,10 @@ function renderTable(tokens) {
         <td style="color: var(--text-tertiary);">${i + 1}</td>
         <td>
           <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <div style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #14F195, #9945FF); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; color: #000; flex-shrink: 0;">
-              ${(token.symbol || '??').slice(0, 2)}
-            </div>
+            ${token.logoUrl
+              ? `<img src="${token.logoUrl}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.outerHTML='<div style=\\'width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#14F195,#9945FF);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem;color:#000;flex-shrink:0\\'>${(token.symbol||'??').slice(0,2)}</div>'" />`
+              : `<div style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #14F195, #9945FF); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; color: #000; flex-shrink: 0;">${(token.symbol || '??').slice(0, 2)}</div>`
+            }
             <div>
               <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(token.name || 'Unknown')}</div>
               <div style="font-size: 0.78rem; color: var(--text-tertiary);">$${escapeHtml(token.symbol || '???')}</div>
@@ -309,9 +317,10 @@ async function openTokenDetail(tokenId, mint) {
 
     content.innerHTML = `
       <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
-        <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #14F195, #9945FF); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.2rem; color: #000; flex-shrink: 0;">
-          ${symbol.slice(0, 2)}
-        </div>
+        ${token.logoUrl
+          ? `<img src="${token.logoUrl}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;border:3px solid rgba(153,69,255,0.3)" onerror="this.outerHTML='<div style=\\'width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#14F195,#9945FF);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.2rem;color:#000;flex-shrink:0\\'>${symbol.slice(0,2)}</div>'" />`
+          : `<div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #14F195, #9945FF); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.2rem; color: #000; flex-shrink: 0;">${symbol.slice(0, 2)}</div>`
+        }
         <div>
           <h2 style="margin: 0; font-size: 1.5rem;">${escapeHtml(name)}</h2>
           <span style="color: var(--text-tertiary); font-size: 0.9rem;">$${escapeHtml(symbol)} · ${status === 'graduated' ? '<span style="color:#14F195"><img class="icon" src="/icons/white/rocket.png" alt="Graduated"> Trading on Raydium CPMM</span>' : '● Bonding Curve'}</span>

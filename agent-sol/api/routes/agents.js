@@ -31,6 +31,7 @@ export default async function agentRoutes(fastify) {
           name: token.token_name,
           mintAddress: token.mint_address,
           status: token.status,
+          logo_url: token.logo_url || null,
           currentPrice: price?.price_sol || '0',
           marketCap: price?.market_cap || '0',
           volume24h: price?.volume_24h || '0',
