@@ -1,8 +1,0 @@
-{
-  "superAdmins": ["3Wym1paZMi91SRTV1kTbwgFXu6JTPif27yVe5xPEViMQ"],
-  "admins": [],
-  "roles": {
-    "token_manager": [],
-    "pool_manager": []
-  }
-}
