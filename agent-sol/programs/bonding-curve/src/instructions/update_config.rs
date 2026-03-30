@@ -12,9 +12,14 @@ pub struct UpdateConfig<'info> {
         mut,
         seeds = [CurveConfig::SEED],
         bump = config.bump,
+        realloc = 8 + CurveConfig::INIT_SPACE,
+        realloc::payer = admin,
+        realloc::zero = false,
         constraint = config.admin == admin.key() @ CurveError::Unauthorized,
     )]
     pub config: Account<'info, CurveConfig>,
+
+    pub system_program: Program<'info, System>,
 }
 
 pub fn handler(

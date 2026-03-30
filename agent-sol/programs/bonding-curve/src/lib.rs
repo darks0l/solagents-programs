@@ -161,4 +161,10 @@ pub mod bonding_curve {
     pub fn close_graduated_pool(ctx: Context<CloseGraduatedPool>) -> Result<()> {
         instructions::close_graduated_pool::handler(ctx)
     }
+
+    /// One-time migration: realloc CurveConfig to accommodate new fields.
+    /// Call once after deploying v2. Remove in a future cleanup deploy.
+    pub fn migrate_config(ctx: Context<MigrateConfig>) -> Result<()> {
+        instructions::migrate_config::handler(ctx)
+    }
 }

@@ -11,6 +11,7 @@ pub mod update_config;
 pub mod accept_admin;
 pub mod close_job;
 pub mod set_payment_mint;
+pub mod migrate_config;
 
 pub use initialize::*;
 pub use create_job::*;
@@ -25,3 +26,4 @@ pub use update_config::*;
 pub use accept_admin::*;
 pub use close_job::*;
 pub use set_payment_mint::*;
+pub use migrate_config::*;

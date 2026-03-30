@@ -6,15 +6,21 @@ use crate::errors::CommerceError;
 /// Can update fee_bps, treasury, paused state, and propose a new admin.
 #[derive(Accounts)]
 pub struct UpdateConfig<'info> {
+    #[account(mut)]
     pub admin: Signer<'info>,
 
     #[account(
         mut,
         seeds = [b"config"],
         bump = config.bump,
+        realloc = PlatformConfig::SIZE,
+        realloc::payer = admin,
+        realloc::zero = false,
         constraint = config.admin == admin.key() @ CommerceError::UnauthorizedClient,
     )]
     pub config: Account<'info, PlatformConfig>,
+
+    pub system_program: Program<'info, System>,
 }
 
 pub fn handler(

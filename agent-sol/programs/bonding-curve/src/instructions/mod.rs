@@ -10,6 +10,7 @@ pub mod claim_raydium_fees;
 pub mod update_config;
 pub mod accept_admin;
 pub mod close_graduated_pool;
+pub mod migrate_config;
 
 pub use initialize::*;
 pub use create_token::*;
@@ -23,3 +24,4 @@ pub use claim_raydium_fees::*;
 pub use update_config::*;
 pub use accept_admin::*;
 pub use close_graduated_pool::*;
+pub use migrate_config::*;

@@ -156,4 +156,10 @@ pub mod agentic_commerce {
     pub fn close_job(ctx: Context<CloseJob>) -> Result<()> {
         instructions::close_job::handler(ctx)
     }
+
+    /// One-time migration: realloc PlatformConfig to accommodate new fields.
+    /// Call once after deploying v2. Remove in a future cleanup deploy.
+    pub fn migrate_config(ctx: Context<MigrateConfig>) -> Result<()> {
+        instructions::migrate_config::handler(ctx)
+    }
 }

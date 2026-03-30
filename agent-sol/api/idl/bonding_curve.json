@@ -8,6 +8,59 @@
   },
   "instructions": [
     {
+      "name": "accept_admin",
+      "docs": [
+        "Accept a pending admin transfer.",
+        "The pending admin (set via update_config) calls this to complete the two-step transfer."
+      ],
+      "discriminator": [
+        112,
+        42,
+        45,
+        90,
+        116,
+        181,
+        13,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "pending_admin",
+          "docs": [
+            "The new admin — must match config.pending_admin"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  114,
+                  118,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "buy",
       "docs": [
         "Buy tokens with SOL.",
@@ -168,6 +221,59 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "claim_all_platform_fees",
+      "docs": [
+        "Batch claim platform fees across multiple pools in a single transaction.",
+        "Treasury signs once; remaining_accounts contains [pool, sol_vault] pairs."
+      ],
+      "discriminator": [
+        237,
+        34,
+        253,
+        145,
+        200,
+        42,
+        95,
+        224
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  114,
+                  118,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "claim_creator_fees",
@@ -466,7 +572,7 @@
         },
         {
           "name": "raydium_program",
-          "address": "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb"
+          "address": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"
         },
         {
           "name": "raydium_pool_state",
@@ -535,6 +641,171 @@
         {
           "name": "associated_token_program",
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_graduated_pool",
+      "docs": [
+        "Close a graduated pool's accounts and reclaim rent to treasury.",
+        "Pool must be graduated and have all fees claimed; token vault must be empty.",
+        "Only admin or treasury can call."
+      ],
+      "discriminator": [
+        216,
+        138,
+        186,
+        60,
+        132,
+        198,
+        52,
+        143
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "Caller — must be admin or treasury"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  114,
+                  118,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool",
+          "docs": [
+            "Pool account — closed at instruction exit (rent → treasury)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  114,
+                  118,
+                  101,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.mint",
+                "account": "CurvePool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "sol_vault",
+          "docs": [
+            "SOL vault — drained to treasury during handler"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_vault",
+          "docs": [
+            "Token vault — closed via SPL CPI during handler"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The token mint for this pool"
+          ]
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury — receives all reclaimed rent and remaining SOL"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
           "name": "system_program",
@@ -1175,7 +1446,7 @@
           "docs": [
             "Raydium CPMM program"
           ],
-          "address": "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb"
+          "address": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"
         },
         {
           "name": "raydium_amm_config",
@@ -1354,6 +1625,63 @@
       ]
     },
     {
+      "name": "migrate_config",
+      "docs": [
+        "One-time migration: realloc CurveConfig to accommodate new fields.",
+        "Call once after deploying v2. Remove in a future cleanup deploy."
+      ],
+      "discriminator": [
+        92,
+        131,
+        58,
+        105,
+        210,
+        154,
+        224,
+        193
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "on the undersized account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  114,
+                  118,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "sell",
       "docs": [
         "Sell tokens for SOL.",
@@ -1519,7 +1847,8 @@
       "name": "update_config",
       "docs": [
         "Update global config.",
-        "Only admin can call this. Fee changes don't affect existing pools retroactively."
+        "Only admin can call this. Fee changes don't affect existing pools retroactively.",
+        "Setting new_admin initiates a two-step transfer — the new admin must call accept_admin."
       ],
       "discriminator": [
         29,
@@ -1561,6 +1890,10 @@
               }
             ]
           }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -1605,6 +1938,12 @@
           "type": {
             "option": "bool"
           }
+        },
+        {
+          "name": "trading_paused",
+          "type": {
+            "option": "bool"
+          }
         }
       ]
     }
@@ -1638,6 +1977,32 @@
     }
   ],
   "events": [
+    {
+      "name": "AdminTransferred",
+      "discriminator": [
+        255,
+        147,
+        182,
+        5,
+        199,
+        217,
+        38,
+        179
+      ]
+    },
+    {
+      "name": "AllPlatformFeesClaimed",
+      "discriminator": [
+        254,
+        60,
+        133,
+        66,
+        32,
+        93,
+        94,
+        61
+      ]
+    },
     {
       "name": "ConfigInitialized",
       "discriminator": [
@@ -1675,6 +2040,19 @@
         157,
         14,
         62
+      ]
+    },
+    {
+      "name": "GraduatedPoolClosed",
+      "discriminator": [
+        112,
+        224,
+        212,
+        7,
+        83,
+        5,
+        213,
+        175
       ]
     },
     {
@@ -1845,9 +2223,75 @@
       "code": 6022,
       "name": "NoRaydiumFees",
       "msg": "No Raydium creator fees to claim"
+    },
+    {
+      "code": 6023,
+      "name": "TradingPaused",
+      "msg": "Trading is currently paused"
+    },
+    {
+      "code": 6024,
+      "name": "NoPendingAdmin",
+      "msg": "No pending admin transfer"
+    },
+    {
+      "code": 6025,
+      "name": "NotPendingAdmin",
+      "msg": "Only the pending admin can accept the transfer"
+    },
+    {
+      "code": 6026,
+      "name": "UnclaimedFees",
+      "msg": "Pool still has unclaimed fees — claim all fees before closing"
+    },
+    {
+      "code": 6027,
+      "name": "VaultNotEmpty",
+      "msg": "Token vault is not empty"
+    },
+    {
+      "code": 6028,
+      "name": "DevBuyExceedsMax",
+      "msg": "Dev buy exceeds maximum allowed (50% of graduation threshold)"
     }
   ],
   "types": [
+    {
+      "name": "AdminTransferred",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_admin",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AllPlatformFeesClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_claimed",
+            "type": "u64"
+          },
+          {
+            "name": "pools_claimed",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "ClaimType",
       "type": {
@@ -1952,6 +2396,14 @@
             "type": "pubkey"
           },
           {
+            "name": "old_pending_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_pending_admin",
+            "type": "pubkey"
+          },
+          {
             "name": "old_paused",
             "type": "bool"
           },
@@ -1965,6 +2417,14 @@
           },
           {
             "name": "new_raydium_permission",
+            "type": "bool"
+          },
+          {
+            "name": "old_trading_paused",
+            "type": "bool"
+          },
+          {
+            "name": "new_trading_paused",
             "type": "bool"
           }
         ]
@@ -2068,6 +2528,20 @@
               "Bump seed for PDA"
             ],
             "type": "u8"
+          },
+          {
+            "name": "trading_paused",
+            "docs": [
+              "Whether trading (buy/sell) is paused — emergency kill switch"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "pending_admin",
+            "docs": [
+              "Proposed new admin (two-step transfer). Pubkey::default() = no pending transfer."
+            ],
+            "type": "pubkey"
           }
         ]
       }
@@ -2315,6 +2789,30 @@
           },
           {
             "name": "total_claimed",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GraduatedPoolClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_lamports_reclaimed",
             "type": "u64"
           }
         ]

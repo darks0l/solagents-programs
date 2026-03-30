@@ -22,6 +22,49 @@
   ],
   "instructions": [
     {
+      "name": "accept_admin",
+      "docs": [
+        "Accept a pending admin transfer. Called by the proposed new admin.",
+        "Completes the two-step admin handoff initiated via update_config."
+      ],
+      "discriminator": [
+        112,
+        42,
+        45,
+        90,
+        116,
+        181,
+        13,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "new_admin",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claim_refund",
       "docs": [
         "Claim refund on an expired job. Anyone can call.",
@@ -41,6 +84,7 @@
       "accounts": [
         {
           "name": "caller",
+          "writable": true,
           "signer": true
         },
         {
@@ -66,6 +110,9 @@
           }
         },
         {
+          "name": "payment_mint"
+        },
+        {
           "name": "vault",
           "writable": true,
           "pda": {
@@ -89,11 +136,111 @@
         },
         {
           "name": "client_token",
-          "writable": true
+          "docs": [
+            "Client's token account — created automatically if it doesn't exist."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "client"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payment_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "client"
         },
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -191,6 +338,7 @@
       "accounts": [
         {
           "name": "evaluator",
+          "writable": true,
           "signer": true
         },
         {
@@ -216,6 +364,9 @@
           }
         },
         {
+          "name": "payment_mint"
+        },
+        {
           "name": "vault",
           "writable": true,
           "pda": {
@@ -239,15 +390,207 @@
         },
         {
           "name": "provider_token",
-          "writable": true
+          "docs": [
+            "Provider's token account — created automatically if it doesn't exist."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "provider"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payment_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "provider"
         },
         {
           "name": "treasury_token",
-          "writable": true
+          "docs": [
+            "Treasury token account — created automatically if it doesn't exist."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payment_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "treasury"
         },
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -543,6 +886,57 @@
       ]
     },
     {
+      "name": "migrate_config",
+      "docs": [
+        "One-time migration: realloc PlatformConfig to accommodate new fields.",
+        "Call once after deploying v2. Remove in a future cleanup deploy."
+      ],
+      "discriminator": [
+        92,
+        131,
+        58,
+        105,
+        210,
+        154,
+        224,
+        193
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "on the undersized account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "reject",
       "docs": [
         "Reject a job.",
@@ -562,6 +956,7 @@
       "accounts": [
         {
           "name": "caller",
+          "writable": true,
           "signer": true
         },
         {
@@ -587,6 +982,9 @@
           }
         },
         {
+          "name": "payment_mint"
+        },
+        {
           "name": "vault",
           "writable": true,
           "pda": {
@@ -610,11 +1008,111 @@
         },
         {
           "name": "client_token",
-          "writable": true
+          "docs": [
+            "Client's token account — created automatically if it doesn't exist (for refunds)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "client"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payment_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "client"
         },
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -668,6 +1166,55 @@
           "type": "bytes"
         }
       ]
+    },
+    {
+      "name": "set_payment_mint",
+      "docs": [
+        "Update the accepted payment mint. Admin only.",
+        "Allows switching the SPL token used for job escrows."
+      ],
+      "discriminator": [
+        172,
+        53,
+        59,
+        108,
+        154,
+        137,
+        185,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "new_payment_mint",
+          "docs": [
+            "The new SPL token mint for payments."
+          ]
+        }
+      ],
+      "args": []
     },
     {
       "name": "set_provider",
@@ -751,7 +1298,8 @@
       "name": "update_config",
       "docs": [
         "Update platform configuration. Admin only.",
-        "Can update fee_bps and treasury. Fee cap enforced (max 1000 bps)."
+        "Can update fee_bps, treasury, paused state, and propose a new admin.",
+        "Fee cap enforced (max 1000 bps)."
       ],
       "discriminator": [
         29,
@@ -766,6 +1314,7 @@
       "accounts": [
         {
           "name": "admin",
+          "writable": true,
           "signer": true
         },
         {
@@ -788,16 +1337,32 @@
           }
         },
         {
-          "name": "new_treasury",
-          "docs": [
-            "New treasury address (optional — pass current treasury to keep unchanged)."
-          ]
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
           "name": "new_fee_bps",
           "type": "u16"
+        },
+        {
+          "name": "new_treasury",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "paused",
+          "type": {
+            "option": "bool"
+          }
+        },
+        {
+          "name": "propose_admin",
+          "type": {
+            "option": "pubkey"
+          }
         }
       ]
     }
@@ -831,6 +1396,19 @@
     }
   ],
   "events": [
+    {
+      "name": "AdminTransferred",
+      "discriminator": [
+        255,
+        147,
+        182,
+        5,
+        199,
+        217,
+        38,
+        179
+      ]
+    },
     {
       "name": "BudgetSet",
       "discriminator": [
@@ -949,6 +1527,19 @@
       ]
     },
     {
+      "name": "PaymentMintUpdated",
+      "discriminator": [
+        220,
+        223,
+        8,
+        225,
+        211,
+        132,
+        243,
+        102
+      ]
+    },
+    {
       "name": "ProviderSet",
       "discriminator": [
         10,
@@ -1052,9 +1643,40 @@
       "code": 6017,
       "name": "InvalidHook",
       "msg": "Invalid hook program"
+    },
+    {
+      "code": 6018,
+      "name": "PlatformPaused",
+      "msg": "Platform is currently paused"
+    },
+    {
+      "code": 6019,
+      "name": "NoPendingAdmin",
+      "msg": "No pending admin transfer"
+    },
+    {
+      "code": 6020,
+      "name": "NotPendingAdmin",
+      "msg": "Only the pending admin can accept the transfer"
     }
   ],
   "types": [
+    {
+      "name": "AdminTransferred",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_admin",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
     {
       "name": "BudgetSet",
       "type": {
@@ -1098,6 +1720,14 @@
           },
           {
             "name": "updated_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "pending_admin",
             "type": "pubkey"
           }
         ]
@@ -1452,6 +2082,26 @@
       }
     },
     {
+      "name": "PaymentMintUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "updated_by",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
       "name": "PlatformConfig",
       "docs": [
         "Platform configuration — owned by admin, stores fee settings."
@@ -1500,6 +2150,20 @@
               "Bump for the config PDA."
             ],
             "type": "u8"
+          },
+          {
+            "name": "paused",
+            "docs": [
+              "Whether job creation is paused."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "pending_admin",
+            "docs": [
+              "Proposed new admin (two-step transfer). Pubkey::default() = no pending transfer."
+            ],
+            "type": "pubkey"
           }
         ]
       }
