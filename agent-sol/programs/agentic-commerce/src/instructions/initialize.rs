@@ -38,6 +38,8 @@ pub fn handler(ctx: Context<Initialize>, fee_bps: u16) -> Result<()> {
     config.payment_mint = ctx.accounts.payment_mint.key();
     config.job_counter = 0;
     config.bump = ctx.bumps.config;
+    config.paused = false;
+    config.pending_admin = Pubkey::default();
 
     msg!("Platform initialized. Fee: {} bps, Treasury: {}", fee_bps, config.treasury);
     Ok(())

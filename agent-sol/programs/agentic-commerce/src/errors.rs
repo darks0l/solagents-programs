@@ -55,4 +55,13 @@ pub enum CommerceError {
 
     #[msg("Invalid hook program")]
     InvalidHook,
+
+    #[msg("Platform is currently paused")]
+    PlatformPaused,
+
+    #[msg("No pending admin transfer")]
+    NoPendingAdmin,
+
+    #[msg("Only the pending admin can accept the transfer")]
+    NotPendingAdmin,
 }

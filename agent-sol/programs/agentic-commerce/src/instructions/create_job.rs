@@ -61,6 +61,7 @@ pub fn handler(
     description: String,
     hook: Pubkey,
 ) -> Result<()> {
+    require!(!ctx.accounts.config.paused, CommerceError::PlatformPaused);
     require!(evaluator != Pubkey::default(), CommerceError::ZeroEvaluator);
     require!(description.len() <= Job::MAX_DESC_LEN, CommerceError::InvalidState);
 

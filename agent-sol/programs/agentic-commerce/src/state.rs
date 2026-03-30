@@ -51,6 +51,10 @@ pub struct PlatformConfig {
     pub job_counter: u64,
     /// Bump for the config PDA.
     pub bump: u8,
+    /// Whether job creation is paused.
+    pub paused: bool,
+    /// Proposed new admin (two-step transfer). Pubkey::default() = no pending transfer.
+    pub pending_admin: Pubkey,
 }
 
 impl PlatformConfig {
@@ -60,7 +64,9 @@ impl PlatformConfig {
         + 32  // treasury
         + 32  // payment_mint
         + 8   // job_counter
-        + 1;  // bump
+        + 1   // bump
+        + 1   // paused
+        + 32; // pending_admin
 }
 
 /// A single job — the core data structure.

@@ -8,6 +8,7 @@ pub mod complete;
 pub mod reject;
 pub mod claim_refund;
 pub mod update_config;
+pub mod accept_admin;
 pub mod close_job;
 pub mod set_payment_mint;
 
@@ -21,5 +22,6 @@ pub use complete::*;
 pub use reject::*;
 pub use claim_refund::*;
 pub use update_config::*;
+pub use accept_admin::*;
 pub use close_job::*;
 pub use set_payment_mint::*;

@@ -126,9 +126,22 @@ pub mod agentic_commerce {
     }
 
     /// Update platform configuration. Admin only.
-    /// Can update fee_bps and treasury. Fee cap enforced (max 1000 bps).
-    pub fn update_config(ctx: Context<UpdateConfig>, new_fee_bps: u16) -> Result<()> {
-        instructions::update_config::handler(ctx, new_fee_bps)
+    /// Can update fee_bps, treasury, paused state, and propose a new admin.
+    /// Fee cap enforced (max 1000 bps).
+    pub fn update_config(
+        ctx: Context<UpdateConfig>,
+        new_fee_bps: u16,
+        new_treasury: Option<Pubkey>,
+        paused: Option<bool>,
+        propose_admin: Option<Pubkey>,
+    ) -> Result<()> {
+        instructions::update_config::handler(ctx, new_fee_bps, new_treasury, paused, propose_admin)
+    }
+
+    /// Accept a pending admin transfer. Called by the proposed new admin.
+    /// Completes the two-step admin handoff initiated via update_config.
+    pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+        instructions::accept_admin::handler(ctx)
     }
 
     /// Update the accepted payment mint. Admin only.
