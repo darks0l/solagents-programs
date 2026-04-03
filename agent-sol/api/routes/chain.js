@@ -39,6 +39,46 @@ import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID, getAccount, NATIVE_MINT } 
 
 export default async function chainRoutes(fastify) {
 
+  // ── Shared: deposit dividend revenue for a trade ──
+  // Calculates 0.5% of trade SOL as creator_fee and routes by mode.
+  // Non-critical — silently fails so trade sync isn't blocked.
+  function _depositDividendRevenue(tokenId, solAmount, txSignature, source = 'creator_fee') {
+    try {
+      const div = stmts.getTokenDividendByMint ? null : stmts.getTokenDividend?.get(tokenId);
+      const divRecord = div || stmts.getTokenDividend?.get(tokenId);
+      if (!divRecord || !divRecord.enabled) return;
+      // Regular mode = creator keeps fees, no dividend deposit
+      if (divRecord.mode === 'regular') return;
+
+      const tradeSol = BigInt(solAmount);
+      const creatorFee = tradeSol / 200n; // 0.5%
+      if (creatorFee <= 0n) return;
+
+      const depId = randomUUID();
+      stmts.insertRevenueDeposit?.run(
+        depId, tokenId, source, creatorFee.toString(),
+        divRecord.mode, null, txSignature
+      );
+      // Update aggregate revenue total
+      const newTotal = (BigInt(divRecord.total_revenue_deposited || '0') + creatorFee).toString();
+      let newStakingRev = divRecord.total_staking_revenue || '0';
+      let newBuybackBal = divRecord.buyback_balance || '0';
+
+      if (divRecord.mode === 'buyback_burn') {
+        newBuybackBal = (BigInt(newBuybackBal) + creatorFee).toString();
+      } else if (divRecord.mode === 'dividend') {
+        newStakingRev = (BigInt(newStakingRev) + creatorFee).toString();
+      }
+
+      stmts.updateDividendStats?.run(
+        divRecord.total_staked, newTotal, newStakingRev,
+        divRecord.total_rewards_distributed, newBuybackBal,
+        divRecord.total_burned, divRecord.total_buyback_sol_spent,
+        divRecord.burn_count, tokenId
+      );
+    } catch { /* non-critical */ }
+  }
+
   // Debug: show connection info
   fastify.get('/api/chain/debug', async (request, reply) => {
     const conn = getConnection();
@@ -916,34 +956,7 @@ export default async function chainRoutes(fastify) {
 
       // ── Dividend revenue deposit (0.5% of trade SOL as creator_fee) ──
       if (tokenId && solAmount !== '0') {
-        try {
-          const div = stmts.getTokenDividend?.get(tokenId);
-          if (div && div.enabled) {
-            const tradeSol = BigInt(solAmount);
-            const creatorFee = tradeSol / 200n; // 0.5%
-            if (creatorFee > 0n) {
-              const stakingPortion = (creatorFee * BigInt(div.staking_share_bps)) / 10000n;
-              const buybackPortion = creatorFee - stakingPortion;
-              const depId = randomUUID();
-              stmts.insertRevenueDeposit?.run(
-                depId, tokenId, 'creator_fee', creatorFee.toString(),
-                stakingPortion.toString(), buybackPortion.toString(),
-                txSignature, null
-              );
-              // Update aggregate stats
-              const newTotal = (BigInt(div.total_revenue_deposited || '0') + creatorFee).toString();
-              const newStaking = (BigInt(div.total_staking_revenue || '0') + stakingPortion).toString();
-              const newBuyback = (BigInt(div.total_buyback_revenue || '0') + buybackPortion).toString();
-              const newBuybackBal = (BigInt(div.buyback_balance || '0') + buybackPortion).toString();
-              stmts.updateDividendStats?.run(
-                div.total_staked, newTotal, newStaking,
-                div.total_rewards_distributed, newBuyback, newBuybackBal,
-                div.total_burned, div.total_buyback_sol_spent, div.burn_count,
-                tokenId
-              );
-            }
-          }
-        } catch { /* non-critical — trade already confirmed */ }
+        _depositDividendRevenue(tokenId, solAmount, txSignature, 'creator_fee');
       }
 
       // Emit WebSocket event — broadcast to both tokenId and mintAddress
@@ -1496,6 +1509,11 @@ export default async function chainRoutes(fastify) {
       if (priceLamports > 0 && stmts.insertTokenPrice) {
         const priceSol = priceLamports / LAMPORTS_PER_SOL;
         stmts.insertTokenPrice.run(tokenId, priceSol.toFixed(12), null, '0', '0', null);
+      }
+
+      // ── Dividend revenue deposit (0.5% of post-grad trade SOL) ──
+      if (tokenId && solAmount !== '0') {
+        _depositDividendRevenue(tokenId, solAmount, txSignature, 'creator_fee');
       }
 
       // Emit WebSocket event
