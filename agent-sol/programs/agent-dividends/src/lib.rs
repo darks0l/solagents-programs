@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use solana_security_txt::security_txt;
 
 pub mod constants;
 pub mod errors;
@@ -9,6 +10,17 @@ use instructions::*;
 use state::DividendMode;
 
 declare_id!("11111111111111111111111111111111");
+
+#[cfg(not(feature = "no-entrypoint"))]
+security_txt! {
+    name: "SolAgents Agent Dividends",
+    project_url: "https://solagents.dev",
+    contacts: "email:darksol@agentmail.to,link:https://solagents.dev",
+    policy: "https://github.com/darks0l/solagents-programs/blob/main/SECURITY.md",
+    preferred_languages: "en",
+    source_code: "https://github.com/darks0l/solagents-programs",
+    auditors: "None"
+}
 
 #[program]
 pub mod agent_dividends {
