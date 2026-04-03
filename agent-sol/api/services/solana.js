@@ -264,6 +264,9 @@ function decodeCurvePoolRaw(data) {
   const name = readString();
   const symbol = readString();
   const uri = readString();
+  // New referral fields (added after uri, before bump)
+  const referralsEnabled = readU8() !== 0;
+  const referralFeesPaid = readU64();
   const bump = readU8();
   const vaultBump = readU8();
 
@@ -272,6 +275,8 @@ function decodeCurvePoolRaw(data) {
 
   return {
     mint, creator, status, name, symbol, uri, bump, vaultBump,
+    referralsEnabled,
+    referralFeesPaid: bn(referralFeesPaid),
     virtualSolReserve: bn(virtualSolReserve),
     virtualTokenReserve: bn(virtualTokenReserve),
     realSolBalance: bn(realSolBalance),
@@ -360,6 +365,7 @@ export async function buildBuyTransaction({
   solAmountLamports,
   minTokensOut,
   createATA = false,
+  referrer = null,
 }) {
   const program = getBondingCurveProgram();
   const conn = getConnection();
@@ -373,18 +379,21 @@ export async function buildBuyTransaction({
 
   const [configPDA] = getCurveConfigPDA();
 
+  const accounts = {
+    buyer,
+    config: configPDA,
+    pool,
+    solVault,
+    tokenVault,
+    buyerTokenAccount: buyerATA,
+    referrer: referrer ? new PublicKey(referrer) : null,
+    tokenProgram: TOKEN_PROGRAM_ID,
+    systemProgram: SystemProgram.programId,
+  };
+
   const ix = await program.methods
     .buy(new BN(solAmountLamports.toString()), new BN(minTokensOut.toString()))
-    .accounts({
-      buyer,
-      config: configPDA,
-      pool,
-      solVault,
-      tokenVault,
-      buyerTokenAccount: buyerATA,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-    })
+    .accounts(accounts)
     .instruction();
 
   const { blockhash } = await conn.getLatestBlockhash();
@@ -409,6 +418,7 @@ export async function buildSellTransaction({
   mintAddress,
   tokenAmount,
   minSolOut,
+  referrer = null,
 }) {
   const program = getBondingCurveProgram();
   const conn = getConnection();
@@ -431,6 +441,7 @@ export async function buildSellTransaction({
       solVault,
       tokenVault,
       sellerTokenAccount: sellerATA,
+      referrer: referrer ? new PublicKey(referrer) : null,
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
@@ -564,6 +575,37 @@ export async function buildClaimCreatorFeesTransaction({
       pool,
       solVault,
       systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  const { blockhash } = await conn.getLatestBlockhash();
+  const tx = new Transaction({ recentBlockhash: blockhash, feePayer: creator });
+  tx.add(ix);
+
+  return Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
+}
+
+/**
+ * Build a "toggle_referrals" transaction for the creator to sign.
+ * Enables or disables referral rewards for a specific token pool.
+ */
+export async function buildToggleReferralsTransaction({
+  creatorPublicKey,
+  mintAddress,
+  enabled,
+}) {
+  const program = getBondingCurveProgram();
+  const conn = getConnection();
+  const creator = new PublicKey(creatorPublicKey);
+  const mint = new PublicKey(mintAddress);
+
+  const [pool] = getCurvePoolPDA(mint);
+
+  const ix = await program.methods
+    .toggleReferrals(enabled)
+    .accounts({
+      creator,
+      pool,
     })
     .instruction();
 

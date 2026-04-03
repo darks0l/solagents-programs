@@ -14,6 +14,7 @@ import {
   buildSellTransaction,
   buildCreateTokenTransaction,
   buildClaimCreatorFeesTransaction,
+  buildToggleReferralsTransaction,
   buildGraduateTransaction,
   getDeployer,
   getCurveConfigPDA,
@@ -74,6 +75,7 @@ export default async function chainRoutes(fastify) {
         tokensCreated: config.tokensCreated ?? 0,
         tokensGraduated: config.tokensGraduated ?? 0,
         raydiumPermissionEnabled: config.raydiumPermissionEnabled ?? false,
+        referralFeeBps: config.referralFeeBps ?? 0,
       };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
@@ -167,6 +169,8 @@ export default async function chainRoutes(fastify) {
         })(),
         graduation_threshold: Number(config?.graduationThreshold || 85_000_000_000n) / LAMPORTS_PER_SOL,
         raydium_pool_address: dbPool?.raydium_pool_address || null,
+        referrals_enabled: pool.referralsEnabled ?? true,
+        referral_fees_paid: ((pool.referralFeesPaid?.toNumber() || 0) / LAMPORTS_PER_SOL).toFixed(9),
       };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
@@ -348,7 +352,7 @@ export default async function chainRoutes(fastify) {
 
   // Build buy transaction
   fastify.post('/api/chain/build/buy', async (request, reply) => {
-    const { mintAddress, buyerWallet, solAmount, slippageBps = 100 } = request.body || {};
+    const { mintAddress, buyerWallet, solAmount, slippageBps = 100, referrer } = request.body || {};
 
     if (!mintAddress) return reply.code(400).send({ error: 'mintAddress required' });
     if (!buyerWallet) return reply.code(400).send({ error: 'buyerWallet required' });
@@ -438,6 +442,7 @@ export default async function chainRoutes(fastify) {
           solAmountLamports,
           minTokensOut,
           createATA: needsATA,
+          referrer: referrer || null,
         });
       } catch (buildErr) {
         const msg = buildErr.message || '';
@@ -477,7 +482,7 @@ export default async function chainRoutes(fastify) {
 
   // Build sell transaction
   fastify.post('/api/chain/build/sell', async (request, reply) => {
-    const { mintAddress, sellerWallet, tokenAmount, slippageBps = 100 } = request.body || {};
+    const { mintAddress, sellerWallet, tokenAmount, slippageBps = 100, referrer } = request.body || {};
 
     if (!mintAddress) return reply.code(400).send({ error: 'mintAddress required' });
     if (!sellerWallet) return reply.code(400).send({ error: 'sellerWallet required' });
@@ -548,6 +553,7 @@ export default async function chainRoutes(fastify) {
           mintAddress,
           tokenAmount: tokenAmount.toString(),
           minSolOut,
+          referrer: referrer || null,
         });
       } catch (buildErr) {
         const msg = buildErr.message || '';
@@ -633,6 +639,27 @@ export default async function chainRoutes(fastify) {
       return { transaction };
     } catch (err) {
       return reply.code(500).send({ error: `Failed to build claim-fees tx: ${err.message}` });
+    }
+  });
+
+  // Build toggle referrals transaction
+  fastify.post('/api/chain/build/toggle-referrals', async (request, reply) => {
+    const { creatorWallet, mintAddress, enabled } = request.body || {};
+
+    if (!creatorWallet) return reply.code(400).send({ error: 'creatorWallet required' });
+    if (!mintAddress) return reply.code(400).send({ error: 'mintAddress required' });
+    if (typeof enabled !== 'boolean') return reply.code(400).send({ error: 'enabled required (boolean)' });
+
+    try {
+      const transaction = await buildToggleReferralsTransaction({
+        creatorPublicKey: creatorWallet,
+        mintAddress,
+        enabled,
+      });
+
+      return { transaction, enabled };
+    } catch (err) {
+      return reply.code(500).send({ error: `Failed to build toggle-referrals tx: ${err.message}` });
     }
   });
 
@@ -858,10 +885,33 @@ export default async function chainRoutes(fastify) {
         const isBuy = tx?.meta?.logMessages?.some(l => l.includes('buy') || l.includes('Buy')) ?? true;
         const tradeId = randomUUID();
 
+        // Extract referrer from request body (passed through by caller)
+        const referrerWallet = request.body?.referrer || null;
+        // Estimate referral fee from the trade — check if referrer was actually paid
+        // by looking at balance changes for the referrer account
+        let referralFeeLamports = '0';
+        if (referrerWallet && tx?.meta) {
+          const accountKeys = tx.transaction?.message?.staticAccountKeys
+            || tx.transaction?.message?.accountKeys || [];
+          const refIdx = accountKeys.findIndex(k => k.toBase58() === referrerWallet);
+          if (refIdx >= 0) {
+            const pre = tx.meta.preBalances?.[refIdx] || 0;
+            const post = tx.meta.postBalances?.[refIdx] || 0;
+            const diff = post - pre;
+            if (diff > 0) referralFeeLamports = diff.toString();
+          }
+        }
+
         stmts.insertTokenTrade.run(
           tradeId, tokenId, traderWallet || '', isBuy ? 'buy' : 'sell',
-          tokenAmount, solAmount, priceLamports.toString(), txSignature
+          tokenAmount, solAmount, priceLamports.toString(), txSignature,
+          referrerWallet, referralFeeLamports
         );
+
+        // Update referral stats atomically
+        if (referrerWallet && referralFeeLamports !== '0') {
+          stmts.insertReferral?.run(referrerWallet, referralFeeLamports);
+        }
       }
 
       // Emit WebSocket event — broadcast to both tokenId and mintAddress
@@ -1400,12 +1450,13 @@ export default async function chainRoutes(fastify) {
         tokenAmount     = (postAmt > preAmt ? postAmt - preAmt : preAmt - postAmt).toString();
       }
 
-      // Record trade in DB
+      // Record trade in DB (post-grad trades don't have on-chain referrals)
       if (stmts.insertTokenTrade) {
         const tradeId = randomUUID();
         stmts.insertTokenTrade.run(
           tradeId, tokenId, traderWallet || '', tradeSide,
-          tokenAmount, solAmount, priceLamports.toString(), txSignature
+          tokenAmount, solAmount, priceLamports.toString(), txSignature,
+          null, '0'
         );
       }
 
@@ -1441,6 +1492,58 @@ export default async function chainRoutes(fastify) {
         txSignature,
         note: 'Trade confirmed on-chain but DB sync failed.',
       });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // REFERRAL STATS
+  // ═══════════════════════════════════════════════════════════
+
+  // Get top referrers leaderboard (must be before :wallet to avoid param conflict)
+  fastify.get('/api/referrals/leaderboard', async (request, reply) => {
+    try {
+      const rows = stmts.getTopReferrers?.all(10) || [];
+      return {
+        leaderboard: rows.map((r, i) => ({
+          rank: i + 1,
+          wallet: r.wallet,
+          total_earned_lamports: r.total_earned_lamports,
+          total_earned_sol: (Number(r.total_earned_lamports) / LAMPORTS_PER_SOL).toFixed(9),
+          total_referrals: r.total_referrals,
+          last_referral_at: r.last_referral_at,
+        })),
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  // Get referral stats for a wallet
+  fastify.get('/api/referrals/:wallet', async (request, reply) => {
+    try {
+      const { wallet } = request.params;
+      if (!wallet) return reply.code(400).send({ error: 'wallet required' });
+
+      const stats = stmts.getReferralStats?.get(wallet);
+      if (!stats) {
+        return {
+          wallet,
+          total_earned_lamports: '0',
+          total_earned_sol: '0',
+          total_referrals: 0,
+          last_referral_at: null,
+        };
+      }
+
+      return {
+        wallet: stats.wallet,
+        total_earned_lamports: stats.total_earned_lamports,
+        total_earned_sol: (Number(stats.total_earned_lamports) / LAMPORTS_PER_SOL).toFixed(9),
+        total_referrals: stats.total_referrals,
+        last_referral_at: stats.last_referral_at,
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
     }
   });
 

@@ -557,6 +557,21 @@ try {
   console.error('[migration] v5 failed:', e.message);
 }
 
+// v6: Referral tracking
+try { db.exec('ALTER TABLE token_trades ADD COLUMN referrer_wallet TEXT'); } catch (_) { /* already exists */ }
+try { db.exec("ALTER TABLE token_trades ADD COLUMN referral_fee_lamports TEXT DEFAULT '0'"); } catch (_) { /* already exists */ }
+try { db.exec("ALTER TABLE token_pools ADD COLUMN referral_fees_paid TEXT NOT NULL DEFAULT '0'"); } catch (_) { /* already exists */ }
+try { db.exec('ALTER TABLE token_pools ADD COLUMN referrals_enabled INTEGER NOT NULL DEFAULT 1'); } catch (_) { /* already exists */ }
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS referral_stats (
+    wallet TEXT PRIMARY KEY,
+    total_earned_lamports TEXT DEFAULT '0',
+    total_referrals INTEGER DEFAULT 0,
+    last_referral_at INTEGER
+  );
+`);
+
 // === Prepared Statements ===
 
 export const stmts = {
@@ -789,8 +804,8 @@ export const stmts = {
 
   // Token Trades
   insertTokenTrade: db.prepare(`
-    INSERT INTO token_trades (id, token_id, trader_wallet, side, amount_token, amount_sol, price_per_token, tx_signature)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO token_trades (id, token_id, trader_wallet, side, amount_token, amount_sol, price_per_token, tx_signature, referrer_wallet, referral_fee_lamports)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
   getTokenTrades: db.prepare('SELECT * FROM token_trades WHERE token_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?'),
   deleteTokenTrades: db.prepare('DELETE FROM token_trades WHERE token_id = ?'),
@@ -977,6 +992,18 @@ export const stmts = {
   `),
   updateApplicationStatus: db.prepare('UPDATE job_applications SET status = ? WHERE id = ?'),
   rejectOtherApplications: db.prepare("UPDATE job_applications SET status = 'rejected' WHERE job_id = ? AND id != ? AND status = 'pending'"),
+
+  // Referral Stats
+  insertReferral: db.prepare(`
+    INSERT INTO referral_stats (wallet, total_earned_lamports, total_referrals, last_referral_at)
+    VALUES (?, ?, 1, unixepoch())
+    ON CONFLICT(wallet) DO UPDATE SET
+      total_earned_lamports = CAST((CAST(referral_stats.total_earned_lamports AS INTEGER) + CAST(excluded.total_earned_lamports AS INTEGER)) AS TEXT),
+      total_referrals = referral_stats.total_referrals + 1,
+      last_referral_at = unixepoch()
+  `),
+  getReferralStats: db.prepare('SELECT * FROM referral_stats WHERE wallet = ?'),
+  getTopReferrers: db.prepare('SELECT * FROM referral_stats ORDER BY CAST(total_earned_lamports AS INTEGER) DESC LIMIT ?'),
 
   // Platform stats (global — only on-chain confirmed for volume)
   platformStats: db.prepare(`

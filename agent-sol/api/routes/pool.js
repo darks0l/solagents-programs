@@ -162,7 +162,8 @@ export default async function poolRoutes(fastify) {
       stmts.insertTokenTrade.run(
         tradeId, token.id, buyerWallet, 'buy',
         result.tokensOut, result.solIn,
-        result.pricePerToken, txSignature || null
+        result.pricePerToken, txSignature || null,
+        null, '0'
       );
 
       // Record price snapshot
@@ -276,7 +277,8 @@ export default async function poolRoutes(fastify) {
       stmts.insertTokenTrade.run(
         tradeId, token.id, sellerWallet, 'sell',
         result.tokensIn, result.solOut,
-        result.pricePerToken, txSignature || null
+        result.pricePerToken, txSignature || null,
+        null, '0'
       );
 
       // Record price snapshot

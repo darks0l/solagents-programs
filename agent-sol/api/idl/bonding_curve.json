@@ -203,6 +203,14 @@
           "writable": true
         },
         {
+          "name": "referrer",
+          "docs": [
+            "Optional referrer who earns a share of the platform fee."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
@@ -813,6 +821,63 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "toggle_referrals",
+      "docs": [
+        "Toggle referrals on/off for a specific token.",
+        "Only the token creator can call this."
+      ],
+      "discriminator": [
+        222,
+        35,
+        227,
+        163,
+        120,
+        36,
+        195,
+        17
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "signer": true
+        },
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  114,
+                  118,
+                  101,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.mint",
+                "account": "CurvePool"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "enabled",
+          "type": "bool"
+        }
+      ]
     },
     {
       "name": "create_token",
@@ -1824,6 +1889,14 @@
           "writable": true
         },
         {
+          "name": "referrer",
+          "docs": [
+            "Optional referrer who earns a share of the platform fee."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
@@ -1943,6 +2016,12 @@
           "name": "trading_paused",
           "type": {
             "option": "bool"
+          }
+        },
+        {
+          "name": "referral_fee_bps",
+          "type": {
+            "option": "u16"
           }
         }
       ]
@@ -2106,6 +2185,19 @@
         179,
         80
       ]
+    },
+    {
+      "name": "ReferralsToggled",
+      "discriminator": [
+        162,
+        173,
+        13,
+        236,
+        43,
+        119,
+        212,
+        244
+      ]
     }
   ],
   "errors": [
@@ -2253,6 +2345,21 @@
       "code": 6028,
       "name": "DevBuyExceedsMax",
       "msg": "Dev buy exceeds maximum allowed (50% of graduation threshold)"
+    },
+    {
+      "code": 6029,
+      "name": "SelfReferral",
+      "msg": "Self-referral not allowed - referrer cannot be the trader"
+    },
+    {
+      "code": 6030,
+      "name": "ReferralsDisabled",
+      "msg": "Referrals are not enabled for this token"
+    },
+    {
+      "code": 6031,
+      "name": "ReferralFeeExceedsPlatform",
+      "msg": "Referral fee exceeds platform fee - must be <= platform_fee_bps"
     }
   ],
   "types": [
@@ -2542,6 +2649,13 @@
               "Proposed new admin (two-step transfer). Pubkey::default() = no pending transfer."
             ],
             "type": "pubkey"
+          },
+          {
+            "name": "referral_fee_bps",
+            "docs": [
+              "Referral fee in basis points, carved from platform fee (e.g. 50 = 0.5%)"
+            ],
+            "type": "u16"
           }
         ]
       }
@@ -2736,6 +2850,20 @@
               "Metadata URI"
             ],
             "type": "string"
+          },
+          {
+            "name": "referrals_enabled",
+            "docs": [
+              "Whether referrals are enabled for this token (creator opt-in)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "referral_fees_paid",
+            "docs": [
+              "Total referral fees paid out (lamports)"
+            ],
+            "type": "u64"
           },
           {
             "name": "bump",
@@ -3030,7 +3158,43 @@
             "type": "u64"
           },
           {
+            "name": "referral_fee",
+            "type": "u64"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
             "name": "graduation_pending",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReferralsToggled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "new_enabled",
             "type": "bool"
           }
         ]

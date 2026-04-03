@@ -468,7 +468,7 @@ export default async function tokenRoutes(fastify) {
     }
 
     const tradeId = randomUUID();
-    stmts.insertTokenTrade.run(tradeId, token.id, traderWallet, side, amountToken, amountSol, pricePerToken, txSignature || null);
+    stmts.insertTokenTrade.run(tradeId, token.id, traderWallet, side, amountToken, amountSol, pricePerToken, txSignature || null, null, '0');
 
     // Calculate and accrue fees (2% of SOL amount)
     const solAmount = parseFloat(amountSol);
