@@ -127,6 +127,7 @@ pub mod bonding_curve {
         paused: Option<bool>,
         raydium_permission_enabled: Option<bool>,
         trading_paused: Option<bool>,
+        referral_fee_bps: Option<u16>,
     ) -> Result<()> {
         instructions::update_config::handler(
             ctx,
@@ -138,7 +139,17 @@ pub mod bonding_curve {
             paused,
             raydium_permission_enabled,
             trading_paused,
+            referral_fee_bps,
         )
+    }
+
+    /// Toggle referrals on/off for a specific token.
+    /// Only the token creator can call this.
+    pub fn toggle_referrals(
+        ctx: Context<ToggleReferrals>,
+        enabled: bool,
+    ) -> Result<()> {
+        instructions::toggle_referrals::handler(ctx, enabled)
     }
 
     /// Accept a pending admin transfer.

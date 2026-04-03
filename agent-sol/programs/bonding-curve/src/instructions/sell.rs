@@ -50,6 +50,11 @@ pub struct Sell<'info> {
     )]
     pub seller_token_account: Account<'info, TokenAccount>,
 
+    /// Optional referrer who earns a share of the platform fee.
+    /// CHECK: Any valid system account can be a referrer. Validated in handler.
+    #[account(mut)]
+    pub referrer: Option<AccountInfo<'info>>,
+
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
@@ -63,6 +68,19 @@ pub fn handler(
 
     let config = &ctx.accounts.config;
     require!(!config.trading_paused, CurveError::TradingPaused);
+
+    // ── Validate referrer ───────────────────────────────────
+    let referrer_key = if let Some(ref referrer) = ctx.accounts.referrer {
+        let rk = referrer.key();
+        require!(rk != ctx.accounts.seller.key(), CurveError::SelfReferral);
+        if ctx.accounts.pool.referrals_enabled && config.referral_fee_bps > 0 {
+            Some(rk)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     // ── Calculate SOL out from curve ──────────────────────────────────────
     let sol_out_before_fee = ctx.accounts.pool.calculate_sell(token_amount)
@@ -93,7 +111,22 @@ pub fn handler(
     } else {
         0
     };
-    let platform_fee = fee.checked_sub(creator_fee).ok_or(CurveError::MathOverflow)?;
+    let total_platform_fee = fee.checked_sub(creator_fee).ok_or(CurveError::MathOverflow)?;
+
+    // ── Calculate referral fee (carved from platform fee) ─────────────────
+    let referral_fee = if referrer_key.is_some() {
+        sol_out_before_fee
+            .checked_mul(config.referral_fee_bps as u64)
+            .ok_or(CurveError::MathOverflow)?
+            .checked_div(10_000)
+            .ok_or(CurveError::MathOverflow)?
+            .min(total_platform_fee)
+    } else {
+        0
+    };
+    let platform_fee = total_platform_fee
+        .checked_sub(referral_fee)
+        .ok_or(CurveError::MathOverflow)?;
 
     // ── Capture PDA seeds before any mutable borrows ─────────────────────
     let pool_key = ctx.accounts.pool.key();
@@ -113,8 +146,6 @@ pub fn handler(
     )?;
 
     // ── Transfer SOL from vault to seller via signed CPI ──────────────────
-    // SystemAccount PDAs must use system_program::transfer + invoke_signed;
-    // direct lamport mutation only works for accounts owned by this program.
     let vault_seeds: &[&[u8]] = &[
         CurvePool::VAULT_SEED,
         pool_key.as_ref(),
@@ -132,20 +163,43 @@ pub fn handler(
         sol_after_fee,
     )?;
 
+    // ── Transfer referral fee from vault to referrer ─────────────────────
+    if referral_fee > 0 {
+        if let Some(ref referrer) = ctx.accounts.referrer {
+            system_program::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.system_program.to_account_info(),
+                    system_program::Transfer {
+                        from: ctx.accounts.sol_vault.to_account_info(),
+                        to: referrer.to_account_info(),
+                    },
+                    &[vault_seeds],
+                ),
+                referral_fee,
+            )?;
+        }
+    }
+
     // ── Update pool state ─────────────────────────────────────────────────
     let pool = &mut ctx.accounts.pool;
     pool.virtual_sol_reserve = pool.virtual_sol_reserve
         .checked_sub(sol_out_before_fee).ok_or(CurveError::MathOverflow)?;
     pool.virtual_token_reserve = pool.virtual_token_reserve
         .checked_add(token_amount).ok_or(CurveError::MathOverflow)?;
+    // real_sol_balance decreases by what was paid out (seller + referral fee)
+    let total_sol_out = sol_after_fee
+        .checked_add(referral_fee)
+        .ok_or(CurveError::MathOverflow)?;
     pool.real_sol_balance = pool.real_sol_balance
-        .checked_sub(sol_after_fee).ok_or(CurveError::MathOverflow)?;
+        .checked_sub(total_sol_out).ok_or(CurveError::MathOverflow)?;
     pool.real_token_balance = pool.real_token_balance
         .checked_add(token_amount).ok_or(CurveError::MathOverflow)?;
     pool.creator_fees_earned = pool.creator_fees_earned
         .checked_add(creator_fee).ok_or(CurveError::MathOverflow)?;
     pool.platform_fees_earned = pool.platform_fees_earned
         .checked_add(platform_fee).ok_or(CurveError::MathOverflow)?;
+    pool.referral_fees_paid = pool.referral_fees_paid
+        .checked_add(referral_fee).ok_or(CurveError::MathOverflow)?;
     pool.total_volume_sol = pool.total_volume_sol
         .checked_add(sol_out_before_fee).ok_or(CurveError::MathOverflow)?;
     pool.total_trades = pool.total_trades
@@ -161,6 +215,8 @@ pub fn handler(
         fee,
         creator_fee,
         platform_fee,
+        referral_fee,
+        referrer: referrer_key.unwrap_or_default(),
         virtual_sol_reserve: pool.virtual_sol_reserve,
         virtual_token_reserve: pool.virtual_token_reserve,
         real_sol_balance: pool.real_sol_balance,

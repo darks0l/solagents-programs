@@ -40,6 +40,10 @@ pub struct CurveConfig {
     pub trading_paused: bool,
     /// Proposed new admin (two-step transfer). Pubkey::default() = no pending transfer.
     pub pending_admin: Pubkey,
+    /// Referral fee in basis points, carved from platform fee (e.g. 50 = 0.5%)
+    /// Must be <= platform_fee_bps. When a valid referrer is present, this amount
+    /// is deducted from the platform's share and sent directly to the referrer.
+    pub referral_fee_bps: u16,
 }
 
 impl CurveConfig {
@@ -120,6 +124,10 @@ pub struct CurvePool {
     /// Metadata URI
     #[max_len(200)]
     pub uri: String,
+    /// Whether referrals are enabled for this token (creator opt-in)
+    pub referrals_enabled: bool,
+    /// Total referral fees paid out (lamports)
+    pub referral_fees_paid: u64,
     /// Bump for pool PDA
     pub bump: u8,
     /// Bump for sol vault PDA

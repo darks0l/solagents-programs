@@ -19,6 +19,9 @@ pub const DEFAULT_DECIMALS: u8 = 9;
 /// Default initial virtual SOL reserve: 30 SOL in lamports
 pub const DEFAULT_INITIAL_VIRTUAL_SOL: u64 = 30_000_000_000;
 
+/// Default referral fee: 0.5% (carved from platform fee)
+pub const DEFAULT_REFERRAL_FEE_BPS: u16 = 50;
+
 /// Basis points denominator
 pub const BPS_DENOMINATOR: u64 = 10_000;
 

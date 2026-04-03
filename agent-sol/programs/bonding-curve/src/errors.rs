@@ -88,4 +88,13 @@ pub enum CurveError {
 
     #[msg("Dev buy exceeds maximum allowed (50% of graduation threshold)")]
     DevBuyExceedsMax,
+
+    #[msg("Self-referral not allowed — referrer cannot be the trader")]
+    SelfReferral,
+
+    #[msg("Referrals are not enabled for this token")]
+    ReferralsDisabled,
+
+    #[msg("Referral fee exceeds platform fee — must be <= platform_fee_bps")]
+    ReferralFeeExceedsPlatform,
 }

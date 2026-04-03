@@ -779,6 +779,7 @@ export default async function adminRoutes(fastify) {
           null,   // paused (creation pause)
           null,   // raydium_permission_enabled
           paused, // trading_paused
+          null,   // referral_fee_bps
         )
         .accounts({
           admin: adminPubkey,
@@ -847,6 +848,7 @@ export default async function adminRoutes(fastify) {
           null,             // paused
           null,             // raydium_permission_enabled
           null,             // trading_paused
+          null,             // referral_fee_bps
         )
         .accounts({
           admin: adminPubkey,

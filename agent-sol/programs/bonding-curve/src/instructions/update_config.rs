@@ -32,6 +32,7 @@ pub fn handler(
     paused: Option<bool>,
     raydium_permission_enabled: Option<bool>,
     trading_paused: Option<bool>,
+    referral_fee_bps: Option<u16>,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
 
@@ -44,6 +45,7 @@ pub fn handler(
     let old_raydium_permission = config.raydium_permission_enabled;
     let old_trading_paused = config.trading_paused;
     let old_pending_admin = config.pending_admin;
+    let old_referral_fee = config.referral_fee_bps;
 
     // Apply updates
     if let Some(fee) = new_creator_fee_bps {
@@ -79,6 +81,14 @@ pub fn handler(
     if let Some(tp) = trading_paused {
         config.trading_paused = tp;
     }
+    if let Some(rfee) = referral_fee_bps {
+        // Referral fee must not exceed platform fee
+        require!(
+            rfee <= config.platform_fee_bps,
+            CurveError::ReferralFeeExceedsPlatform
+        );
+        config.referral_fee_bps = rfee;
+    }
 
     emit!(ConfigUpdated {
         admin: config.admin,
@@ -100,6 +110,8 @@ pub fn handler(
         new_raydium_permission: config.raydium_permission_enabled,
         old_trading_paused,
         new_trading_paused: config.trading_paused,
+        old_referral_fee_bps: old_referral_fee,
+        new_referral_fee_bps: config.referral_fee_bps,
     });
 
     Ok(())
@@ -126,4 +138,6 @@ pub struct ConfigUpdated {
     pub new_raydium_permission: bool,
     pub old_trading_paused: bool,
     pub new_trading_paused: bool,
+    pub old_referral_fee_bps: u16,
+    pub new_referral_fee_bps: u16,
 }

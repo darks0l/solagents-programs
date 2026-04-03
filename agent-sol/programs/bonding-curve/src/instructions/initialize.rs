@@ -55,6 +55,7 @@ pub fn handler(
     config.tokens_graduated = 0;
     config.trading_paused = false;
     config.pending_admin = Pubkey::default();
+    config.referral_fee_bps = DEFAULT_REFERRAL_FEE_BPS;
     config.bump = ctx.bumps.config;
 
     emit!(ConfigInitialized {

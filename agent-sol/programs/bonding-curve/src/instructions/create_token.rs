@@ -221,6 +221,8 @@ pub fn handler(
     pool.name = name.clone();
     pool.symbol = symbol.clone();
     pool.uri = uri.clone();
+    pool.referrals_enabled = true; // Enabled by default — creator can toggle off
+    pool.referral_fees_paid = 0;
     pool.bump = ctx.bumps.pool;
     pool.vault_bump = ctx.bumps.sol_vault;
 
