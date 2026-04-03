@@ -142,6 +142,40 @@ export function renderAgents(container, state) {
             <p class="text-sm text-secondary">• <span style="color:#14F195">70% (1.4%)</span> goes to you — the creator</p>
             <p class="text-sm text-secondary">• <span style="color:#9945FF">30% (0.6%)</span> goes to the platform</p>
           </div>
+
+          <div class="form-group mt-2">
+            <label class="form-label" style="margin-bottom:8px">Dividend Mode <span class="text-muted text-xs">(how your 1.4% creator fee is used)</span></label>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+              <label class="card glass p-1" style="cursor:pointer;text-align:center;border:2px solid rgba(20,241,149,0.4);background:rgba(20,241,149,0.08);transition:all 0.2s" id="mode-card-regular">
+                <input type="radio" name="dividend-mode" value="Regular" checked style="display:none">
+                <div style="font-size:1.2rem;margin-bottom:4px">💰</div>
+                <div class="text-sm font-semibold" style="color:#14F195">Regular</div>
+                <div class="text-xs text-muted" style="margin-top:2px">Keep 100% of your creator fee</div>
+              </label>
+              <label class="card glass p-1" style="cursor:pointer;text-align:center;border:2px solid rgba(255,255,255,0.08);transition:all 0.2s" id="mode-card-dividend">
+                <input type="radio" name="dividend-mode" value="Dividend" style="display:none">
+                <div style="font-size:1.2rem;margin-bottom:4px">🏦</div>
+                <div class="text-sm font-semibold">Dividend</div>
+                <div class="text-xs text-muted" style="margin-top:2px">Fees flow to stakers as SOL rewards</div>
+              </label>
+              <label class="card glass p-1" style="cursor:pointer;text-align:center;border:2px solid rgba(255,255,255,0.08);transition:all 0.2s" id="mode-card-buyback">
+                <input type="radio" name="dividend-mode" value="BuybackBurn" style="display:none">
+                <div style="font-size:1.2rem;margin-bottom:4px">🔥</div>
+                <div class="text-sm font-semibold">Buyback & Burn</div>
+                <div class="text-xs text-muted" style="margin-top:2px">Fees buy tokens & burn them permanently</div>
+              </label>
+            </div>
+            <p class="text-muted text-xs mt-05">You can switch modes later (7-day cooldown between switches)</p>
+          </div>
+
+          <div class="form-group mt-1">
+            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="tok-referrals" style="width:16px;height:16px;accent-color:#9945FF">
+              <span>Enable Referral Program</span>
+              <span class="text-muted text-xs">(0.5% from platform fee goes to referrers)</span>
+            </label>
+          </div>
+
           <div class="card glass mt-1 p-2" style="background:rgba(20,241,149,0.05);border-color:rgba(20,241,149,0.15)">
             <p class="text-sm"><strong>What happens:</strong></p>
             <p class="text-sm text-secondary">1. SPL token minted on Solana with your logo + description</p>
@@ -721,6 +755,23 @@ function openTokenizeWizard(agentId, state = {}, agentWallet = null) {
     });
   }
 
+  // Dividend mode card selection styling
+  document.querySelectorAll('input[name="dividend-mode"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      document.getElementById('mode-card-regular').style.borderColor = 'rgba(255,255,255,0.08)';
+      document.getElementById('mode-card-regular').style.background = 'transparent';
+      document.getElementById('mode-card-dividend').style.borderColor = 'rgba(255,255,255,0.08)';
+      document.getElementById('mode-card-dividend').style.background = 'transparent';
+      document.getElementById('mode-card-buyback').style.borderColor = 'rgba(255,255,255,0.08)';
+      document.getElementById('mode-card-buyback').style.background = 'transparent';
+      const selected = radio.value.toLowerCase().replace('burn', '');
+      const cardId = radio.value === 'Regular' ? 'mode-card-regular' : radio.value === 'Dividend' ? 'mode-card-dividend' : 'mode-card-buyback';
+      const color = radio.value === 'Regular' ? '20,241,149' : radio.value === 'Dividend' ? '153,69,255' : '255,165,0';
+      document.getElementById(cardId).style.borderColor = `rgba(${color},0.4)`;
+      document.getElementById(cardId).style.background = `rgba(${color},0.08)`;
+    });
+  });
+
   document.getElementById('btn-launch-token')?.addEventListener('click', async () => {
     const tokenName = document.getElementById('tok-name')?.value.trim();
     const tokenSymbol = document.getElementById('tok-symbol')?.value.trim();
@@ -747,6 +798,8 @@ function openTokenizeWizard(agentId, state = {}, agentWallet = null) {
         socialTelegram: document.getElementById('tok-social-telegram')?.value || null,
         socialDiscord: document.getElementById('tok-social-discord')?.value || null,
         socialWebsite: document.getElementById('tok-social-website')?.value || null,
+        dividendMode: document.querySelector('input[name="dividend-mode"]:checked')?.value || 'Regular',
+        referralsEnabled: document.getElementById('tok-referrals')?.checked || false,
       });
 
       if (result.error) return toast(result.error, 'error');
