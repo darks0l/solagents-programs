@@ -11,6 +11,24 @@ import { connectWallet, getPublicKey, isConnected, signAndSendTransaction } from
 const LAMPORTS_PER_SOL = 1_000_000_000;
 const TOKEN_DECIMALS = 9;
 
+// ── Referral Support ─────────────────────────────────────────
+let _referrerWallet = null;
+
+function _parseReferrer() {
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get('ref');
+  if (ref && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(ref)) {
+    _referrerWallet = ref;
+  } else {
+    _referrerWallet = null;
+  }
+}
+
+function _shortenWallet(addr) {
+  if (!addr || addr.length < 8) return addr || '';
+  return addr.slice(0, 4) + '...' + addr.slice(-4);
+}
+
 // ── Live WebSocket Feed ──────────────────────────────────────
 
 let _ws = null;
@@ -326,7 +344,17 @@ export async function renderTrade(container, state, mintAddress) {
     return;
   }
 
+  // Parse referral from URL query string
+  _parseReferrer();
+
   container.innerHTML = `
+    <!-- Referral Banner -->
+    ${_referrerWallet ? `
+    <div id="referral-banner" style="padding:10px 16px;margin-bottom:1rem;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.25);border-radius:12px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:1.1rem">🎁</span>
+      <span style="color:#d4af37;font-size:0.85rem;font-weight:500">Trading with referral from <span class="font-mono" style="color:#fff">${_shortenWallet(_referrerWallet)}</span></span>
+    </div>` : ''}
+
     <!-- SOL Price Ticker -->
     <div class="card" id="sol-ticker" style="padding:10px 16px;margin-bottom:1rem;display:flex;align-items:center;gap:12px;background:rgba(153,69,255,0.08);border:1px solid rgba(153,69,255,0.15)">
       <img src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png" alt="SOL" style="width:24px;height:24px;border-radius:50%">
@@ -512,6 +540,30 @@ export async function renderTrade(container, state, mintAddress) {
           </div>
         </div>
 
+        <!-- Referral Share Button -->
+        <div id="referral-share-section" style="display:none;margin-top:12px;padding:0 16px 12px">
+          <button class="btn btn-sm w-full" id="btn-share-referral" style="background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.3);color:#d4af37;border-radius:12px;padding:10px 16px;backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:0.85rem;cursor:pointer;transition:all 0.2s">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            Share Referral Link
+          </button>
+          <div id="referral-copied-toast" style="display:none;text-align:center;margin-top:6px;color:#14F195;font-size:0.75rem;font-weight:600">✓ Copied to clipboard!</div>
+        </div>
+
+        <!-- Creator Referral Toggle -->
+        <div id="creator-referral-toggle" style="display:none" class="card glass mt-2">
+          <div class="card-body" style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-weight:600;font-size:0.85rem;color:var(--text-primary)">Referral Program</div>
+              <div class="text-muted text-xs" style="margin-top:2px">Earn 50bps on referred trades</div>
+            </div>
+            <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer">
+              <input type="checkbox" id="toggle-referrals-input" style="opacity:0;width:0;height:0">
+              <span id="toggle-referrals-slider" style="position:absolute;inset:0;background:rgba(255,255,255,0.1);border-radius:24px;transition:all 0.3s;border:1px solid rgba(255,255,255,0.1)"></span>
+              <span id="toggle-referrals-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:all 0.3s"></span>
+            </label>
+          </div>
+        </div>
+
         <!-- Dev Buy Info -->
         <div class="card glass mt-2" id="dev-buy-card" style="display:none">
           <div class="card-header">
@@ -643,6 +695,78 @@ export async function renderTrade(container, state, mintAddress) {
 
   // Wire up sell
   document.getElementById('btn-sell')?.addEventListener('click', () => executeSell(mintAddress));
+
+  // Referral share button — show only if wallet connected
+  _updateReferralShareVisibility(mintAddress);
+
+  document.getElementById('btn-share-referral')?.addEventListener('click', () => {
+    const link = `https://solagents.dev/trade?mint=${mintAddress}&ref=${getPublicKey()}`;
+    navigator.clipboard.writeText(link).then(() => {
+      const toastEl = document.getElementById('referral-copied-toast');
+      if (toastEl) {
+        toastEl.style.display = '';
+        setTimeout(() => { toastEl.style.display = 'none'; }, 2000);
+      }
+    }).catch(() => {
+      toast('Failed to copy link', 'error');
+    });
+  });
+
+  // Creator referral toggle
+  document.getElementById('toggle-referrals-input')?.addEventListener('change', async (e) => {
+    const enabled = e.target.checked;
+    _updateToggleUI(enabled);
+    try {
+      const result = await api.post('/chain/build/toggle-referrals', {
+        creatorWallet: getPublicKey(),
+        mintAddress,
+        enabled,
+      });
+      if (result.error) throw new Error(result.error);
+      if (!result.transaction) throw new Error('No transaction returned');
+      const signature = await signAndSendTransaction(result.transaction);
+      toast(`Referrals ${enabled ? 'enabled' : 'disabled'}! <a href="https://explorer.solana.com/tx/${signature}?cluster=devnet" target="_blank">View ↗</a>`, 'success');
+    } catch (err) {
+      // Revert toggle on failure
+      e.target.checked = !enabled;
+      _updateToggleUI(!enabled);
+      toast(`Toggle failed: ${err.message}`, 'error');
+    }
+  });
+}
+
+function _updateReferralShareVisibility(mintAddress) {
+  const section = document.getElementById('referral-share-section');
+  if (section) {
+    section.style.display = isConnected() ? '' : 'none';
+  }
+}
+
+function _updateToggleUI(enabled) {
+  const slider = document.getElementById('toggle-referrals-slider');
+  const knob = document.getElementById('toggle-referrals-knob');
+  if (slider) {
+    slider.style.background = enabled ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.1)';
+    slider.style.borderColor = enabled ? 'rgba(212,175,55,0.5)' : 'rgba(255,255,255,0.1)';
+  }
+  if (knob) {
+    knob.style.transform = enabled ? 'translateX(20px)' : 'translateX(0)';
+    knob.style.background = enabled ? '#d4af37' : '#fff';
+  }
+}
+
+async function _checkCreatorReferralToggle(poolData, mintAddress) {
+  const toggleSection = document.getElementById('creator-referral-toggle');
+  if (!toggleSection) return;
+  // Only show if connected wallet is the creator
+  if (!isConnected() || !poolData.creator) { toggleSection.style.display = 'none'; return; }
+  if (getPublicKey() !== poolData.creator) { toggleSection.style.display = 'none'; return; }
+
+  toggleSection.style.display = '';
+  const checkbox = document.getElementById('toggle-referrals-input');
+  const enabled = poolData.referralsEnabled === true || poolData.referrals_enabled === true;
+  if (checkbox) checkbox.checked = enabled;
+  _updateToggleUI(enabled);
 }
 
 async function loadTradePageData(mintAddress) {
@@ -797,6 +921,12 @@ async function loadTradePageData(mintAddress) {
         <p class="text-muted text-xs mt-1">All dev buys happen at the same bonding curve price as public buyers.</p>
       `;
     }
+
+    // Creator referral toggle
+    _checkCreatorReferralToggle(poolData, mintAddress);
+
+    // Referral share button visibility (wallet may have connected during load)
+    _updateReferralShareVisibility(mintAddress);
 
     // Raydium UI enhancements for graduated tokens
     if (_isGraduated) {
@@ -1032,12 +1162,14 @@ async function executeBuy(mintAddress) {
   try {
     // Build on-chain transaction from server (Raydium CPMM if graduated)
     const buyEndpoint = _isGraduated ? '/chain/build/post-grad/buy' : '/chain/build/buy';
-    const result = await api.post(buyEndpoint, {
+    const buyBody = {
       mintAddress,
       buyerWallet: getPublicKey(),
       solAmount,
       slippageBps: 100, // 1% slippage
-    });
+    };
+    if (_referrerWallet) buyBody.referrer = _referrerWallet;
+    const result = await api.post(buyEndpoint, buyBody);
 
     if (result.error) throw new Error(result.error);
     if (!result.transaction) throw new Error('No transaction returned from server');
@@ -1112,12 +1244,14 @@ async function executeSell(mintAddress) {
   try {
     const raw = Math.round(tokenAmount * Math.pow(10, TOKEN_DECIMALS)).toString();
     const sellEndpoint = _isGraduated ? '/chain/build/post-grad/sell' : '/chain/build/sell';
-    const result = await api.post(sellEndpoint, {
+    const sellBody = {
       mintAddress,
       sellerWallet: getPublicKey(),
       tokenAmount: raw,
       slippageBps: 100,
-    });
+    };
+    if (_referrerWallet) sellBody.referrer = _referrerWallet;
+    const result = await api.post(sellEndpoint, sellBody);
 
     if (result.error) throw new Error(result.error);
     if (!result.transaction) throw new Error('No transaction returned from server');
