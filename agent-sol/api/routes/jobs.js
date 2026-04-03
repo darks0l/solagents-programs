@@ -1,4 +1,4 @@
-import { v4 as uuid } from 'uuid';
+import { v4 as uuid, v4 as randomUUID } from 'uuid';
 import { stmts } from '../services/db.js';
 import * as commerce from '../services/commerce.js';
 import { getConnection } from '../services/solana.js';
@@ -499,6 +499,45 @@ export default async function jobRoutes(fastify) {
           }
         } catch { /* non-critical */ }
       }
+
+      // ── Dividend revenue deposit (50% of job budget to provider's token) ──
+      try {
+        if (job.provider && job.budget) {
+          // Find the provider's agent token
+          const providerAgent = stmts.getAgentByWallet?.get(job.provider);
+          if (providerAgent) {
+            const providerToken = stmts.getAgentTokenByAgent?.get(providerAgent.id);
+            const tokenId = providerToken?.id;
+            if (tokenId) {
+              const div = stmts.getTokenDividend?.get(tokenId);
+              if (div && div.enabled) {
+                const budgetLamports = BigInt(Math.floor(job.budget * 1e9)); // budget is in SOL
+                const revenueShare = budgetLamports / 2n; // 50%
+                if (revenueShare > 0n) {
+                  const stakingPortion = (revenueShare * BigInt(div.staking_share_bps)) / 10000n;
+                  const buybackPortion = revenueShare - stakingPortion;
+                  const depId = randomUUID();
+                  stmts.insertRevenueDeposit?.run(
+                    depId, tokenId, 'job_completion', revenueShare.toString(),
+                    stakingPortion.toString(), buybackPortion.toString(),
+                    jobId, txSignature || null
+                  );
+                  const newTotal = (BigInt(div.total_revenue_deposited || '0') + revenueShare).toString();
+                  const newStaking = (BigInt(div.total_staking_revenue || '0') + stakingPortion).toString();
+                  const newBuyback = (BigInt(div.total_buyback_revenue || '0') + buybackPortion).toString();
+                  const newBuybackBal = (BigInt(div.buyback_balance || '0') + buybackPortion).toString();
+                  stmts.updateDividendStats?.run(
+                    div.total_staked, newTotal, newStaking,
+                    div.total_rewards_distributed, newBuyback, newBuybackBal,
+                    div.total_burned, div.total_buyback_sol_spent, div.burn_count,
+                    tokenId
+                  );
+                }
+              }
+            }
+          }
+        }
+      } catch { /* non-critical — job completion already confirmed */ }
     }
 
     return {

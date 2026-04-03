@@ -572,7 +572,111 @@ db.exec(`
   );
 `);
 
+// v7: Dividend/staking/buyback tables (3-mode: regular / dividend / buyback_burn)
+db.exec(`
+  -- Dividend configuration per token (3 modes: regular, dividend, buyback_burn)
+  CREATE TABLE IF NOT EXISTS token_dividends (
+    token_id TEXT PRIMARY KEY REFERENCES agent_tokens(id),
+    mint_address TEXT NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'regular' CHECK(mode IN ('regular', 'dividend', 'buyback_burn')),
+    total_staked TEXT NOT NULL DEFAULT '0',
+    total_revenue_deposited TEXT NOT NULL DEFAULT '0',
+    total_staking_revenue TEXT NOT NULL DEFAULT '0',
+    total_rewards_distributed TEXT NOT NULL DEFAULT '0',
+    buyback_balance TEXT NOT NULL DEFAULT '0',
+    total_burned TEXT NOT NULL DEFAULT '0',
+    total_buyback_sol_spent TEXT NOT NULL DEFAULT '0',
+    burn_count INTEGER NOT NULL DEFAULT 0,
+    last_mode_change INTEGER,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
+  -- Individual stake positions
+  CREATE TABLE IF NOT EXISTS stake_positions (
+    id TEXT PRIMARY KEY,
+    token_id TEXT NOT NULL REFERENCES agent_tokens(id),
+    wallet TEXT NOT NULL,
+    amount TEXT NOT NULL DEFAULT '0',
+    reward_debt TEXT NOT NULL DEFAULT '0',
+    total_claimed TEXT NOT NULL DEFAULT '0',
+    staked_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    UNIQUE(token_id, wallet)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_stake_positions_token ON stake_positions(token_id);
+  CREATE INDEX IF NOT EXISTS idx_stake_positions_wallet ON stake_positions(wallet);
+
+  -- Revenue deposits (job completions + fee splits)
+  CREATE TABLE IF NOT EXISTS revenue_deposits (
+    id TEXT PRIMARY KEY,
+    token_id TEXT NOT NULL REFERENCES agent_tokens(id),
+    source TEXT NOT NULL CHECK(source IN ('job_completion', 'creator_fee', 'manual')),
+    amount_lamports TEXT NOT NULL,
+    destination TEXT NOT NULL DEFAULT 'dividend' CHECK(destination IN ('dividend', 'buyback_burn')),
+    reference_id TEXT,
+    tx_signature TEXT,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_revenue_deposits_token ON revenue_deposits(token_id, created_at DESC);
+
+  -- Buyback executions
+  CREATE TABLE IF NOT EXISTS buyback_events (
+    id TEXT PRIMARY KEY,
+    token_id TEXT NOT NULL REFERENCES agent_tokens(id),
+    sol_spent TEXT NOT NULL,
+    tokens_burned TEXT NOT NULL,
+    burn_tx TEXT,
+    price_per_token TEXT,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_buyback_events_token ON buyback_events(token_id, created_at DESC);
+
+  -- Reward claims
+  CREATE TABLE IF NOT EXISTS reward_claims (
+    id TEXT PRIMARY KEY,
+    token_id TEXT NOT NULL REFERENCES agent_tokens(id),
+    wallet TEXT NOT NULL,
+    amount_lamports TEXT NOT NULL,
+    tx_signature TEXT,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_reward_claims_token ON reward_claims(token_id);
+  CREATE INDEX IF NOT EXISTS idx_reward_claims_wallet ON reward_claims(wallet);
+`);
+
 // === Prepared Statements ===
+
+// Dividend statements
+const createTokenDividend = db.prepare(`INSERT INTO token_dividends (token_id, mint_address, mode) VALUES (?, ?, ?)`);
+const getTokenDividend = db.prepare(`SELECT * FROM token_dividends WHERE token_id = ?`);
+const getTokenDividendByMint = db.prepare(`SELECT * FROM token_dividends WHERE mint_address = ?`);
+const updateDividendMode = db.prepare(`UPDATE token_dividends SET mode = ?, last_mode_change = unixepoch(), updated_at = unixepoch() WHERE token_id = ?`);
+const updateDividendStats = db.prepare(`UPDATE token_dividends SET total_staked = ?, total_revenue_deposited = ?, total_staking_revenue = ?, total_rewards_distributed = ?, buyback_balance = ?, total_burned = ?, total_buyback_sol_spent = ?, burn_count = ?, updated_at = unixepoch() WHERE token_id = ?`);
+
+// Stake statements
+const upsertStake = db.prepare(`INSERT INTO stake_positions (id, token_id, wallet, amount, reward_debt) VALUES (?, ?, ?, ?, ?) ON CONFLICT(token_id, wallet) DO UPDATE SET amount = ?, reward_debt = ?, updated_at = unixepoch()`);
+const getStakePosition = db.prepare(`SELECT * FROM stake_positions WHERE token_id = ? AND wallet = ?`);
+const getTokenStakers = db.prepare(`SELECT * FROM stake_positions WHERE token_id = ? AND CAST(amount AS INTEGER) > 0 ORDER BY CAST(amount AS INTEGER) DESC`);
+const getWalletStakes = db.prepare(`SELECT sp.*, td.mode, td.mint_address, at.token_name, at.token_symbol FROM stake_positions sp JOIN token_dividends td ON sp.token_id = td.token_id JOIN agent_tokens at ON sp.token_id = at.id WHERE sp.wallet = ? AND CAST(sp.amount AS INTEGER) > 0`);
+
+// Revenue statements
+const insertRevenueDeposit = db.prepare(`INSERT INTO revenue_deposits (id, token_id, source, amount_lamports, destination, reference_id, tx_signature) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+const getRevenueHistory = db.prepare(`SELECT * FROM revenue_deposits WHERE token_id = ? ORDER BY created_at DESC LIMIT ?`);
+const getTotalRevenue = db.prepare(`SELECT COALESCE(SUM(CAST(amount_lamports AS INTEGER)), 0) as total FROM revenue_deposits WHERE token_id = ?`);
+
+// Buyback statements
+const insertBuybackEvent = db.prepare(`INSERT INTO buyback_events (id, token_id, sol_spent, tokens_burned, burn_tx, price_per_token) VALUES (?, ?, ?, ?, ?, ?)`);
+const getBuybackHistory = db.prepare(`SELECT * FROM buyback_events WHERE token_id = ? ORDER BY created_at DESC LIMIT ?`);
+
+// Reward claim statements
+const insertRewardClaim = db.prepare(`INSERT INTO reward_claims (id, token_id, wallet, amount_lamports, tx_signature) VALUES (?, ?, ?, ?, ?)`);
+const getRewardClaimHistory = db.prepare(`SELECT * FROM reward_claims WHERE wallet = ? ORDER BY created_at DESC LIMIT ?`);
 
 export const stmts = {
   // Agents
@@ -1016,6 +1120,45 @@ export const stmts = {
       (SELECT COUNT(*) FROM token_trades) as total_token_trades,
       (SELECT COUNT(*) FROM jobs WHERE status IN ('funded', 'submitted') AND onchain_address IS NOT NULL) as active_onchain_jobs
   `),
+
+  // Dividends
+  createTokenDividend,
+  getTokenDividend,
+  getTokenDividendByMint,
+  updateDividendMode,
+  updateDividendStats,
+
+  // Stakes
+  upsertStake,
+  getStakePosition,
+  getTokenStakers,
+  getWalletStakes,
+
+  // Revenue
+  insertRevenueDeposit,
+  getRevenueHistory,
+  getTotalRevenue,
+
+  // Buybacks
+  insertBuybackEvent,
+  getBuybackHistory,
+
+  // Reward Claims
+  insertRewardClaim,
+  getRewardClaimHistory,
+
+  // Dividend leaderboard
+  getDividendLeaderboard: db.prepare(`
+    SELECT td.*, at.token_name, at.token_symbol, at.mint_address as token_mint
+    FROM token_dividends td
+    JOIN agent_tokens at ON td.token_id = at.id
+    WHERE td.enabled = 1
+    ORDER BY CAST(td.total_revenue_deposited AS INTEGER) DESC
+    LIMIT ?
+  `),
+
+  // Dividend stats helpers
+  getStakersCount: db.prepare(`SELECT COUNT(*) as count FROM stake_positions WHERE token_id = ? AND CAST(amount AS INTEGER) > 0`),
 };
 
 export default db;

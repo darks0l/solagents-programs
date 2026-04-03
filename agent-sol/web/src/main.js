@@ -15,6 +15,8 @@ import { renderTracker } from './pages/tracker.js';
 import { renderMarketplace } from './pages/marketplace.js';
 import { renderAgentProfile } from './pages/agent-profile.js';
 import { renderAdmin } from './pages/admin.js';
+import { renderDividends } from './pages/dividends.js';
+import { renderTokenDividends } from './pages/token-dividends.js';
 import {
   connectWallet as walletConnect,
   disconnectWallet,
@@ -138,12 +140,16 @@ const pages = {
   skills: renderSkills,
   tracker: renderTracker,
   admin: renderAdmin,
+  dividends: renderDividends,
+  'token-dividends': renderTokenDividends,
 };
 
 // === URL helpers ===
 function pathForPage(page, params = {}) {
   if (page === 'dashboard') return '/';
   if (page === 'trade' && params.mintAddress) return `/trade/${params.mintAddress}`;
+  if (page === 'dividends') return '/dividends';
+  if (page === 'token-dividends' && params.mint) return `/dividends/${params.mint}`;
   if (page === 'agent' && (params.agentId || params.id)) return `/agent/${params.agentId || params.id}`;
   if (page === 'admin') return '/admin';
   return `/${page}`;
@@ -153,9 +159,12 @@ function pageFromPath(path) {
   if (!path || path === '/') return { page: 'dashboard', params: {} };
   const tradeMatch = path.match(/^\/trade\/([^/]+)$/);
   if (tradeMatch) return { page: 'trade', params: { mintAddress: tradeMatch[1] } };
+  if (path === '/dividends') return { page: 'dividends', params: {} };
+  const divMatch = path.match(/^\/dividends\/([^/]+)$/);
+  if (divMatch) return { page: 'token-dividends', params: { mint: divMatch[1] } };
   const agentMatch = path.match(/^\/agent\/([^/]+)$/);
   if (agentMatch) return { page: 'agent', params: { agentId: agentMatch[1] } };
-  const pageMatch = path.match(/^\/([a-z]+)$/);
+  const pageMatch = path.match(/^\/([a-z][-a-z]*)$/);
   if (pageMatch && pages[pageMatch[1]]) return { page: pageMatch[1], params: {} };
   return { page: 'dashboard', params: {} };
 }
@@ -176,7 +185,7 @@ function navigate(page, params = {}, skipHistory = false) {
   document.querySelectorAll('.nav-link, .mobile-nav-link').forEach(link => {
     // Keep "Agents" nav active when viewing an agent profile
     const navPage = link.dataset.page;
-    link.classList.toggle('active', navPage === page || (navPage === 'agents' && page === 'agent'));
+    link.classList.toggle('active', navPage === page || (navPage === 'agents' && page === 'agent') || (navPage === 'dividends' && page === 'token-dividends'));
   });
 
   // Hide mobile nav
@@ -189,7 +198,7 @@ function navigate(page, params = {}, skipHistory = false) {
   content.className = 'main-content page-enter';
 
   if (pages[page]) {
-    pages[page](content, state, params.mintAddress || params.agentId || params.id);
+    pages[page](content, state, params.mintAddress || params.mint || params.agentId || params.id);
   }
 }
 
@@ -318,7 +327,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof e.detail === 'string') {
       if (pages[e.detail]) navigate(e.detail);
     } else if (e.detail.page) {
-      navigate(e.detail.page, e.detail);
+      const params = { ...e.detail };
+      delete params.page;
+      navigate(e.detail.page, params);
     }
   });
 

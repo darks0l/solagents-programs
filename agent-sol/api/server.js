@@ -26,6 +26,7 @@ import servicesRoutes from './routes/services.js';
 import applicationRoutes from './routes/applications.js';
 import uploadRoutes from './routes/upload.js';
 import guideRoutes from './routes/guide.js';
+import dividendRoutes from './routes/dividends.js';
 import { initPinata } from './services/ipfs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -249,6 +250,19 @@ fastify.get('/api/info', async () => ({
     trade: 'POST /api/trade/swap',
     cards: 'POST /api/cards/order',
     transfer: 'POST /api/transfer',
+    dividends: {
+      config: 'GET /api/dividends/:tokenId',
+      stakers: 'GET /api/dividends/:tokenId/stakers',
+      revenue: 'GET /api/dividends/:tokenId/revenue',
+      buybacks: 'GET /api/dividends/:tokenId/buybacks',
+      stats: 'GET /api/dividends/:tokenId/stats',
+      wallet_stakes: 'GET /api/dividends/wallet/:wallet',
+      leaderboard: 'GET /api/dividends/leaderboard',
+      enable: 'POST /api/dividends/:tokenId/enable (creator auth)',
+      split: 'POST /api/dividends/:tokenId/split (creator auth, 7-day cooldown)',
+      deposit: 'POST /api/dividends/:tokenId/deposit (admin)',
+      buyback: 'POST /api/dividends/:tokenId/buyback (admin)',
+    },
   },
 }));
 
@@ -270,6 +284,7 @@ await fastify.register(servicesRoutes);
 await fastify.register(applicationRoutes);
 await fastify.register(uploadRoutes, { stmts: {} });
 await fastify.register(guideRoutes);
+await fastify.register(dividendRoutes);
 
 // SPA fallback — serve index.html for non-API routes
 fastify.setNotFoundHandler((request, reply) => {

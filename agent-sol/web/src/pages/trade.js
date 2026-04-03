@@ -600,6 +600,13 @@ export async function renderTrade(container, state, mintAddress) {
             </div>
           </div>
         </div>
+
+        <!-- Dividend Info (loaded dynamically) -->
+        <div id="dividend-info-card" class="card glass mt-2" style="display:none">
+          <div class="card-body" style="padding:12px">
+            <div id="dividend-info-content"></div>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -968,8 +975,82 @@ async function loadTradePageData(mintAddress) {
     // Load trades
     loadTrades(mintAddress);
 
+    // Load dividend info
+    loadDividendInfo(mintAddress);
+
   } catch (err) {
     toast(`Failed to load token data: ${err.message}`, 'error');
+  }
+}
+
+// ── Dividend Info on Trade Page ──────────────────────────────
+
+async function loadDividendInfo(mintAddress) {
+  const card = document.getElementById('dividend-info-card');
+  const content = document.getElementById('dividend-info-content');
+  if (!card || !content) return;
+
+  try {
+    const config = await api.get(`/dividends/${mintAddress}`);
+    if (!config || config.error || config.enabled === false) {
+      card.style.display = 'none';
+      return;
+    }
+
+    card.style.display = '';
+    const mode = config.mode || 'regular';
+    const staking = config.staking || {};
+    const buyback = config.buyback || {};
+    const totalRevenue = config.total_revenue_deposited || 0;
+
+    const fmtTok = (raw) => {
+      const n = Number(raw) / 1e9;
+      if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+      if (n >= 1e3) return (n / 1e3).toFixed(2) + 'K';
+      return n.toFixed(2);
+    };
+    const fmtSol = (lam) => (Number(lam) / 1e9).toFixed(4);
+
+    const modeMap = {
+      regular: { label: '💰 Regular', bg: 'rgba(255,215,0,0.12)', color: '#ffd700' },
+      dividend: { label: '🏦 Dividend', bg: 'rgba(0,255,163,0.12)', color: '#00ffa3' },
+      buyback_burn: { label: '🔥 Burn', bg: 'rgba(153,69,255,0.12)', color: '#9945ff' },
+    };
+    const m = modeMap[mode] || modeMap.regular;
+
+    let statsHtml = '';
+    if (mode === 'dividend') {
+      statsHtml = `
+        <div class="stat-row"><span class="text-muted text-xs">🏦 Staked</span><span class="font-mono text-xs">${fmtTok(staking.total_staked || 0)} tokens</span></div>
+        <div class="stat-row mt-05"><span class="text-muted text-xs">🏦 SOL Distributed</span><span class="font-mono text-xs" style="color:#00ffa3">${fmtSol(staking.total_distributed || 0)} SOL</span></div>
+        <div class="stat-row mt-05"><span class="text-muted text-xs">👥 Stakers</span><span class="font-mono text-xs">${staking.stakers_count || 0}</span></div>`;
+    } else if (mode === 'buyback_burn') {
+      statsHtml = `
+        <div class="stat-row"><span class="text-muted text-xs">🔥 Tokens Burned</span><span class="font-mono text-xs" style="color:#9945ff">${fmtTok(buyback.total_burned || 0)}</span></div>
+        <div class="stat-row mt-05"><span class="text-muted text-xs">🔥 SOL Spent</span><span class="font-mono text-xs">${fmtSol(buyback.total_sol_spent || 0)} SOL</span></div>
+        <div class="stat-row mt-05"><span class="text-muted text-xs">🔥 Burns</span><span class="font-mono text-xs">${buyback.burn_count || 0}</span></div>`;
+    } else {
+      statsHtml = `<div class="text-muted text-xs" style="padding:4px 0">Creator keeps all fees</div>`;
+    }
+
+    content.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:0.75rem;padding:3px 8px;border-radius:6px;font-weight:600;background:${m.bg};color:${m.color}">${m.label}</span>
+        <span class="text-muted text-xs" style="margin-left:auto">${fmtSol(totalRevenue)} SOL revenue</span>
+      </div>
+      ${statsHtml}
+      <a href="/dividends/${mintAddress}" id="div-link-trade" style="display:block;text-align:center;margin-top:10px;padding:8px;background:rgba(0,255,163,0.06);border:1px solid rgba(0,255,163,0.12);border-radius:8px;color:#00ffa3;font-size:0.8rem;font-weight:600;text-decoration:none;transition:background 0.2s" onmouseenter="this.style.background='rgba(0,255,163,0.12)'" onmouseleave="this.style.background='rgba(0,255,163,0.06)'">View Dividends →</a>
+    `;
+
+    // SPA navigation for the link
+    document.getElementById('div-link-trade')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      history.pushState({ page: 'token-dividends', params: { mint: mintAddress } }, '', `/dividends/${mintAddress}`);
+      document.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'token-dividends', mint: mintAddress } }));
+    });
+  } catch {
+    // Dividends not enabled or endpoint doesn't exist yet — hide silently
+    card.style.display = 'none';
   }
 }
 

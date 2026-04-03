@@ -914,6 +914,38 @@ export default async function chainRoutes(fastify) {
         }
       }
 
+      // ── Dividend revenue deposit (0.5% of trade SOL as creator_fee) ──
+      if (tokenId && solAmount !== '0') {
+        try {
+          const div = stmts.getTokenDividend?.get(tokenId);
+          if (div && div.enabled) {
+            const tradeSol = BigInt(solAmount);
+            const creatorFee = tradeSol / 200n; // 0.5%
+            if (creatorFee > 0n) {
+              const stakingPortion = (creatorFee * BigInt(div.staking_share_bps)) / 10000n;
+              const buybackPortion = creatorFee - stakingPortion;
+              const depId = randomUUID();
+              stmts.insertRevenueDeposit?.run(
+                depId, tokenId, 'creator_fee', creatorFee.toString(),
+                stakingPortion.toString(), buybackPortion.toString(),
+                txSignature, null
+              );
+              // Update aggregate stats
+              const newTotal = (BigInt(div.total_revenue_deposited || '0') + creatorFee).toString();
+              const newStaking = (BigInt(div.total_staking_revenue || '0') + stakingPortion).toString();
+              const newBuyback = (BigInt(div.total_buyback_revenue || '0') + buybackPortion).toString();
+              const newBuybackBal = (BigInt(div.buyback_balance || '0') + buybackPortion).toString();
+              stmts.updateDividendStats?.run(
+                div.total_staked, newTotal, newStaking,
+                div.total_rewards_distributed, newBuyback, newBuybackBal,
+                div.total_burned, div.total_buyback_sol_spent, div.burn_count,
+                tokenId
+              );
+            }
+          }
+        } catch { /* non-critical — trade already confirmed */ }
+      }
+
       // Emit WebSocket event — broadcast to both tokenId and mintAddress
       // so clients subscribed by either key receive the update
       const tradePayload = {
