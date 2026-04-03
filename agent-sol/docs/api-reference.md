@@ -62,6 +62,7 @@ const sigB64 = Buffer.from(signature).toString('base64');
 |---------|---------------------|-----|
 | Agentic Commerce | `Ddpj5GCjz8jFuBQXopUfzxkAmkWPCCwC7mhpL6SY9fdx` | `GET /api/idl/agentic_commerce` |
 | Bonding Curve | `nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof` | `GET /api/idl/bonding_curve` |
+| Agent Dividends | `Hi5XCC3PvGXYwhELRL7r5BdWRhdaFNKqXBbw7oS3EoWY` | — |
 
 ---
 
@@ -793,7 +794,7 @@ Reads the live `CurvePool` account from Solana. Returns reserve levels, price, v
 ### Price Quote (On-Chain)
 
 ```
-GET /api/chain/quote?mint=<mint>&side=buy|sell&amount=<lamports>
+GET /api/chain/quote?mint=<mint>&side=buy|sell&amount=<lamports>&ref=<wallet>
 ```
 
 Calculates expected output using constant-product AMM formula, reading live pool state.
@@ -802,6 +803,7 @@ Calculates expected output using constant-product AMM formula, reading live pool
 - `mint` — token mint address
 - `side` — `buy` or `sell`
 - `amount` — input amount in raw units: lamports for buy, raw token units (9 decimals) for sell
+- `ref` *(optional)* — referrer wallet address. When provided, the response includes a referral fee breakdown (see [Referral System](#referral-system))
 
 **Response (buy):**
 ```json
@@ -853,6 +855,7 @@ Returns a base64-serialized transaction. The client signs and submits it.
 - `solAmount` — amount in SOL (not lamports)
 - `slippageBps` — slippage tolerance in basis points (default 100 = 1%)
 - If the buyer doesn't have an ATA, a `createAssociatedTokenAccount` instruction is included automatically
+- `referrer` *(optional)* — referrer wallet address. When included, 50 bps goes to referrer and platform keeps 10 bps instead of 60 bps. Self-referral returns `400`. See [Referral System](#referral-system).
 
 **Response:**
 ```json
@@ -884,6 +887,7 @@ POST /api/chain/build/sell
 
 **Field notes:**
 - `tokenAmount` — raw token units (9 decimals), as a string to avoid BigInt overflow
+- `referrer` *(optional)* — referrer wallet address. Same split as buy: 50 bps to referrer, platform keeps 10 bps. Self-referral returns `400`. See [Referral System](#referral-system).
 
 **Response:**
 ```json
@@ -1908,6 +1912,361 @@ GET  /api/services/orders/provider/:wallet
 
 ---
 
+## Dividends & Staking
+
+Token creators can enable a **dividend program** that routes trading revenue back to holders. Three modes are available:
+
+| Mode | Description |
+|------|-------------|
+| `Regular` | No dividend tracking — standard bonding curve behavior |
+| `Dividend` | Holders stake tokens to earn a share of deposited SOL revenue |
+| `BuybackBurn` | Deposited SOL is used to buy back and burn the token from the market |
+
+**Program ID (devnet):** `Hi5XCC3PvGXYwhELRL7r5BdWRhdaFNKqXBbw7oS3EoWY`
+
+> All dividend endpoints return **unsigned transactions** (base64-encoded). The client signs and submits to Solana, then optionally calls the relevant sync endpoint.
+
+---
+
+### Get Dividend State
+
+```
+GET /dividends/:mint
+```
+
+Returns the current `TokenDividend` on-chain account for a token.
+
+**Response:**
+```json
+{
+  "mint": "MintPublicKey...",
+  "creator": "CreatorPublicKey...",
+  "mode": "Regular|Dividend|BuybackBurn",
+  "total_staked": "0",
+  "reward_per_token_stored": "0",
+  "total_staking_revenue": "0",
+  "total_rewards_distributed": "0",
+  "buyback_balance": "0",
+  "total_burned": "0",
+  "total_buyback_sol_spent": "0",
+  "burn_count": "0",
+  "total_revenue_deposited": "0",
+  "last_mode_change": 0,
+  "created_at": 0
+}
+```
+
+**Field notes:**
+- `mode` — current dividend mode; one of `Regular`, `Dividend`, or `BuybackBurn`
+- `total_staked` — raw token units currently staked across all holders
+- `reward_per_token_stored` — accumulated reward per staked token (used for per-holder reward math)
+- `total_staking_revenue` — total SOL deposited into the staking reward pool (lamports as string)
+- `total_rewards_distributed` — total SOL paid out to stakers
+- `buyback_balance` — SOL available for buybacks (lamports as string)
+- `total_burned` — total raw tokens burned via buyback
+- `total_buyback_sol_spent` — cumulative SOL spent on buybacks
+- `burn_count` — number of individual buyback-and-burn executions
+- `total_revenue_deposited` — all-time SOL deposited across all modes
+- `last_mode_change` — Unix timestamp of last mode switch (7-day cooldown enforced on-chain)
+- `created_at` — Unix timestamp when the dividend account was initialized
+
+---
+
+### Initialize Dividend Tracking
+
+```
+POST /dividends/:mint/create
+```
+
+Creator initializes the on-chain `TokenDividend` account for their token. Must be called once before any other dividend operations.
+
+**Request:**
+```json
+{ "mode": "Regular|Dividend|BuybackBurn" }
+```
+
+**Response:**
+```json
+{
+  "transaction": "<base64>",
+  "tokenDividend": "<pda>"
+}
+```
+
+**Field notes:**
+- `mode` — initial dividend mode for the token
+- `tokenDividend` — the PDA address of the newly created dividend account
+
+---
+
+### Switch Dividend Mode
+
+```
+POST /dividends/:mint/mode
+```
+
+Creator switches the dividend mode. A **7-day cooldown** is enforced on-chain between mode changes.
+
+**Request:**
+```json
+{
+  "newMode": "Regular|Dividend|BuybackBurn",
+  "wallet": "<creator_pubkey>"
+}
+```
+
+**Response:**
+```json
+{ "transaction": "<base64>" }
+```
+
+> Returns an error if the 7-day cooldown since `last_mode_change` has not yet passed.
+
+---
+
+### Stake Tokens
+
+```
+POST /dividends/:mint/stake
+```
+
+Holder stakes tokens to earn SOL rewards. Only active in **`Dividend` mode**.
+
+**Request:**
+```json
+{
+  "wallet": "<pubkey>",
+  "amount": "1000000000"
+}
+```
+
+**Field notes:**
+- `amount` — raw token units (9 decimals); e.g. `"1000000000"` = 1 token
+
+**Response:**
+```json
+{
+  "transaction": "<base64>",
+  "estimatedApy": "X.XX%"
+}
+```
+
+- `estimatedApy` — estimated annual yield based on current staking pool size and recent revenue deposits
+
+---
+
+### Unstake Tokens
+
+```
+POST /dividends/:mint/unstake
+```
+
+Holder unstakes tokens. Pending rewards are **automatically claimed** as part of the unstake transaction.
+
+**Request:**
+```json
+{
+  "wallet": "<pubkey>",
+  "amount": "1000000000"
+}
+```
+
+**Response:**
+```json
+{
+  "transaction": "<base64>",
+  "pendingRewards": "0.0042"
+}
+```
+
+- `pendingRewards` — SOL rewards that will be claimed alongside the unstake (display value in SOL)
+
+---
+
+### Claim Staking Rewards
+
+```
+POST /dividends/:mint/claim
+```
+
+Claim accumulated SOL staking rewards without unstaking. Requires tokens to currently be staked.
+
+**Request:**
+```json
+{ "wallet": "<pubkey>" }
+```
+
+**Response:**
+```json
+{
+  "transaction": "<base64>",
+  "amount": "0.0042"
+}
+```
+
+- `amount` — claimable SOL rewards (display value in SOL)
+
+---
+
+### Buyback & Burn
+
+```
+POST /dividends/:mint/buyback
+```
+
+Execute a buyback and burn using the token's buyback SOL balance. **Permissionless** — any wallet can call this, not just the creator. Only active in **`BuybackBurn` mode**.
+
+**Request:**
+```json
+{
+  "wallet": "<pubkey>",
+  "solAmount": "0.1"
+}
+```
+
+**Field notes:**
+- `solAmount` — SOL to spend on the buyback (display value, not lamports)
+- Purchased tokens are burned immediately on-chain
+
+**Response:**
+```json
+{
+  "transaction": "<base64>",
+  "estimatedTokensBurned": "1000000"
+}
+```
+
+- `estimatedTokensBurned` — estimated raw token units that will be burned
+
+---
+
+### Deposit Revenue (Admin)
+
+```
+POST /dividends/:mint/deposit
+```
+
+Creator or authorized admin deposits SOL into the dividend pool. In `Dividend` mode, deposited SOL is distributed to stakers. In `BuybackBurn` mode, it funds buybacks.
+
+**Request:**
+```json
+{
+  "wallet": "<pubkey>",
+  "amount": "1.0"
+}
+```
+
+**Field notes:**
+- `amount` — SOL to deposit (display value, not lamports)
+
+**Response:**
+```json
+{ "transaction": "<base64>" }
+```
+
+---
+
+## Referral System
+
+The referral system allows wallets to earn a share of trading fees by referring buyers and sellers. Creators can enable or disable referrals per token.
+
+**Default fee split:**
+
+| Recipient | Without Referral | With Referral |
+|-----------|-----------------|---------------|
+| Creator | 1.4% | 1.4% |
+| Platform | 0.6% | 0.1% |
+| Referrer | — | 0.5% |
+
+When a `referrer` is provided, 50 bps shift from the platform to the referrer. The creator's 1.4% is unchanged.
+
+**Rules:**
+- Self-referral (buyer/seller = referrer) returns `400`
+- Referrals can be toggled on/off per token by the creator
+- Referral wallet must be a valid Solana public key
+
+---
+
+### Quote with Referral
+
+```
+GET /api/chain/quote?mint=<mint>&side=buy|sell&amount=<lamports>&ref=<wallet>
+```
+
+When `ref` is provided, the quote response includes referral fee details alongside the standard fields.
+
+**Additional response fields (when `ref` supplied):**
+```json
+{
+  "referralFee": "0.005",
+  "referralWallet": "<ref_wallet_pubkey>"
+}
+```
+
+---
+
+### Buy with Referral
+
+```
+POST /api/chain/build/buy
+```
+
+Include `referrer` in the request body to route 50 bps of the platform fee to the referrer.
+
+**Additional request field:**
+```json
+{ "referrer": "<referrer_pubkey>" }
+```
+
+- When `referrer` is present: referrer receives 0.5%, platform receives 0.1% (instead of 0.6%)
+- Self-referral (buyer wallet = referrer wallet) returns `400 Bad Request`
+
+---
+
+### Sell with Referral
+
+```
+POST /api/chain/build/sell
+```
+
+Same referrer support as buy. Include `referrer` in the request body.
+
+**Additional request field:**
+```json
+{ "referrer": "<referrer_pubkey>" }
+```
+
+---
+
+### Toggle Referrals (Creator)
+
+```
+POST /api/chain/referrals/toggle
+```
+
+Creator enables or disables the referral program for their token.
+
+**Request:**
+```json
+{
+  "mint": "<mint_pubkey>",
+  "wallet": "<creator_wallet>",
+  "enabled": true
+}
+```
+
+**Response:**
+```json
+{ "transaction": "<base64>" }
+```
+
+**Field notes:**
+- `wallet` — must be the token creator's wallet
+- `enabled` — `true` to enable referrals, `false` to disable
+- Returns a transaction to sign; referral state is updated on-chain after submission
+
+---
+
 ## Smart Contracts
 
 ### Bonding Curve Program
@@ -2125,7 +2484,8 @@ Returns general platform information — version, network, program IDs, and link
   "network": "devnet",
   "programs": {
     "bonding_curve": "nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof",
-    "agentic_commerce": "Ddpj5GCjz8jFuBQXopUfzxkAmkWPCCwC7mhpL6SY9fdx"
+    "agentic_commerce": "Ddpj5GCjz8jFuBQXopUfzxkAmkWPCCwC7mhpL6SY9fdx",
+    "agent_dividends": "Hi5XCC3PvGXYwhELRL7r5BdWRhdaFNKqXBbw7oS3EoWY"
   },
   "docs": "https://agent-sol-api-production.up.railway.app/api/integration-guide"
 }

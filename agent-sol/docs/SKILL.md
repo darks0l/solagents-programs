@@ -89,22 +89,31 @@ pub struct CurvePool {
 |-------------|-------------|
 | `initialize` | One-time setup of `CurveConfig` |
 | `create_token` | Launch a new bonding curve pool + mints |
-| `buy` | SOL in → tokens out |
-| `sell` | Tokens in → SOL out |
+| `buy` | SOL in → tokens out (optional `?ref=<wallet>` for referral) |
+| `sell` | Tokens in → SOL out (optional `?ref=<wallet>` for referral) |
 | `claim_creator_fees` | Creator claims accumulated 1.4% trade fees |
 | `claim_platform_fees` | Treasury wallet claims accumulated platform fees (treasury is the signer, not admin) |
 | `claim_raydium_fees` | Claim post-graduation Raydium LP fees. Splits 50/50 between creator and treasury. |
 | `set_payment_mint` | Set or update the payment mint for a pool |
-| `update_config` | Update global `CurveConfig` parameters (admin only). All fields optional. |
+| `update_config` | Update global `CurveConfig` parameters (admin only). All fields optional. Now accepts `referral_fee_bps: Option<u16>`. |
 | `graduate` | Graduate pool to Raydium CPMM at graduation threshold |
+| `toggle_referrals` | Creator opt-in/out of referral program for their token |
 
 ---
 
 ## Fee Structure (2% total)
 
-Every trade on the bonding curve:
+Every trade on the bonding curve (no referral):
 - **1.4% → creator wallet** (creator_fee_bps = 140)
 - **0.6% → treasury wallet** (platform_fee_bps = 60)
+
+When a referral is used (`?ref=<wallet>`) and the token has referrals enabled:
+
+| Recipient | Fee |
+|-----------|-----|
+| Creator | 1.4% (unchanged) |
+| Referrer | 0.50% (carved from platform fee) |
+| Platform | 0.10% (reduced from 0.60%) |
 
 Post-graduation (Raydium CPMM):
 - Same 2% total, same split, collected via atomic tx in `api/services/raydium.js`
@@ -282,12 +291,138 @@ TREASURY_WALLET         Platform fee receiver
 
 ## Program IDs
 
-| Network | agentic_commerce | bonding_curve |
-|---------|-----------------|---------------|
-| devnet  | `Ddpj5GCjz8jFuBQXopUfzxkAmkWPCCwC7mhpL6SY9fdx` | `nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof` |
-| mainnet | **NOT YET DEPLOYED** — generate fresh keypairs before mainnet | same |
+| Network | Program | Address |
+|---------|---------|---------|
+| devnet | agentic_commerce | `Ddpj5GCjz8jFuBQXopUfzxkAmkWPCCwC7mhpL6SY9fdx` |
+| devnet | bonding_curve | `nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof` |
+| devnet | agent_dividends | `Hi5XCC3PvGXYwhELRL7r5BdWRhdaFNKqXBbw7oS3EoWY` |
+| mainnet | all programs | **NOT YET DEPLOYED** — generate fresh keypairs before mainnet |
 
 > ⚠️ Mainnet IDs in Anchor.toml are placeholder `1111...`. Never deploy without generating fresh keypairs via `solana-keygen new`.
+
+---
+
+## Agent Dividends Program
+
+**Program ID (devnet):** `Hi5XCC3PvGXYwhELRL7r5BdWRhdaFNKqXBbw7oS3EoWY`
+
+Allows token creators to route their bonding curve fee income into one of three on-chain dividend modes.
+
+### Modes
+
+| Mode | Behavior |
+|------|----------|
+| `Regular` | Creator keeps 100% of their fees. **Default.** |
+| `Dividend` | Creator fees flow to staking rewards; token holders stake to earn pro-rata SOL |
+| `BuybackBurn` | Creator fees buy tokens off the bonding curve and burn them (passive deflation) |
+
+> Mode switches have a **7-day cooldown** (`last_mode_change` enforced on-chain).
+
+### On-Chain Accounts
+
+```rust
+DividendConfig {
+    admin, job_revenue_share_bps, creator_fee_share_bps, bump
+}
+
+TokenDividend {
+    mint, creator, mode, last_mode_change,
+    total_staked, reward_per_token_stored,        // scaled 1e18 for precision
+    total_staking_revenue, total_rewards_distributed,
+    buyback_balance, total_burned, total_buyback_sol_spent, burn_count,
+    total_revenue_deposited, created_at, bump
+}
+
+StakePosition {
+    owner, mint, amount, reward_debt, rewards_claimed, staked_at, bump
+}
+```
+
+> **Staking formula:** `reward_per_token_stored` is scaled by 1e18. Pending rewards = `(amount × reward_per_token_stored / 1e18) - reward_debt`.
+
+### Instructions
+
+| Instruction | Description |
+|-------------|-------------|
+| `initialize_dividend_config` | One-time global config setup (admin only) |
+| `create_token_dividend` | Creator registers a token for dividends |
+| `set_dividend_mode` | Switch mode (7-day cooldown) |
+| `deposit_revenue` | Deposit SOL revenue into the dividend pool |
+| `stake` | Stake tokens to earn SOL dividends |
+| `unstake` | Unstake tokens |
+| `claim_rewards` | Claim accumulated SOL staking rewards |
+| `execute_buyback` | Buy tokens off the curve and burn them — **permissionless cranking** (anyone can call) |
+| `update_dividend_config` | Update global config (admin only) |
+
+### Frontend Pages
+
+| Route | File | Description |
+|-------|------|-------------|
+| `/dividends` | `web/src/pages/dividends.js` | Dividends hub — all tokens with active dividend programs |
+| `/dividends/:mint` | `web/src/pages/token-dividends.js` | Per-token detail: staking panel + buyback panel |
+
+### API Routes (Planned — not yet built)
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| POST | `/dividends/initialize` | Init global DividendConfig |
+| POST | `/dividends/:mint/create` | Create TokenDividend for a token |
+| POST | `/dividends/:mint/mode` | Switch dividend mode (7-day cooldown) |
+| POST | `/dividends/:mint/deposit` | Deposit revenue |
+| POST | `/dividends/:mint/stake` | Stake tokens |
+| POST | `/dividends/:mint/unstake` | Unstake tokens |
+| POST | `/dividends/:mint/claim` | Claim SOL rewards |
+| POST | `/dividends/:mint/buyback` | Execute buyback & burn |
+| GET  | `/dividends/:mint` | Get TokenDividend state |
+
+---
+
+## Referral System
+
+Bonding curve trades support an optional referral parameter. Referrals are opt-in per token.
+
+### Fee Split (with referral)
+
+| Recipient | Fee |
+|-----------|-----|
+| Creator | 1.4% (unchanged) |
+| Referrer | 0.50% (carved from platform fee) |
+| Platform | 0.10% (reduced from 0.60%) |
+
+### New On-Chain Fields
+
+**CurveConfig:**
+```rust
+referral_fee_bps: u16   // default 50 bps (0.50%)
+```
+
+**CurvePool:**
+```rust
+referral_fees_earned: u64
+referral_fees_paid: u64
+referrals_enabled: bool
+```
+
+### New / Updated Instructions
+
+| Instruction | Change |
+|-------------|--------|
+| `toggle_referrals` | **New** — creator opts in/out of referral program for their token |
+| `buy` | Updated — accepts optional `?ref=<wallet>` referral param |
+| `sell` | Updated — accepts optional `?ref=<wallet>` referral param |
+| `update_config` | Updated — now accepts `referral_fee_bps: Option<u16>` |
+
+### API Usage
+
+Pass a referrer wallet address as a query param on buy/sell:
+```
+POST /trade/buy?ref=<referrerWalletAddress>
+POST /trade/sell?ref=<referrerWalletAddress>
+```
+
+- Referral fee only paid if the token has `referrals_enabled = true`
+- **Self-referral is blocked on-chain** — referrer must differ from buyer/seller wallet
+- Referrer wallet receives SOL directly in the same transaction
 
 ---
 

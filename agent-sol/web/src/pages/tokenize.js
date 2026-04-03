@@ -117,7 +117,7 @@ export async function renderTokenize(container, state) {
             <div class="step-number">2</div>
             <div class="step-content">
               <h3 class="font-semibold">Hit "Tokenize" on Your Agent Page</h3>
-              <p class="text-secondary text-sm">Navigate to <strong>Agents → Your Agent → Tokenize</strong>. Fill in your token name, symbol, logo, and description.</p>
+              <p class="text-secondary text-sm">Navigate to <strong>Agents → Your Agent → Tokenize</strong>. Fill in your token name, symbol, logo, and description. In the wizard you'll also choose your <strong>Dividend Mode</strong> (Regular, Dividend, or Buyback &amp; Burn) and optionally enable the <strong>referral program</strong>.</p>
             </div>
           </div>
           <div class="step">
@@ -192,6 +192,9 @@ export async function renderTokenize(container, state) {
             </div>
           </div>
           <p class="text-muted text-xs mt-1" style="text-align:center;">2% total fee • 70/30 split</p>
+          <div style="margin-top:10px;padding:10px 14px;background:rgba(153,69,255,0.08);border:1px solid rgba(153,69,255,0.2);border-radius:8px;font-size:0.8rem;color:rgba(255,255,255,0.65);text-align:center;">
+            <strong style="color:#9945FF;">Referral Program:</strong> When a creator enables referrals, the platform fee is split — <span style="color:#14F195;">0.50% to the referrer</span> / <span style="color:#9945FF;">0.10% to the platform</span>. Your 1.4% creator fee is <em>unchanged</em>.
+          </div>
         </div>
 
         <!-- Example math -->
@@ -211,6 +214,71 @@ export async function renderTokenize(container, state) {
                 <div class="text-xl font-bold">$4,200</div>
                 <div class="text-muted text-xs">You earn / month</div>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dividend Mode -->
+    <div class="card glass mt-2" style="max-width:800px;margin-left:auto;margin-right:auto;border-color:rgba(20,241,149,0.2);background:linear-gradient(135deg,rgba(20,241,149,0.03),rgba(153,69,255,0.03));">
+      <div class="card-header">
+        <h2 class="font-semibold"><img class="icon" src="/icons/white/coin-tilt.png" alt="Dividend"> Dividend Mode</h2>
+      </div>
+      <div class="card-body">
+        <p class="text-secondary text-sm mb-2">
+          When you tokenize, choose how your <strong>1.4% creator fee</strong> works for your community. You can switch modes after launch with a <strong>7-day cooldown</strong> between switches.
+        </p>
+        <div class="grid grid-3 gap-1">
+          <div class="card glass" style="background:rgba(0,0,0,0.3);border-color:rgba(20,241,149,0.15);padding:20px 16px;">
+            <div style="font-size:1.6rem;margin-bottom:8px;">💰</div>
+            <h4 class="font-semibold text-sm mb-1" style="color:#14F195;">Regular <span style="font-size:0.7rem;color:rgba(255,255,255,0.4);font-weight:400;">(default)</span></h4>
+            <p class="text-muted text-xs" style="line-height:1.6;">Keep 100% of your 1.4% creator fee on every trade. Nothing changes for holders. Straightforward passive income.</p>
+          </div>
+          <div class="card glass" style="background:rgba(0,0,0,0.3);border-color:rgba(153,69,255,0.2);padding:20px 16px;">
+            <div style="font-size:1.6rem;margin-bottom:8px;">🏦</div>
+            <h4 class="font-semibold text-sm mb-1" style="color:#9945FF;">Dividend Mode</h4>
+            <p class="text-muted text-xs" style="line-height:1.6;">Your 1.4% creator fee flows into a <strong style="color:#9945FF;">staking pool</strong>. Holders stake tokens to earn pro-rata SOL rewards. More staked = more rewards distributed to stakers.</p>
+          </div>
+          <div class="card glass" style="background:rgba(0,0,0,0.3);border-color:rgba(255,68,68,0.15);padding:20px 16px;">
+            <div style="font-size:1.6rem;margin-bottom:8px;">🔥</div>
+            <h4 class="font-semibold text-sm mb-1" style="color:#FF4444;">Buyback &amp; Burn</h4>
+            <p class="text-muted text-xs" style="line-height:1.6;">Your 1.4% creator fee automatically <strong style="color:#FF4444;">buys tokens off the curve and burns them</strong> permanently. Reduces supply, increases scarcity for all holders. Passive deflation.</p>
+          </div>
+        </div>
+        <p class="text-muted text-xs mt-2" style="text-align:center;">Dividend Mode is selected during the tokenize wizard and can be changed at any time (7-day cooldown between switches).</p>
+      </div>
+    </div>
+
+    <!-- Referral System -->
+    <div class="card glass mt-2" style="max-width:800px;margin-left:auto;margin-right:auto;border-color:rgba(153,69,255,0.2);">
+      <div class="card-header">
+        <h2 class="font-semibold"><img class="icon" src="/icons/white/chain.png" alt="Referral"> Referral Program</h2>
+      </div>
+      <div class="card-body">
+        <p class="text-secondary text-sm mb-2">
+          Creators can opt-in to a referral program to grow their token organically. Referrals are <strong>funded entirely by the platform fee</strong> — your 1.4% creator fee is completely unaffected.
+        </p>
+        <div class="grid grid-2 gap-2">
+          <div>
+            <h4 class="font-semibold text-sm mb-1" style="color:#9945FF;">How It Works</h4>
+            <ul class="feature-list text-sm">
+              <li><img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Creator toggles referrals on/off from token settings</li>
+              <li><img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Users share their wallet as a link: <code style="font-size:0.75rem;">?ref=&lt;wallet&gt;</code></li>
+              <li><img class="icon" src="/icons/white/checkmark.png" alt="Yes"> 50 bps (0.5%) referral fee carved from platform fee</li>
+              <li><img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Platform retains 0.10%; referrer earns 0.50%</li>
+              <li><img class="icon" src="/icons/white/checkmark.png" alt="Yes"> Self-referrals blocked on-chain</li>
+            </ul>
+          </div>
+          <div class="card glass" style="background:rgba(0,0,0,0.3);border-color:rgba(153,69,255,0.1);">
+            <div class="card-body" style="padding:16px;">
+              <h4 class="font-semibold text-sm mb-1">Fee Split With Referrals Active</h4>
+              <div style="display:flex;border-radius:6px;overflow:hidden;height:32px;font-size:0.75rem;font-weight:600;margin-bottom:8px;">
+                <div style="width:70%;background:linear-gradient(90deg,#14F195,#0fb07a);display:flex;align-items:center;justify-content:center;color:#000;">Creator 1.4%</div>
+                <div style="width:25%;background:linear-gradient(90deg,#9945FF,#7733cc);display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.65rem;">Referrer 0.50%</div>
+                <div style="width:5%;background:rgba(120,80,200,0.6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.6rem;">0.1%</div>
+              </div>
+              <p class="text-muted text-xs">Your creator earnings are always 1.4% regardless of referral status.</p>
             </div>
           </div>
         </div>
@@ -409,7 +477,7 @@ export async function renderTokenize(container, state) {
               <td><strong>Token Trade</strong></td>
               <td><span style="color:#14F195;">2%</span></td>
               <td>Buyer/Seller</td>
-              <td>70% creator / 30% platform</td>
+              <td>1.4% creator / 0.6% platform<br><span style="font-size:0.78em;color:rgba(255,255,255,0.45);">With referrals: 1.4% creator / 0.50% referrer / 0.10% platform</span></td>
             </tr>
             <tr>
               <td><strong>Job Completed</strong></td>
