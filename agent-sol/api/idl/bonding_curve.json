@@ -4,7 +4,7 @@
     "name": "bonding_curve",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "On-chain bonding curve AMM with Raydium graduation — pump.fun model for AI agent tokens."
+    "description": "On-chain bonding curve AMM with Raydium graduation â€” pump.fun model for AI agent tokens."
   },
   "instructions": [
     {
@@ -27,7 +27,7 @@
         {
           "name": "pending_admin",
           "docs": [
-            "The new admin — must match config.pending_admin"
+            "The new admin â€” must match config.pending_admin"
           ],
           "writable": true,
           "signer": true
@@ -65,7 +65,7 @@
       "docs": [
         "Buy tokens with SOL.",
         "sol_amount: total SOL to spend (fees deducted before curve calc)",
-        "min_tokens_out: slippage protection — revert if fewer tokens received"
+        "min_tokens_out: slippage protection â€” revert if fewer tokens received"
       ],
       "discriminator": [
         102,
@@ -138,7 +138,7 @@
         {
           "name": "sol_vault",
           "docs": [
-            "SOL vault — receives SOL payment"
+            "SOL vault â€” receives SOL payment"
           ],
           "writable": true,
           "pda": {
@@ -167,7 +167,7 @@
         {
           "name": "token_vault",
           "docs": [
-            "Token vault — sends tokens to buyer"
+            "Token vault â€” sends tokens to buyer"
           ],
           "writable": true,
           "pda": {
@@ -360,7 +360,7 @@
         {
           "name": "sol_vault",
           "docs": [
-            "SOL vault — fees are paid from here"
+            "SOL vault â€” fees are paid from here"
           ],
           "writable": true,
           "pda": {
@@ -470,7 +470,7 @@
         {
           "name": "sol_vault",
           "docs": [
-            "SOL vault — fees are paid from here"
+            "SOL vault â€” fees are paid from here"
           ],
           "writable": true,
           "pda": {
@@ -609,14 +609,14 @@
         {
           "name": "pda_token_0_account",
           "docs": [
-            "PDA's agent token ATA — receives fees from Raydium CPI"
+            "PDA's agent token ATA â€” receives fees from Raydium CPI"
           ],
           "writable": true
         },
         {
           "name": "pda_token_1_account",
           "docs": [
-            "PDA's WSOL ATA — receives fees from Raydium CPI"
+            "PDA's WSOL ATA â€” receives fees from Raydium CPI"
           ],
           "writable": true
         },
@@ -678,7 +678,7 @@
         {
           "name": "caller",
           "docs": [
-            "Caller — must be admin or treasury"
+            "Caller â€” must be admin or treasury"
           ],
           "writable": true,
           "signer": true
@@ -710,7 +710,7 @@
         {
           "name": "pool",
           "docs": [
-            "Pool account — closed at instruction exit (rent → treasury)"
+            "Pool account â€” closed at instruction exit (rent â†’ treasury)"
           ],
           "writable": true,
           "pda": {
@@ -741,7 +741,7 @@
         {
           "name": "sol_vault",
           "docs": [
-            "SOL vault — drained to treasury during handler"
+            "SOL vault â€” drained to treasury during handler"
           ],
           "writable": true,
           "pda": {
@@ -770,7 +770,7 @@
         {
           "name": "token_vault",
           "docs": [
-            "Token vault — closed via SPL CPI during handler"
+            "Token vault â€” closed via SPL CPI during handler"
           ],
           "writable": true,
           "pda": {
@@ -807,7 +807,7 @@
         {
           "name": "treasury",
           "docs": [
-            "Treasury — receives all reclaimed rent and remaining SOL"
+            "Treasury â€” receives all reclaimed rent and remaining SOL"
           ],
           "writable": true
         },
@@ -874,7 +874,7 @@
         {
           "name": "mint",
           "docs": [
-            "The SPL token mint — created here"
+            "The SPL token mint â€” created here"
           ],
           "writable": true,
           "signer": true
@@ -1081,7 +1081,7 @@
         {
           "name": "creator_token_account",
           "docs": [
-            "Creator's token account (ATA) — needed for dev buy"
+            "Creator's token account (ATA) â€” needed for dev buy"
           ],
           "writable": true
         },
@@ -1123,7 +1123,7 @@
       "name": "graduate",
       "docs": [
         "Graduate pool to Raydium CPMM.",
-        "Permissionless — anyone can call once threshold is reached.",
+        "Permissionless â€” anyone can call once threshold is reached.",
         "Remaining tokens + accumulated SOL migrate to Raydium.",
         "LP tokens are burned (liquidity permanently locked)."
       ],
@@ -1228,7 +1228,7 @@
         {
           "name": "token_vault",
           "docs": [
-            "Token vault — remaining tokens transferred to Raydium"
+            "Token vault â€” remaining tokens transferred to Raydium"
           ],
           "writable": true,
           "pda": {
@@ -1266,7 +1266,7 @@
         {
           "name": "payer_agent_ata",
           "docs": [
-            "Payer's ATA for the agent token — funded from token_vault before Raydium CPI"
+            "Payer's ATA for the agent token â€” funded from token_vault before Raydium CPI"
           ],
           "writable": true,
           "pda": {
@@ -1359,7 +1359,7 @@
         {
           "name": "payer_wsol_ata",
           "docs": [
-            "Payer's WSOL ATA — SOL wrapped here before Raydium CPI"
+            "Payer's WSOL ATA â€” SOL wrapped here before Raydium CPI"
           ],
           "writable": true,
           "pda": {
@@ -1465,7 +1465,7 @@
         {
           "name": "raydium_pool_state",
           "docs": [
-            "Raydium pool state — created by CPI"
+            "Raydium pool state â€” created by CPI"
           ],
           "writable": true
         },
@@ -1478,28 +1478,28 @@
         {
           "name": "raydium_token_0_vault",
           "docs": [
-            "Raydium token 0 vault — created by CPI"
+            "Raydium token 0 vault â€” created by CPI"
           ],
           "writable": true
         },
         {
           "name": "raydium_token_1_vault",
           "docs": [
-            "Raydium token 1 vault — created by CPI"
+            "Raydium token 1 vault â€” created by CPI"
           ],
           "writable": true
         },
         {
           "name": "raydium_lp_mint",
           "docs": [
-            "Raydium LP mint — created by CPI"
+            "Raydium LP mint â€” created by CPI"
           ],
           "writable": true
         },
         {
           "name": "lp_token_account",
           "docs": [
-            "Payer's LP token ATA — created by Raydium CPI (payer pays rent as creator)",
+            "Payer's LP token ATA â€” created by Raydium CPI (payer pays rent as creator)",
             "We burn LP tokens from here immediately after graduation."
           ],
           "writable": true
@@ -1553,7 +1553,7 @@
     {
       "name": "initialize",
       "docs": [
-        "Initialize the global curve config — called once per deployment."
+        "Initialize the global curve config â€” called once per deployment."
       ],
       "discriminator": [
         175,
@@ -1690,11 +1690,43 @@
       "args": []
     },
     {
+      "name": "migrate_pool",
+      "discriminator": [
+        55,
+        170,
+        171,
+        123,
+        210,
+        69,
+        39,
+        172
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "pool",
+          "docs": [
+            "on undersized/mis-sized accounts."
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "sell",
       "docs": [
         "Sell tokens for SOL.",
         "token_amount: tokens to sell",
-        "min_sol_out: slippage protection — revert if less SOL received (after fees)"
+        "min_sol_out: slippage protection â€” revert if less SOL received (after fees)"
       ],
       "discriminator": [
         51,
@@ -1767,7 +1799,7 @@
         {
           "name": "sol_vault",
           "docs": [
-            "SOL vault — sends SOL to seller"
+            "SOL vault â€” sends SOL to seller"
           ],
           "writable": true,
           "pda": {
@@ -1796,7 +1828,7 @@
         {
           "name": "token_vault",
           "docs": [
-            "Token vault — receives tokens from seller"
+            "Token vault â€” receives tokens from seller"
           ],
           "writable": true,
           "pda": {
@@ -1921,7 +1953,7 @@
       "docs": [
         "Update global config.",
         "Only admin can call this. Fee changes don't affect existing pools retroactively.",
-        "Setting new_admin initiates a two-step transfer — the new admin must call accept_admin."
+        "Setting new_admin initiates a two-step transfer â€” the new admin must call accept_admin."
       ],
       "discriminator": [
         29,
@@ -2214,7 +2246,7 @@
     {
       "code": 6002,
       "name": "PoolNotActive",
-      "msg": "Pool is not active — trading disabled"
+      "msg": "Pool is not active â€” trading disabled"
     },
     {
       "code": 6003,
@@ -2254,12 +2286,12 @@
     {
       "code": 6010,
       "name": "InvalidFees",
-      "msg": "Invalid fee configuration — total fees cannot exceed 1000 bps (10%)"
+      "msg": "Invalid fee configuration â€” total fees cannot exceed 1000 bps (10%)"
     },
     {
       "code": 6011,
       "name": "InvalidThreshold",
-      "msg": "Invalid graduation threshold — must be greater than 0"
+      "msg": "Invalid graduation threshold â€” must be greater than 0"
     },
     {
       "code": 6012,
@@ -2284,12 +2316,12 @@
     {
       "code": 6016,
       "name": "InvalidSupply",
-      "msg": "Invalid total supply — must be greater than 0"
+      "msg": "Invalid total supply â€” must be greater than 0"
     },
     {
       "code": 6017,
       "name": "InvalidDecimals",
-      "msg": "Invalid decimals — must be between 0 and 9"
+      "msg": "Invalid decimals â€” must be between 0 and 9"
     },
     {
       "code": 6018,
@@ -2304,12 +2336,12 @@
     {
       "code": 6020,
       "name": "CreatorMismatch",
-      "msg": "Creator mismatch — only the token creator can perform this action"
+      "msg": "Creator mismatch â€” only the token creator can perform this action"
     },
     {
       "code": 6021,
       "name": "NotGraduated",
-      "msg": "Pool has not graduated — Raydium fees only available post-graduation"
+      "msg": "Pool has not graduated â€” Raydium fees only available post-graduation"
     },
     {
       "code": 6022,
@@ -2334,7 +2366,7 @@
     {
       "code": 6026,
       "name": "UnclaimedFees",
-      "msg": "Pool still has unclaimed fees — claim all fees before closing"
+      "msg": "Pool still has unclaimed fees â€” claim all fees before closing"
     },
     {
       "code": 6027,
@@ -2349,7 +2381,7 @@
     {
       "code": 6029,
       "name": "SelfReferral",
-      "msg": "Self-referral not allowed — referrer cannot be the trader"
+      "msg": "Self-referral not allowed â€” referrer cannot be the trader"
     },
     {
       "code": 6030,
@@ -2359,7 +2391,7 @@
     {
       "code": 6031,
       "name": "ReferralFeeExceedsPlatform",
-      "msg": "Referral fee exceeds platform fee — must be <= platform_fee_bps"
+      "msg": "Referral fee exceeds platform fee â€” must be <= platform_fee_bps"
     }
   ],
   "types": [
@@ -2647,7 +2679,7 @@
           {
             "name": "trading_paused",
             "docs": [
-              "Whether trading (buy/sell) is paused — emergency kill switch"
+              "Whether trading (buy/sell) is paused â€” emergency kill switch"
             ],
             "type": "bool"
           },
@@ -2692,7 +2724,7 @@
           {
             "name": "virtual_sol_reserve",
             "docs": [
-              "Current virtual SOL reserve (lamports) — includes initial virtual + real deposits"
+              "Current virtual SOL reserve (lamports) â€” includes initial virtual + real deposits"
             ],
             "type": "u64"
           },
@@ -2706,7 +2738,7 @@
           {
             "name": "real_sol_balance",
             "docs": [
-              "Real SOL deposited by buyers (lamports) — this is what accumulates toward graduation"
+              "Real SOL deposited by buyers (lamports) â€” this is what accumulates toward graduation"
             ],
             "type": "u64"
           },
@@ -2766,14 +2798,14 @@
           {
             "name": "dev_buy_sol",
             "docs": [
-              "Dev buy tracking — SOL spent by creator"
+              "Dev buy tracking â€” SOL spent by creator"
             ],
             "type": "u64"
           },
           {
             "name": "dev_buy_tokens",
             "docs": [
-              "Dev buy tracking — tokens received by creator"
+              "Dev buy tracking â€” tokens received by creator"
             ],
             "type": "u64"
           },
@@ -2862,20 +2894,6 @@
             "type": "string"
           },
           {
-            "name": "referrals_enabled",
-            "docs": [
-              "Whether referrals are enabled for this token (creator opt-in)"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "referral_fees_paid",
-            "docs": [
-              "Total referral fees paid out (lamports)"
-            ],
-            "type": "u64"
-          },
-          {
             "name": "bump",
             "docs": [
               "Bump for pool PDA"
@@ -2888,6 +2906,20 @@
               "Bump for sol vault PDA"
             ],
             "type": "u8"
+          },
+          {
+            "name": "referrals_enabled",
+            "docs": [
+              "Whether referrals are enabled for this token (creator opt-in)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "referral_fees_paid",
+            "docs": [
+              "Total referral fees paid out (lamports)"
+            ],
+            "type": "u64"
           }
         ]
       }

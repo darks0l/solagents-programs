@@ -124,14 +124,14 @@ pub struct CurvePool {
     /// Metadata URI
     #[max_len(200)]
     pub uri: String,
-    /// Whether referrals are enabled for this token (creator opt-in)
-    pub referrals_enabled: bool,
-    /// Total referral fees paid out (lamports)
-    pub referral_fees_paid: u64,
     /// Bump for pool PDA
     pub bump: u8,
     /// Bump for sol vault PDA
     pub vault_bump: u8,
+    /// Whether referrals are enabled for this token (creator opt-in)
+    pub referrals_enabled: bool,
+    /// Total referral fees paid out (lamports)
+    pub referral_fees_paid: u64,
 }
 
 impl CurvePool {

@@ -11,6 +11,7 @@ pub mod update_config;
 pub mod accept_admin;
 pub mod close_graduated_pool;
 pub mod migrate_config;
+pub mod migrate_pool;
 pub mod toggle_referrals;
 
 pub use initialize::*;
@@ -26,4 +27,5 @@ pub use update_config::*;
 pub use accept_admin::*;
 pub use close_graduated_pool::*;
 pub use migrate_config::*;
+pub use migrate_pool::*;
 pub use toggle_referrals::*;

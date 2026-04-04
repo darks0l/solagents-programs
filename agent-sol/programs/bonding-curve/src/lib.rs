@@ -178,4 +178,8 @@ pub mod bonding_curve {
     pub fn migrate_config(ctx: Context<MigrateConfig>) -> Result<()> {
         instructions::migrate_config::handler(ctx)
     }
+
+    pub fn migrate_pool(ctx: Context<MigratePool>) -> Result<()> {
+        instructions::migrate_pool::handler(ctx)
+    }
 }
