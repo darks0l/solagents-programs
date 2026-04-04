@@ -39,7 +39,7 @@ pub struct Graduate<'info> {
         seeds = [CurveConfig::SEED],
         bump = config.bump,
     )]
-    pub config: Account<'info, CurveConfig>,
+    pub config: Box<Account<'info, CurveConfig>>,
 
     #[account(
         mut,
@@ -47,7 +47,7 @@ pub struct Graduate<'info> {
         bump = pool.bump,
         constraint = pool.is_active() @ CurveError::AlreadyGraduated,
     )]
-    pub pool: Account<'info, CurvePool>,
+    pub pool: Box<Account<'info, CurvePool>>,
 
     /// SOL vault
     /// CHECK: PDA validated by seeds
@@ -66,7 +66,7 @@ pub struct Graduate<'info> {
         token::mint = pool.mint,
         token::authority = pool,
     )]
-    pub token_vault: Account<'info, TokenAccount>,
+    pub token_vault: Box<Account<'info, TokenAccount>>,
 
     /// The token mint
     /// CHECK: validated via pool.mint constraint
@@ -82,7 +82,7 @@ pub struct Graduate<'info> {
         associated_token::mint = mint,
         associated_token::authority = payer,
     )]
-    pub payer_agent_ata: Account<'info, TokenAccount>,
+    pub payer_agent_ata: Box<Account<'info, TokenAccount>>,
 
     /// Payer's WSOL ATA — SOL wrapped here before Raydium CPI
     #[account(
@@ -91,7 +91,7 @@ pub struct Graduate<'info> {
         associated_token::mint = wsol_mint,
         associated_token::authority = payer,
     )]
-    pub payer_wsol_ata: Account<'info, TokenAccount>,
+    pub payer_wsol_ata: Box<Account<'info, TokenAccount>>,
 
     // ── Raydium CPMM accounts ───────────────────────────────
 

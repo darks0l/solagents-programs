@@ -9,7 +9,7 @@ pub mod state;
 use instructions::*;
 use state::DividendMode;
 
-declare_id!("11111111111111111111111111111111");
+declare_id!("Hi5XCC3PvGXYwhELRL7r5BdWRhdaFNKqXBbw7oS3EoWY");
 
 #[cfg(not(feature = "no-entrypoint"))]
 security_txt! {

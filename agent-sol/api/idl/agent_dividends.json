@@ -1,0 +1,1640 @@
+{
+  "address": "Hi5XCC3PvGXYwhELRL7r5BdWRhdaFNKqXBbw7oS3EoWY",
+  "metadata": {
+    "name": "agent_dividends",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "claim_rewards",
+      "docs": [
+        "Claim accumulated SOL staking rewards.",
+        "Works regardless of current mode (you can always claim earned rewards)."
+      ],
+      "discriminator": [
+        4,
+        144,
+        132,
+        71,
+        116,
+        23,
+        151,
+        80
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_dividend",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stake_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "dividend_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_token_dividend",
+      "docs": [
+        "Create a dividend account for a specific agent token.",
+        "Creator picks a mode: Regular (keep fees), Dividend (staking rewards), or BuybackBurn."
+      ],
+      "discriminator": [
+        205,
+        72,
+        63,
+        183,
+        147,
+        205,
+        231,
+        5
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "Creator of the agent token (must match bonding-curve pool creator)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Global dividend config (validates existence)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The agent-token mint."
+          ]
+        },
+        {
+          "name": "token_dividend",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "staking_vault",
+          "docs": [
+            "Staking vault — holds staked agent tokens (SPL token account owned by PDA)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "mode",
+          "type": {
+            "defined": {
+              "name": "DividendMode"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "deposit_revenue",
+      "docs": [
+        "Admin/crank deposits SOL revenue into the dividend system.",
+        "Routes to staking rewards (Dividend mode) or buyback vault (BuybackBurn mode).",
+        "Rejected if token is in Regular mode."
+      ],
+      "discriminator": [
+        224,
+        212,
+        82,
+        100,
+        60,
+        240,
+        220,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "depositor",
+          "docs": [
+            "Admin / crank that deposits SOL revenue."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_dividend",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_dividend.mint",
+                "account": "TokenDividend"
+              }
+            ]
+          }
+        },
+        {
+          "name": "dividend_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_dividend.mint",
+                "account": "TokenDividend"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyback_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  121,
+                  98,
+                  97,
+                  99,
+                  107,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_dividend.mint",
+                "account": "TokenDividend"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "execute_buyback",
+      "docs": [
+        "Execute a buyback & burn. Permissionless — anyone can crank.",
+        "Burns tokens that were purchased off-chain and deposited into",
+        "the bought_tokens_account owned by the token_dividend PDA."
+      ],
+      "discriminator": [
+        47,
+        32,
+        19,
+        100,
+        184,
+        96,
+        144,
+        49
+      ],
+      "accounts": [
+        {
+          "name": "crank",
+          "docs": [
+            "Permissionless crank that triggers the burn."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_dividend",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bought_tokens_account",
+          "docs": [
+            "Token account holding agent tokens purchased via off-chain swap,",
+            "owned by the token_dividend PDA so we can burn from it."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "sol_spent",
+          "type": "u64"
+        },
+        {
+          "name": "tokens_to_burn",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_dividend_config",
+      "docs": [
+        "Initialize the global dividend configuration. Called once."
+      ],
+      "discriminator": [
+        5,
+        151,
+        147,
+        36,
+        92,
+        105,
+        209,
+        113
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "job_revenue_share_bps",
+          "type": "u16"
+        },
+        {
+          "name": "creator_fee_share_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "set_dividend_mode",
+      "docs": [
+        "Creator switches between Regular / Dividend / BuybackBurn modes.",
+        "7-day cooldown between switches."
+      ],
+      "discriminator": [
+        151,
+        15,
+        249,
+        22,
+        204,
+        221,
+        119,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "Token creator — only they can change mode."
+          ],
+          "signer": true
+        },
+        {
+          "name": "token_dividend",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_dividend.mint",
+                "account": "TokenDividend"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_mode",
+          "type": {
+            "defined": {
+              "name": "DividendMode"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stake",
+      "docs": [
+        "Stake agent tokens to earn pro-rata SOL rewards.",
+        "Only works when token is in Dividend mode."
+      ],
+      "discriminator": [
+        206,
+        176,
+        202,
+        18,
+        200,
+        209,
+        179,
+        108
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_dividend",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stake_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_token_account",
+          "docs": [
+            "User's agent-token account."
+          ],
+          "writable": true
+        },
+        {
+          "name": "staking_vault",
+          "docs": [
+            "Staking vault that holds staked tokens."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "dividend_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "unstake",
+      "docs": [
+        "Unstake agent tokens. Auto-claims pending rewards.",
+        "Works regardless of current mode (you can always exit)."
+      ],
+      "discriminator": [
+        90,
+        95,
+        107,
+        42,
+        205,
+        124,
+        50,
+        225
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_dividend",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stake_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_token_account",
+          "docs": [
+            "User's agent-token account to receive unstaked tokens."
+          ],
+          "writable": true
+        },
+        {
+          "name": "staking_vault",
+          "docs": [
+            "Staking vault holding staked tokens."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "dividend_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "update_dividend_config",
+      "docs": [
+        "Admin updates global dividend configuration."
+      ],
+      "discriminator": [
+        66,
+        44,
+        204,
+        109,
+        223,
+        131,
+        55,
+        23
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_admin",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "job_revenue_share_bps",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "creator_fee_share_bps",
+          "type": {
+            "option": "u16"
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "DividendConfig",
+      "discriminator": [
+        63,
+        131,
+        144,
+        1,
+        74,
+        35,
+        195,
+        14
+      ]
+    },
+    {
+      "name": "StakePosition",
+      "discriminator": [
+        78,
+        165,
+        30,
+        111,
+        171,
+        125,
+        11,
+        220
+      ]
+    },
+    {
+      "name": "TokenDividend",
+      "discriminator": [
+        38,
+        109,
+        103,
+        18,
+        16,
+        206,
+        27,
+        19
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "BuybackExecuted",
+      "discriminator": [
+        150,
+        109,
+        157,
+        10,
+        124,
+        24,
+        38,
+        189
+      ]
+    },
+    {
+      "name": "ModeChanged",
+      "discriminator": [
+        149,
+        123,
+        78,
+        29,
+        237,
+        72,
+        67,
+        229
+      ]
+    },
+    {
+      "name": "RevenueDeposited",
+      "discriminator": [
+        97,
+        189,
+        62,
+        159,
+        189,
+        208,
+        43,
+        181
+      ]
+    },
+    {
+      "name": "RewardsClaimed",
+      "discriminator": [
+        75,
+        98,
+        88,
+        18,
+        219,
+        112,
+        88,
+        121
+      ]
+    },
+    {
+      "name": "Staked",
+      "discriminator": [
+        11,
+        146,
+        45,
+        205,
+        230,
+        58,
+        213,
+        240
+      ]
+    },
+    {
+      "name": "Unstaked",
+      "discriminator": [
+        27,
+        179,
+        156,
+        215,
+        47,
+        71,
+        195,
+        7
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "You are not authorized to perform this action"
+    },
+    {
+      "code": 6001,
+      "name": "ZeroAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6002,
+      "name": "InsufficientStake",
+      "msg": "Insufficient staked balance"
+    },
+    {
+      "code": 6003,
+      "name": "NoRewardsToClaim",
+      "msg": "No rewards available to claim"
+    },
+    {
+      "code": 6004,
+      "name": "NoBuybackBalance",
+      "msg": "No buyback balance available"
+    },
+    {
+      "code": 6005,
+      "name": "StakingNotActive",
+      "msg": "Staking is not active — token must be in Dividend mode"
+    },
+    {
+      "code": 6006,
+      "name": "BuybackNotActive",
+      "msg": "Buyback is not active — token must be in BuybackBurn mode"
+    },
+    {
+      "code": 6007,
+      "name": "RegularModeNoDeposits",
+      "msg": "Token is in Regular mode — no revenue deposits accepted"
+    },
+    {
+      "code": 6008,
+      "name": "CooldownNotElapsed",
+      "msg": "Mode switch cooldown has not elapsed (7 days)"
+    },
+    {
+      "code": 6009,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "BuybackExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "sol_spent",
+            "type": "u64"
+          },
+          {
+            "name": "tokens_burned",
+            "type": "u64"
+          },
+          {
+            "name": "total_burned",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DividendConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "docs": [
+              "Admin that can deposit revenue & update config."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "job_revenue_share_bps",
+            "docs": [
+              "Share of job revenue routed to dividends (bps, e.g. 5000 = 50%)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "creator_fee_share_bps",
+            "docs": [
+              "Share of creator trading fees routed to dividends (bps)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DividendMode",
+      "docs": [
+        "Three mutually exclusive dividend modes a creator can choose."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Regular"
+          },
+          {
+            "name": "Dividend"
+          },
+          {
+            "name": "BuybackBurn"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ModeChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_mode",
+            "type": {
+              "defined": {
+                "name": "DividendMode"
+              }
+            }
+          },
+          {
+            "name": "new_mode",
+            "type": {
+              "defined": {
+                "name": "DividendMode"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RevenueDeposited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "mode",
+            "type": {
+              "defined": {
+                "name": "DividendMode"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardsClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StakePosition",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "docs": [
+              "Staker's wallet."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "Agent-token mint."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Amount currently staked."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reward_debt",
+            "docs": [
+              "Snapshot of reward_per_token_stored at last stake/claim action."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "rewards_claimed",
+            "docs": [
+              "Lifetime SOL claimed by this staker."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "staked_at",
+            "docs": [
+              "Unix timestamp of first stake."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Staked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_staked",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenDividend",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "docs": [
+              "The agent-token mint this dividend belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Creator of the agent token (matches bonding-curve pool creator)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "mode",
+            "docs": [
+              "Current dividend mode: Regular, Dividend, or BuybackBurn."
+            ],
+            "type": {
+              "defined": {
+                "name": "DividendMode"
+              }
+            }
+          },
+          {
+            "name": "last_mode_change",
+            "docs": [
+              "Timestamp of last mode change (enforce 7-day cooldown)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "total_staked",
+            "docs": [
+              "Total agent tokens currently staked."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reward_per_token_stored",
+            "docs": [
+              "Accumulated reward per staked token, scaled by 1e18."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "total_staking_revenue",
+            "docs": [
+              "Lifetime SOL deposited to staking rewards."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_rewards_distributed",
+            "docs": [
+              "Lifetime SOL distributed (claimed) by stakers."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "buyback_balance",
+            "docs": [
+              "SOL sitting in the buyback vault awaiting execution."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_burned",
+            "docs": [
+              "Lifetime tokens burned via buyback."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_buyback_sol_spent",
+            "docs": [
+              "Lifetime SOL spent on buybacks."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "burn_count",
+            "docs": [
+              "Number of buyback executions."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_revenue_deposited",
+            "docs": [
+              "Lifetime SOL deposited (across all modes, excluding Regular)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Unix timestamp when this dividend was created."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Unstaked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_staked",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

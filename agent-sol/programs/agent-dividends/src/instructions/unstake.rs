@@ -59,6 +59,12 @@ pub struct Unstake<'info> {
 pub fn handler(ctx: Context<Unstake>, amount: u64) -> Result<()> {
     require!(amount > 0, DividendError::ZeroAmount);
 
+    // Extract account infos before any mutable borrows
+    let td_info = ctx.accounts.token_dividend.to_account_info();
+    let staking_vault_info = ctx.accounts.staking_vault.to_account_info();
+    let user_ta_info = ctx.accounts.user_token_account.to_account_info();
+    let token_program_info = ctx.accounts.token_program.to_account_info();
+
     let td = &mut ctx.accounts.token_dividend;
     let pos = &mut ctx.accounts.stake_position;
 
@@ -98,14 +104,13 @@ pub fn handler(ctx: Context<Unstake>, amount: u64) -> Result<()> {
         mint_key.as_ref(),
         &[td_bump],
     ]];
-
     token::transfer(
         CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
+            token_program_info,
             Transfer {
-                from: ctx.accounts.staking_vault.to_account_info(),
-                to: ctx.accounts.user_token_account.to_account_info(),
-                authority: ctx.accounts.token_dividend.to_account_info(),
+                from: staking_vault_info,
+                to: user_ta_info,
+                authority: td_info,
             },
             signer_seeds,
         ),

@@ -49,6 +49,12 @@ pub fn handler(ctx: Context<ExecuteBuyback>, sol_spent: u64, tokens_to_burn: u64
     require!(sol_spent > 0, DividendError::ZeroAmount);
     require!(tokens_to_burn > 0, DividendError::ZeroAmount);
 
+    // Extract account infos before any mutable borrows
+    let td_info = ctx.accounts.token_dividend.to_account_info();
+    let mint_info = ctx.accounts.mint.to_account_info();
+    let bought_tokens_info = ctx.accounts.bought_tokens_account.to_account_info();
+    let token_program_info = ctx.accounts.token_program.to_account_info();
+
     let td = &mut ctx.accounts.token_dividend;
 
     require!(td.buyback_balance >= sol_spent, DividendError::NoBuybackBalance);
@@ -61,14 +67,13 @@ pub fn handler(ctx: Context<ExecuteBuyback>, sol_spent: u64, tokens_to_burn: u64
         mint_key.as_ref(),
         &[td_bump],
     ]];
-
     token::burn(
         CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
+            token_program_info,
             Burn {
-                mint: ctx.accounts.mint.to_account_info(),
-                from: ctx.accounts.bought_tokens_account.to_account_info(),
-                authority: ctx.accounts.token_dividend.to_account_info(),
+                mint: mint_info,
+                from: bought_tokens_info,
+                authority: td_info,
             },
             signer_seeds,
         ),

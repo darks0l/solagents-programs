@@ -580,7 +580,7 @@
         },
         {
           "name": "raydium_program",
-          "address": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"
+          "address": "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb"
         },
         {
           "name": "raydium_pool_state",
@@ -821,63 +821,6 @@
         }
       ],
       "args": []
-    },
-    {
-      "name": "toggle_referrals",
-      "docs": [
-        "Toggle referrals on/off for a specific token.",
-        "Only the token creator can call this."
-      ],
-      "discriminator": [
-        222,
-        35,
-        227,
-        163,
-        120,
-        36,
-        195,
-        17
-      ],
-      "accounts": [
-        {
-          "name": "creator",
-          "signer": true
-        },
-        {
-          "name": "pool",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  117,
-                  114,
-                  118,
-                  101,
-                  95,
-                  112,
-                  111,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "pool.mint",
-                "account": "CurvePool"
-              }
-            ]
-          }
-        }
-      ],
-      "args": [
-        {
-          "name": "enabled",
-          "type": "bool"
-        }
-      ]
     },
     {
       "name": "create_token",
@@ -1511,7 +1454,7 @@
           "docs": [
             "Raydium CPMM program"
           ],
-          "address": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"
+          "address": "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb"
         },
         {
           "name": "raydium_amm_config",
@@ -1580,7 +1523,7 @@
           "docs": [
             "WSOL mint"
           ],
-          "address": "So11111111111111111111111111111111111111112"
+          "address": "nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof"
         },
         {
           "name": "raydium_permission",
@@ -1917,6 +1860,63 @@
       ]
     },
     {
+      "name": "toggle_referrals",
+      "docs": [
+        "Toggle referrals on/off for a specific token.",
+        "Only the token creator can call this."
+      ],
+      "discriminator": [
+        222,
+        35,
+        227,
+        163,
+        120,
+        36,
+        195,
+        17
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "signer": true
+        },
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  114,
+                  118,
+                  101,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.mint",
+                "account": "CurvePool"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "enabled",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "update_config",
       "docs": [
         "Update global config.",
@@ -2161,6 +2161,19 @@
       ]
     },
     {
+      "name": "ReferralsToggled",
+      "discriminator": [
+        162,
+        173,
+        13,
+        236,
+        43,
+        119,
+        212,
+        244
+      ]
+    },
+    {
       "name": "TokenCreated",
       "discriminator": [
         236,
@@ -2184,19 +2197,6 @@
         79,
         179,
         80
-      ]
-    },
-    {
-      "name": "ReferralsToggled",
-      "discriminator": [
-        162,
-        173,
-        13,
-        236,
-        43,
-        119,
-        212,
-        244
       ]
     }
   ],
@@ -2349,7 +2349,7 @@
     {
       "code": 6029,
       "name": "SelfReferral",
-      "msg": "Self-referral not allowed - referrer cannot be the trader"
+      "msg": "Self-referral not allowed — referrer cannot be the trader"
     },
     {
       "code": 6030,
@@ -2359,7 +2359,7 @@
     {
       "code": 6031,
       "name": "ReferralFeeExceedsPlatform",
-      "msg": "Referral fee exceeds platform fee - must be <= platform_fee_bps"
+      "msg": "Referral fee exceeds platform fee — must be <= platform_fee_bps"
     }
   ],
   "types": [
@@ -2533,6 +2533,14 @@
           {
             "name": "new_trading_paused",
             "type": "bool"
+          },
+          {
+            "name": "old_referral_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "new_referral_fee_bps",
+            "type": "u16"
           }
         ]
       }
@@ -2653,7 +2661,9 @@
           {
             "name": "referral_fee_bps",
             "docs": [
-              "Referral fee in basis points, carved from platform fee (e.g. 50 = 0.5%)"
+              "Referral fee in basis points, carved from platform fee (e.g. 50 = 0.5%)",
+              "Must be <= platform_fee_bps. When a valid referrer is present, this amount",
+              "is deducted from the platform's share and sent directly to the referrer."
             ],
             "type": "u16"
           }
@@ -3061,6 +3071,34 @@
       }
     },
     {
+      "name": "ReferralsToggled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "new_enabled",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
       "name": "TokenCreated",
       "type": {
         "kind": "struct",
@@ -3146,6 +3184,14 @@
             "type": "u64"
           },
           {
+            "name": "referral_fee",
+            "type": "u64"
+          },
+          {
+            "name": "referrer",
+            "type": "pubkey"
+          },
+          {
             "name": "virtual_sol_reserve",
             "type": "u64"
           },
@@ -3158,43 +3204,7 @@
             "type": "u64"
           },
           {
-            "name": "referral_fee",
-            "type": "u64"
-          },
-          {
-            "name": "referrer",
-            "type": "pubkey"
-          },
-          {
             "name": "graduation_pending",
-            "type": "bool"
-          }
-        ]
-      }
-    },
-    {
-      "name": "ReferralsToggled",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "pool",
-            "type": "pubkey"
-          },
-          {
-            "name": "mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "type": "pubkey"
-          },
-          {
-            "name": "old_enabled",
-            "type": "bool"
-          },
-          {
-            "name": "new_enabled",
             "type": "bool"
           }
         ]

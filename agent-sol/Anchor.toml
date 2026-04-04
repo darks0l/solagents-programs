@@ -8,12 +8,12 @@ skip-lint = false
 [programs.localnet]
 agentic_commerce = "Ddpj5GCjz8jFuBQXopUfzxkAmkWPCCwC7mhpL6SY9fdx"
 bonding_curve = "nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof"
-agent_dividends = "11111111111111111111111111111111"
+agent_dividends = "Hi5XCC3PvGXYwhELRL7r5BdWRhdaFNKqXBbw7oS3EoWY"
 
 [programs.devnet]
 agentic_commerce = "Ddpj5GCjz8jFuBQXopUfzxkAmkWPCCwC7mhpL6SY9fdx"
 bonding_curve = "nFc4nPJ2j68QS1pU15XFV2K2k6u7EifuPYpC1nHxuof"
-agent_dividends = "11111111111111111111111111111111"
+agent_dividends = "Hi5XCC3PvGXYwhELRL7r5BdWRhdaFNKqXBbw7oS3EoWY"
 
 [registry]
 url = "https://api.apr.dev"
@@ -26,7 +26,7 @@ url = "https://api.apr.dev"
 # Then update declare_id!() in each program's lib.rs to match the new IDs.
 agentic_commerce = "11111111111111111111111111111111"
 bonding_curve = "11111111111111111111111111111111"
-agent_dividends = "11111111111111111111111111111111"
+agent_dividends = "Hi5XCC3PvGXYwhELRL7r5BdWRhdaFNKqXBbw7oS3EoWY"
 
 [provider]
 cluster = "Localnet"
