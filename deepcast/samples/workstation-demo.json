@@ -1,0 +1,47 @@
+{
+  "title": "My Agent Demo",
+  "subtitle": "Built with teeth.",
+  "theme": "terminal",
+  "steps": [
+    {
+      "label": "Initializing agent",
+      "command": "claude --print 'Analyze this codebase'",
+      "output": "Loading 47 files... done.\nToken context: 32k / 200k",
+      "reasoning": "This codebase has 47 files across 6 modules. The main entry point is index.ts which orchestrates the agent loop.",
+      "duration": 4000
+    },
+    {
+      "label": "Reading source files",
+      "command": "find src -name '*.ts' | head -20",
+      "output": "src/agent.ts\nsrc/router.ts\nsrc/plugins/*.ts (14 files)\nsrc/utils/*.ts (12 files)",
+      "files": [
+        "src/agent.ts",
+        "src/router.ts",
+        "src/plugins/"
+      ],
+      "duration": 3000
+    },
+    {
+      "label": "Running tests",
+      "command": "pnpm test",
+      "output": "✓ 127 tests passed (4.2s)\n  coverage: 84%",
+      "reasoning": "All 127 tests pass. Coverage is good. One minor issue in the router module — edge case with empty string matching.",
+      "files": [
+        "src/router.ts"
+      ],
+      "duration": 5000
+    },
+    {
+      "label": "Building production bundle",
+      "command": "pnpm build",
+      "output": "dist/main.js  142kb\ndist/worker.js  89kb",
+      "files": [
+        "dist/main.js",
+        "dist/worker.js"
+      ],
+      "duration": 4000
+    }
+  ],
+  "endTitle": "complete",
+  "endSubtitle": "deepcast workstation"
+}
